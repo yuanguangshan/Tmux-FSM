@@ -1,6 +1,12 @@
 # 🧠 Tmux‑FSM / Weaver Core Design Philosophy
 ## 设计哲学宣言（Design Philosophy）
 
+> Weaver Core
+
+> Weaver Core does not try to be helpful.
+It tries to be correct.
+> And correctness is the only form of respect an editor can offer.
+
 ---
 
 ## 一、编辑不是 UI 行为，而是语义事件
