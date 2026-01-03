@@ -1,6 +1,3 @@
-# Tmux-FSM
-tmux‑fsm is a headless editing kernel running as a long‑lived daemon. tmux‑fsm does not edit text. It edits meaning over time.
-
 # tmux-fsm: Fact-Oriented Editing Kernel (FOEK)
 
 # tmux‑fsm
