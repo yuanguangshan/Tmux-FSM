@@ -120,6 +120,13 @@ func (r *PassthroughResolver) resolveAnchorWithSnapshot(a core.Anchor, s core.Sn
 		return core.ResolvedAnchor{PaneID: a.PaneID, Line: row, Start: start, End: end}, nil
 	case core.AnchorLine:
 		return core.ResolvedAnchor{PaneID: a.PaneID, Line: row, Start: 0, End: len(lineText) - 1}, nil
+	case core.AnchorAbsolute:
+		// Ref is expected to be []int{line, col}
+		if coords, ok := a.Ref.([]int); ok && len(coords) >= 2 {
+			return core.ResolvedAnchor{PaneID: a.PaneID, Line: coords[0], Start: coords[1], End: coords[1]}, nil
+		}
+		// Fallback to cursor
+		return core.ResolvedAnchor{PaneID: a.PaneID, Line: row, Start: col, End: col}, nil
 	case core.AnchorLegacyRange:
 		return r.resolveAnchor(a) // Fallback or implement here
 	default:

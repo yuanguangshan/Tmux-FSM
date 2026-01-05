@@ -15,6 +15,7 @@ const (
 
 	// Structural
 	AnchorSelection
+	AnchorAbsolute
 
 	// Legacy Support
 	AnchorLegacyRange

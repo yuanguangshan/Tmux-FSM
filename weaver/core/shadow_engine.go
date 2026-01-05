@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -92,6 +93,39 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 		}, ErrWorldDrift // Or a new error like ErrSafetyViolation
 	}
 
+	// [Phase 7] Inverse Fact Enrichment:
+	// If the planner couldn't generate inverse facts (common for semantic deletes),
+	// we generate them now using the reality captured during resolution.
+	if len(inverseFacts) == 0 && len(resolvedFacts) > 0 {
+		for _, rf := range resolvedFacts {
+			if rf.Kind == FactDelete && rf.Payload.OldText != "" {
+				// [Phase 7] Axiom 7.6: Paradox Resolved
+				// Undo is return-to-origin, not a new fork.
+				// Line-level semantic fingerprints are ignored because global post-hash already secured the timeline.
+				invAnchor := Anchor{
+					PaneID: rf.Anchor.PaneID,
+					Kind:   AnchorAbsolute,
+					Ref:    []int{rf.Anchor.Line, rf.Anchor.Start},
+				}
+
+				invMeta := make(map[string]interface{})
+				for k, v := range rf.Meta {
+					invMeta[k] = v
+				}
+				invMeta["operation"] = "undo_restore"
+
+				inverseFacts = append(inverseFacts, Fact{
+					Kind:   FactInsert,
+					Anchor: invAnchor,
+					Payload: FactPayload{
+						Text: rf.Payload.OldText,
+					},
+					Meta: invMeta,
+				})
+			}
+		}
+	}
+
 	// 3. Create Transaction
 	txID := TransactionID(fmt.Sprintf("tx-%d", time.Now().UnixNano()))
 	tx := &Transaction{
@@ -155,6 +189,9 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 		}
 	}
 
+	var audit []AuditEntry
+	audit = append(audit, AuditEntry{Step: "Adjudicate", Result: "Undo context verified"})
+
 	// [Phase 5.1] Resolve InverseFacts
 	// [Phase 6.3] Use recorded PostHash if available (passed as expectedHash)
 	resolvedFacts, err := e.resolver.ResolveFacts(tx.InverseFacts, tx.PostSnapshotHash)
@@ -162,12 +199,15 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 		e.history.PushBack(tx)
 		return nil, err
 	}
+	audit = append(audit, AuditEntry{Step: "Resolve", Result: fmt.Sprintf("Success: %d facts", len(resolvedFacts))})
 
 	// Apply
+	log.Printf("[WEAVER] Undo: Applying %d inverse facts. line-level fingerprints intentionally ignored.", len(resolvedFacts))
 	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
 		e.history.PushBack(tx)
 		return nil, err
 	}
+	audit = append(audit, AuditEntry{Step: "Project", Result: "Success"})
 
 	// Move to Redo Stack
 	e.history.AddRedo(tx)
@@ -176,6 +216,7 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 		Kind:        VerdictApplied,
 		Message:     fmt.Sprintf("Undone tx: %s", tx.ID),
 		Transaction: tx,
+		Audit:       audit,
 	}, nil
 }
 

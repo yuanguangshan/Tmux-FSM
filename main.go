@@ -616,21 +616,22 @@ func handleClient(conn net.Conn) bool {
 		ProcessIntentGlobal(intent)
 	}
 
-	// 统一写入本地日志以便直接调试
-	logFile, _ := os.OpenFile(os.Getenv("HOME")+"/tmux-fsm.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if logFile != nil {
-		fmt.Fprintf(logFile, "[%s] DEBUG: Key='%s', FSM_Handled=%v, Action='%s', Mode='%s'\n",
-			time.Now().Format("15:04:05"), key, fsmHandled, action, globalState.Mode)
-		if action != "" {
-			fmt.Fprintf(logFile, "[%s] DEBUG: Executing legacy action: %s\n", time.Now().Format("15:04:05"), action)
-		}
-		logFile.Close()
-	}
-
 	// [Phase 4] Weaver 模式下接管执行（包括 Undo/Redo），唯有 repeat_last 仍走 Legacy
 	if action != "" && (GetMode() == ModeLegacy || (GetMode() == ModeShadow) || action == "repeat_last") {
+		// 统一写入本地日志以便直接调试
+		logFile, _ := os.OpenFile(os.Getenv("HOME")+"/tmux-fsm.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if logFile != nil {
+			fmt.Fprintf(logFile, "[%s] DEBUG: Key='%s', FSM_Handled=%v, Action='%s', Mode='%s'\n",
+				time.Now().Format("15:04:05"), key, fsmHandled, action, globalState.Mode)
+			fmt.Fprintf(logFile, "[%s] DEBUG: Executing legacy action: %s\n", time.Now().Format("15:04:05"), action)
+			logFile.Close()
+		}
+
+		// [Phase 7] 再次确认：在 Weaver 模式下，Undo/Redo 必须由引擎完成，此处强制跳过
 		// [Phase 7] 再次确认：在 Weaver 模式下，Undo/Redo 必须由引擎完成，此处强制跳过
 		if GetMode() == ModeWeaver && (action == "undo" || action == "redo") {
+			updateStatusBar(globalState, clientName)
+			conn.Write([]byte("ok"))
 			return false
 		}
 		if action == "repeat_last" {

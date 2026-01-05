@@ -13,7 +13,12 @@ func (p *TmuxProjection) Apply(resolved []core.ResolvedAnchor, facts []core.Reso
 	for _, fact := range facts {
 		targetPane := fact.Anchor.PaneID
 		if targetPane == "" {
-			targetPane = "{current}" // 容错，虽然应该由 Logic 层填充
+			targetPane = "{current}" // 容错
+		}
+
+		// Phase 7: For exact restoration, we must jump to the coordinate first
+		if fact.Anchor.Start >= 0 {
+			TmuxJumpTo(fact.Anchor.Start, fact.Anchor.Line, targetPane)
 		}
 
 		// 从 Meta 中提取 legacy motion
@@ -35,6 +40,9 @@ func (p *TmuxProjection) Apply(resolved []core.ResolvedAnchor, facts []core.Reso
 				// 如果是 paste:
 				if motion == "paste" { // Hack: check motion
 					PerformPhysicalPaste(metaString(fact.Meta, "sub_motion"), targetPane)
+				} else {
+					// Phase 7: Undo recovery or raw text projection
+					PerformPhysicalRawInsert(text, targetPane)
 				}
 			} else {
 				// 动作 (e.g. insert_after -> a)
