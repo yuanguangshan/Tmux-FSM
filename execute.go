@@ -693,59 +693,9 @@ func performPhysicalFind(fType, char string, count int, targetPane string) {
 }
 
 func handleUndo(state *FSMState, targetPane string) {
-	// --- [ABI: Inverse Verdict Deliberation] ---
-	if len(state.UndoStack) == 0 {
-		return
-	}
-	// 弹出最近一个事务（先不正式移除，等成功后再说）
-	tx := state.UndoStack[len(state.UndoStack)-1]
-
-	// [Phase 7] Phase 1: Resolve all anchors first (Axiom 7.2)
-	// 确保整个事务要么全做，要么不做，禁止“半次 Undo”
-	pendingFacts := make([]Fact, 0, len(tx.Records))
-	overallSafety := "exact"
-
-	for i := len(tx.Records) - 1; i >= 0; i-- {
-		r := tx.Records[i]
-		// Axiom 2: Anchor Primacy - Always resolve anchor before executing
-		res, err := ResolveAnchor(r.Inverse.Target.Anchor)
-		if err != nil {
-			// Axiom 4: Mandatory Failure Conditions - Reject the entire transaction
-			state.LastUndoFailure = fmt.Sprintf("Anchor mismatch for TX %d in pane %s", tx.ID, r.Inverse.Target.Anchor.PaneID)
-			state.LastUndoSafetyLevel = ""
-			logLine(fmt.Sprintf("[UNDO-REJECT] %s", state.LastUndoFailure))
-			return // 立即退出，不执行任何写操作
-		}
-
-		// Axiom 7.4 & 7.9: Fuzzy Policy
-		if res.Result == ResolveFuzzy {
-			if !state.AllowPartial {
-				state.LastUndoFailure = fmt.Sprintf("Fuzzy match rejected by policy for TX %d", tx.ID)
-				logLine(fmt.Sprintf("[UNDO-REJECT] %s", state.LastUndoFailure))
-				return
-			}
-			overallSafety = "fuzzy"
-		}
-
-		// 准备执行用的 Fact，使用解析出的 Row
-		fact := r.Inverse
-		fact.Target.Anchor.LineHint = res.Row
-		pendingFacts = append(pendingFacts, fact)
-	}
-
-	// [Phase 7] Phase 2: Execution (Atomic commitment)
-	// 正式从栈中弹出
-	state.UndoStack = state.UndoStack[:len(state.UndoStack)-1]
-	tx.SafetyLevel = overallSafety
-	state.LastUndoSafetyLevel = overallSafety
-	state.LastUndoFailure = ""
-
-	for _, f := range pendingFacts {
-		executeFact(f)
-	}
-
-	// Move to Redo Stack
-	state.RedoStack = append(state.RedoStack, tx)
+	// [Phase 9] Legacy undo now handled by Weaver as single source of truth
+	// This function should not be called directly anymore
+	// Undo is now dispatched as Intent to Weaver via ProcessIntentGlobal
 }
 
 func logLine(msg string) {
@@ -916,24 +866,9 @@ func handleVisualAction(action string, state *FSMState, targetPane string) {
 }
 
 func handleRedo(state *FSMState, targetPane string) {
-	if len(state.RedoStack) == 0 {
-		return
-	}
-	tx := state.RedoStack[len(state.RedoStack)-1]
-	if tx.Skipped {
-		logLine("Refusing Redo: Transaction was skipped or failed during Undo")
-		return
-	}
-	state.RedoStack = state.RedoStack[:len(state.RedoStack)-1]
-	state.UndoStack = append(state.UndoStack, tx)
-
-	// Inherit safety level from transaction
-	state.LastUndoSafetyLevel = tx.SafetyLevel
-	state.LastUndoFailure = ""
-
-	for _, r := range tx.Records {
-		executeFact(r.Fact)
-	}
+	// [Phase 9] Legacy redo now handled by Weaver as single source of truth
+	// This function should not be called directly anymore
+	// Redo is now dispatched as Intent to Weaver via ProcessIntentGlobal
 }
 
 func executeVimAction(action string, state *FSMState, targetPane string) {

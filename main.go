@@ -81,26 +81,12 @@ func takeSnapshotForPane(paneID string) (string, error) {
 	cursor := adapter.TmuxGetCursorPos(paneID)
 	lines := adapter.TmuxCapturePane(paneID)
 
-	var snapLines []core.LineSnapshot
-	for i, line := range lines {
-		snapLines = append(snapLines, core.LineSnapshot{
-			Row:  i,
-			Text: line,
-			Hash: core.LineHash(adapter.TmuxHashLine(line)),
-		})
-	}
+	// Use the new snapshot structure with LineID
+	snapshot := core.TakeSnapshot(paneID, core.CursorPos{
+		Row: cursor[0],
+		Col: cursor[1],
+	}, lines)
 
-	snapshot := core.Snapshot{
-		PaneID: paneID,
-		Cursor: core.CursorPos{
-			Row: cursor[0],
-			Col: cursor[1],
-		},
-		Lines:   snapLines,
-		TakenAt: time.Now(),
-	}
-
-	snapshot.Hash = computeSnapshotHash(snapshot)
 	return string(snapshot.Hash), nil
 }
 
@@ -108,15 +94,9 @@ func takeSnapshotForPane(paneID string) (string, error) {
 // NOTE: This is currently "Pane-only" scoped (Phase 8)
 // For Phase 9+ (Split/Multi-pane), this will need to be upgraded to "World-scoped"
 // where the hash represents the state of the affected world subgraph, not just a single pane
+// [Phase 9] This function is now redundant since core.TakeSnapshot already computes the hash
 func computeSnapshotHash(s core.Snapshot) core.SnapshotHash {
-	h := sha256.New()
-
-	h.Write([]byte(s.PaneID))
-	for _, line := range s.Lines {
-		h.Write([]byte(line.Hash))
-	}
-
-	return core.SnapshotHash(hex.EncodeToString(h.Sum(nil)))
+	return s.Hash
 }
 
 func (tm *TransactionManager) Begin(paneID string) {
@@ -161,7 +141,9 @@ func (tm *TransactionManager) Commit(
 	tx.Applied = true
 
 	// --- Phase 8.3: 提交到 Legacy 时间线（只有非跳过事务） ---
-	if !tx.Skipped {
+	// [Phase 9] Only add to legacy stack if not in Weaver mode
+	// Weaver becomes the single source of truth for undo/redo
+	if !tx.Skipped && GetMode() != ModeWeaver {
 		*stack = append(*stack, *tx)
 	}
 
@@ -762,7 +744,10 @@ func handleClient(conn net.Conn) bool {
 					executeAction(savedAction, &globalState, paneID, clientName)
 					globalState.Count = orig
 					transMgr.Commit(&globalState.UndoStack, paneID)
-					globalState.RedoStack = nil
+					// [Phase 9] Only clear legacy redo stack if not in Weaver mode
+					if GetMode() != ModeWeaver {
+						globalState.RedoStack = nil
+					}
 					return false
 				}
 			}
@@ -775,7 +760,10 @@ func handleClient(conn net.Conn) bool {
 			// --- [ABI: Audit Closure] ---
 			// Kernel finalizes the verdict and commits to the timeline.
 			transMgr.Commit(&globalState.UndoStack, paneID)
-			globalState.RedoStack = nil
+			// [Phase 9] Only clear legacy redo stack if not in Weaver mode
+			if GetMode() != ModeWeaver {
+				globalState.RedoStack = nil
+			}
 
 			// Record if repeatable
 			isRepeatable := strings.HasPrefix(action, "delete_") ||
