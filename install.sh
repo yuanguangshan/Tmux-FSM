@@ -126,9 +126,9 @@ case $install_mode in
         # 尝试静默重新加载 tmux 配置
         if tmux info >/dev/null 2>&1; then
             tmux source-file "$TMUX_CONF" 2>/dev/null && echo "✅ tmux configuration reloaded"
-            # 预热 Daemon
-            "$TMUX_FSM_DIR/tmux-fsm" -server >/dev/null 2>&1 &
-            echo "✅ Daemon pre-warmed."
+            # 预热 Daemon (Phase 7: Weaver Mode)
+            TMUX_FSM_MODE=weaver TMUX_FSM_LOG_FACTS=1 "$TMUX_FSM_DIR/tmux-fsm" -server >/dev/null 2>&1 &
+            echo "✅ Daemon pre-warmed (Weaver Mode)."
         fi
         ;;
     2)
@@ -148,9 +148,9 @@ case $install_mode in
         # 尝试静默重新加载 tmux 配置
         if tmux info >/dev/null 2>&1; then
             tmux source-file "$TMUX_CONF" 2>/dev/null && echo "✅ tmux configuration reloaded"
-            # 预热 Daemon
-            "$TMUX_FSM_DIR/tmux-fsm" -server >/dev/null 2>&1 &
-            echo "✅ Daemon pre-warmed."
+            # 预热 Daemon (Phase 7: Weaver Mode)
+            TMUX_FSM_MODE=weaver TMUX_FSM_LOG_FACTS=1 "$TMUX_FSM_DIR/tmux-fsm" -server >/dev/null 2>&1 &
+            echo "✅ Daemon pre-warmed (Weaver Mode)."
         fi
         ;;
     *)

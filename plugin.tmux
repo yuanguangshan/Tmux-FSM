@@ -24,8 +24,12 @@ run-shell "
         tmux bind-key -n \"\$root_key\" run-shell -b '$HOME/.tmux/plugins/tmux-fsm/enter_fsm.sh'
     fi
 
-    # 3. 启动服务器守护进程
-    $HOME/.tmux/plugins/tmux-fsm/tmux-fsm -server >/dev/null 2>&1 &
+    # 3. 设置全局环境变量 (Phase 7: Temporal Integrity)
+    tmux set-environment -g TMUX_FSM_MODE weaver
+    tmux set-environment -g TMUX_FSM_LOG_FACTS 1
+
+    # 4. 启动服务器守护进程 (Weaver Mode)
+    TMUX_FSM_MODE=weaver TMUX_FSM_LOG_FACTS=1 $HOME/.tmux/plugins/tmux-fsm/tmux-fsm -server >/dev/null 2>&1 &
 "
 
 # 5. FSM 键表配置 (新架构)

@@ -628,7 +628,11 @@ func handleClient(conn net.Conn) bool {
 	}
 
 	// [Phase 4] Weaver 模式下接管执行（包括 Undo/Redo），唯有 repeat_last 仍走 Legacy
-	if action != "" && (GetMode() != ModeWeaver || action == "repeat_last") {
+	if action != "" && (GetMode() == ModeLegacy || (GetMode() == ModeShadow) || action == "repeat_last") {
+		// [Phase 7] 再次确认：在 Weaver 模式下，Undo/Redo 必须由引擎完成，此处强制跳过
+		if GetMode() == ModeWeaver && (action == "undo" || action == "redo") {
+			return false
+		}
 		if action == "repeat_last" {
 			// Retrieve last repeatable action
 			if globalState.LastRepeatableAction != nil {
