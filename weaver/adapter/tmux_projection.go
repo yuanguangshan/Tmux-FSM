@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"fmt"
 	"strings"
 	"tmux-fsm/weaver/core"
 )
@@ -10,7 +11,15 @@ import (
 type TmuxProjection struct{}
 
 func (p *TmuxProjection) Apply(resolved []core.ResolvedAnchor, facts []core.ResolvedFact) error {
+	if err := detectProjectionConflicts(facts); err != nil {
+		return err
+	}
+
 	for _, fact := range facts {
+		if fact.Anchor.LineID == "" {
+			return fmt.Errorf("projection rejected: missing LineID (unsafe anchor)")
+		}
+
 		targetPane := fact.Anchor.PaneID
 		if targetPane == "" {
 			targetPane = "{current}" // 容错
@@ -127,4 +136,76 @@ func metaString(m map[string]interface{}, key string) string {
 		}
 	}
 	return ""
+}
+
+// detectProjectionConflicts 检测投影冲突：同 LineID 上写操作区间重叠
+func detectProjectionConflicts(facts []core.ResolvedFact) error {
+	type writeRange struct {
+		lineID core.LineID
+		start  int
+		end    int
+		kind   core.FactKind
+	}
+
+	var writes []writeRange
+
+	isWrite := func(f core.ResolvedFact) bool {
+		switch f.Kind {
+		case core.FactDelete:
+			return true
+		case core.FactReplace:
+			return true
+		case core.FactInsert:
+			return f.Payload.Text != ""
+		default:
+			return false
+		}
+	}
+
+	for _, f := range facts {
+		if f.Anchor.LineID == "" {
+			// Phase 10 invariant: Projection 不接受不稳定 anchor
+			return fmt.Errorf("projection conflict check failed: missing LineID")
+		}
+		if !isWrite(f) {
+			continue
+		}
+
+		start := f.Anchor.Start
+		end := f.Anchor.End
+		if end < start {
+			end = start
+		}
+
+		writes = append(writes, writeRange{
+			lineID: f.Anchor.LineID,
+			start:  start,
+			end:    end,
+			kind:   f.Kind,
+		})
+	}
+
+	// O(n^2) is fine: n is usually < 5
+	for i := 0; i < len(writes); i++ {
+		for j := i + 1; j < len(writes); j++ {
+			a := writes[i]
+			b := writes[j]
+
+			if a.lineID != b.lineID {
+				continue
+			}
+
+			// 区间重叠检测
+			if a.start <= b.end && b.start <= a.end {
+				return fmt.Errorf(
+					"projection conflict: overlapping writes on line %s [%d,%d] vs [%d,%d]",
+					a.lineID,
+					a.start, a.end,
+					b.start, b.end,
+				)
+			}
+		}
+	}
+
+	return nil
 }

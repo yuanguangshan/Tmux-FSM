@@ -78,12 +78,17 @@ func (r *PassthroughResolver) ResolveFacts(facts []core.Fact, expectedHash strin
 			}
 		}
 
+		safety := core.SafetyExact
+		if ra.LineID == "" {
+			safety = core.SafetyFuzzy // ❗不是 Exact
+		}
+
 		resolved = append(resolved, core.ResolvedFact{
 			Kind:    f.Kind,
 			Anchor:  ra,
 			Payload: payload,
 			Meta:    f.Meta,
-			Safety:  core.SafetyExact, // Phase 7: All current successful resolutions are exact
+			Safety:  safety,
 			LineID:  ra.LineID,        // Phase 9: Include stable LineID
 		})
 	}
@@ -160,16 +165,14 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 		}
 	}
 
-	// For now, we'll create a temporary LineID based on the content
-	// In a real implementation, we'd want to get the stable LineID from the snapshot
-	lineID := core.LineID(adapter.TmuxHashLine(lineText))
-
+	// ❗禁止在无 Snapshot 情况下伪造 LineID
+	// Return empty LineID to indicate unstable anchor
 	switch a.Kind {
 
 	case core.AnchorAtCursor:
 		return core.ResolvedAnchor{
 			PaneID: a.PaneID,
-			LineID: lineID,
+			LineID: "",        // 空 LineID，明确表示不稳定
 			Line:   row,
 			Start:  col,
 			End:    col,
@@ -183,7 +186,7 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 		}
 		return core.ResolvedAnchor{
 			PaneID: a.PaneID,
-			LineID: lineID,
+			LineID: "",        // 空 LineID，明确表示不稳定
 			Line:   row,
 			Start:  start,
 			End:    end,
@@ -193,7 +196,7 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 		// use lineText already captured
 		return core.ResolvedAnchor{
 			PaneID: a.PaneID,
-			LineID: lineID,
+			LineID: "",        // 空 LineID，明确表示不稳定
 			Line:   row,
 			Start:  0,
 			End:    len(lineText) - 1,
@@ -202,12 +205,9 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 	case core.AnchorLegacyRange:
 		// Legacy Range encoded in Ref
 		if m, ok := a.Ref.(map[string]int); ok {
-			// Create a LineID for the legacy line
-			legacyLineText := adapter.TmuxCaptureLine(a.PaneID, m["line"])
-			legacyLineID := core.LineID(adapter.TmuxHashLine(legacyLineText))
 			return core.ResolvedAnchor{
 				PaneID: a.PaneID,
-				LineID: legacyLineID,
+				LineID: "",        // 空 LineID，明确表示不稳定
 				Line:   m["line"],
 				Start:  m["start"],
 				End:    m["end"],
@@ -219,7 +219,7 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 		// Fallback for unknown kinds (e.g. Selection? if not implemented)
 		return core.ResolvedAnchor{
 			PaneID: a.PaneID,
-			LineID: lineID,
+			LineID: "",        // 空 LineID，明确表示不稳定
 			Line:   row,
 			Start:  col,
 			End:    col,

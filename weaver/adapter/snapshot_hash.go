@@ -6,6 +6,8 @@ import (
 	"tmux-fsm/weaver/core"
 )
 
+// ❌ DEPRECATED: Do NOT use this
+// SnapshotHash must be computed by core.TakeSnapshot only.
 func computeSnapshotHash(s core.Snapshot) core.SnapshotHash {
 	h := sha256.New()
 

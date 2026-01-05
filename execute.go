@@ -1,3 +1,7 @@
+// ❗LEGACY PHYSICAL REFERENCE
+// This file defines the canonical physical behavior.
+// Any change here MUST be mirrored in weaver/adapter/tmux_physical.go.
+
 package main
 
 import (

@@ -6,6 +6,9 @@ import (
 	"strings"
 )
 
+// ❗MIRROR OF execute.go
+// DO NOT diverge behavior unless Phase 6+ explicitly allows it.
+
 // NOTE:
 // This file is a verbatim copy of physical execution logic from execute.go.
 // Phase 3 rule:
