@@ -6,7 +6,32 @@ import (
 	"strings"
 )
 
+// processKeyToIntent 将按键转换为 Intent（阶段 1：新增的语义层）
+// 这是从 string-based action 到 Intent-based 的过渡函数
+func processKeyToIntent(state *FSMState, key string) Intent {
+	// 先调用原有逻辑获取 action string
+	action := processKeyLegacy(state, key)
+
+	// 如果没有 action，返回空 Intent
+	if action == "" {
+		return Intent{Kind: IntentNone}
+	}
+
+	// 将 action string 转换为 Intent
+	// 注意：这是一个临时的反向转换，最终会被移除
+	return actionStringToIntent(action, state.Count)
+}
+
+// processKey 保持原有签名，内部调用 processKeyToIntent
+// 这确保了向后兼容性（阶段 1 的关键：行为 100% 不变）
 func processKey(state *FSMState, key string) string {
+	intent := processKeyToIntent(state, key)
+	return intent.ToActionString()
+}
+
+// processKeyLegacy 是原来的 processKey 实现
+// 重命名以保留原有逻辑
+func processKeyLegacy(state *FSMState, key string) string {
 	var res string
 	switch state.Mode {
 	case "NORMAL":
@@ -150,10 +175,10 @@ func handleNormal(state *FSMState, key string) string {
 		"h": "left", "j": "down", "k": "up", "l": "right",
 		"w": "word_forward", "b": "word_backward", "e": "end_of_word",
 		"0": "start_of_line", "$": "end_of_line",
-		"G":   "end_of_file",
-		"^":   "start_of_line",
-		"C-b": "word_backward", // Adding C-b as word_backward alias
-		"C-f": "word_forward",  // Adding C-f as word_forward alias
+		"G":    "end_of_file",
+		"^":    "start_of_line",
+		"C-b":  "word_backward", // Adding C-b as word_backward alias
+		"C-f":  "word_forward",  // Adding C-f as word_forward alias
 		"Home": "start_of_line",
 		"End":  "end_of_line",
 	}
