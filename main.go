@@ -610,10 +610,19 @@ func handleClient(conn net.Conn) bool {
 
 	// 阶段 3：Weaver 模式 - 接管执行；Shadow 模式 - 仅观察
 	if (GetMode() == ModeShadow || GetMode() == ModeWeaver) && action != "" {
-		// 将 action string 转换为 Intent
-		intent := actionStringToIntent(action, globalState.Count, paneID)
-		// 让 Weaver 处理（只记录，不执行）
-		ProcessIntentGlobal(intent)
+		// [Phase 7] Hybrid Protection:
+		// If it's a high-fidelity action that will fall through to legacy below,
+		// we SKIP direct Weaver processing here to prevent physical interference.
+		// It will be captured via Reverse Bridge in Commit().
+		isHighFidelity := strings.HasPrefix(action, "delete_") ||
+			strings.HasPrefix(action, "change_") ||
+			strings.HasPrefix(action, "yank_") ||
+			strings.HasPrefix(action, "replace_")
+
+		if !(GetMode() == ModeWeaver && isHighFidelity) {
+			intent := actionStringToIntent(action, globalState.Count, paneID)
+			ProcessIntentGlobal(intent)
+		}
 	}
 
 	// [Phase 4] Weaver 模式下接管执行（包括 Undo/Redo），唯有 repeat_last 仍走 Legacy

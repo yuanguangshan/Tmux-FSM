@@ -809,42 +809,8 @@ func performPhysicalDelete(motion string, targetPane string) {
 		exec.Command("tmux", "send-keys", "-t", targetPane, "C-k").Run()
 
 	case "word_forward", "inside_word", "around_word": // dw
-		// Robust fallback: Shell bindings for M-d are flaky.
-		// Use tmux visual block deletion which works universally.
-		// 1. Enter copy mode
-		exec.Command("tmux", "copy-mode", "-t", targetPane).Run()
-		// 2. Start selection
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "begin-selection").Run()
-		// 3. Move to next word end (standard tmux key is 'e', but 'next-word-end' command)
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "next-word-end").Run()
-		// 4. Copy pipe and cancel (to get text for undo history if needed) - handled by captureText already?
-		// No, we just want to delete.
-		// 4. Delete the selection. In shell, this means we can't just 'delete' the selection easily
-		// without pasting emptiness or similar hacks.
-		// Wait, we need to DELETE in the shell prompt.
-		// Tmux copy-mode doesn't edit the shell buffer.
-		// We MUST send keys to the shell.
-
-		// If \033d failed, it means the shell simply doesn't support Alt+d.
-		// Let's try to simulate 'Delete' key repeatedly? No, we don't know the word length.
-		// Let's try Ctrl+w (delete word backward) but we are at the start.
-		// We can move to end of word (Alt+f) then Ctrl+w.
-		// But Alt+f might fail too!
-
-		// Let's try the HEX code for M-d again but explicitly as bytes.
-		// Or assume user might be using zsh with a different binding.
-
-		// Let's try `Escape` then `d` again but with a small sleep? No.
-
-		// Let's try moving cursor right word, then backspace word?
-		// Alt+Right is also Meta.
-
-		// Is there a standard way to delete word in ALL shells?
-		// No. But M-d is the readline standard.
-
-		// Let's revert to "Escape" "d" but ensure proper argument passing.
-		// tmux send-keys -t target Escape d
-		exec.Command("tmux", "send-keys", "-t", targetPane, "Escape", "d").Run()
+		// Robust implementation: M-d (Alt-d) is the shell standard for delete-word-forward.
+		exec.Command("tmux", "send-keys", "-t", targetPane, "M-d").Run()
 
 	case "word_backward": // db
 		// C-w: Unix word rubout (backward)
