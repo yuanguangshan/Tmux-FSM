@@ -87,9 +87,9 @@ func PerformPhysicalMove(motion string, count int, targetPane string) {
 	case "right":
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-N", cStr, "Right").Run()
 	case "start_of_line": // 0
-		exec.Command("tmux", "send-keys", "-t", targetPane, "Home").Run()
+		exec.Command("tmux", "send-keys", "-t", targetPane, "C-a").Run()
 	case "end_of_line": // $
-		exec.Command("tmux", "send-keys", "-t", targetPane, "End").Run()
+		exec.Command("tmux", "send-keys", "-t", targetPane, "C-e").Run()
 	case "word_forward": // w
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-N", cStr, "M-f").Run()
 	case "word_backward": // b
@@ -130,13 +130,8 @@ func PerformPhysicalDelete(motion string, targetPane string) {
 		exec.Command("tmux", "send-keys", "-t", targetPane, "C-k").Run()
 
 	case "word_forward", "inside_word", "around_word": // dw
-		// Robust fallback: Shell bindings for M-d are flaky.
-		// Use tmux visual block deletion which works universally.
-		exec.Command("tmux", "copy-mode", "-t", targetPane).Run()
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "begin-selection").Run()
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "next-word-end").Run()
-		// Note: Legacy code comment regarding copy-pipe omitted for brevity, but logic kept
-		exec.Command("tmux", "send-keys", "-t", targetPane, "Escape", "d").Run()
+		// Simple and robust: most shells bind M-d to delete-word-forward
+		exec.Command("tmux", "send-keys", "-t", targetPane, "M-d").Run()
 
 	case "word_backward": // db
 		// C-w: Unix word rubout (backward)

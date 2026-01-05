@@ -39,7 +39,7 @@ bind-key -T fsm -n Escape run-shell -b "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -e
 # 6. Explicitly bind alphanumeric keys (POSIX compliant)
 # {a..z} is a bash extension, we must use explicit lists for /bin/sh compatibility
 run-shell "
-    for key in a b c d e f g h i j k l m n o p q r s t u v w x y z A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9; do
+    for key in a b c d e f g h i j k l m n o p q r s t u v w x y z A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9 '$' '^' '.' '/' ',' ';' ':'; do
         tmux bind-key -T fsm \"\$key\" run-shell -b \"$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -key '\$key' '#{pane_id}|#{client_name}'\"
     done
 "
@@ -49,7 +49,7 @@ run-shell "
 
 # Keep 'Any' as a fallback for special keys and punctuation.
 bind-key -T fsm Any run-shell -b \
-  "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -key '#{key}' '#{pane_id}|#{client_name}'"
+  "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -key \"#{key}\" \"#{pane_id}|#{client_name}\""
 
 # 7. 额外的便捷键绑定
 bind-key -T fsm q run-shell -b "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -exit"
