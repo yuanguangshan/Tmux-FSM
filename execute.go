@@ -280,8 +280,15 @@ func executeShellAction(action string, state *FSMState, targetPane string) {
 				// Record semantic Fact in active transaction
 				record := captureShellDelete(targetPane, startPos[0], content)
 				transMgr.Append(record)
+
+				// [Phase 7] Robust Deletion:
+				// Since we know EXACTLY what we captured, we delete by character count.
+				// This is much safer than relying on shell M-d bindings.
+				exec.Command("tmux", "send-keys", "-t", targetPane, "-N", fmt.Sprint(len(content)), "Delete").Run()
+			} else {
+				// Fallback if capture failed
+				performPhysicalDelete(motion, targetPane)
 			}
-			performPhysicalDelete(motion, targetPane)
 		}
 		if op == "change" {
 			exitFSM(targetPane) // change implies entering insert mode
@@ -778,14 +785,17 @@ func abs(v int) int {
 
 func captureText(motion string, targetPane string) string {
 	if motion == "word_forward" {
-		// 直接通过 tmux 捕获内容
-		// 修复 Race Condition: tmux send-keys 是异步的，增加微调
+		// 1. 进入 copy-mode 并执行标准化抓取
+		exec.Command("tmux", "copy-mode", "-t", targetPane).Run()
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "begin-selection").Run()
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "next-word-end").Run()
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "copy-pipe", "tmux save-buffer -").Run()
-		time.Sleep(5 * time.Millisecond) // 给 tmux 5ms 时间刷入 buffer
+		// 使用 selection 模式自带的 copy-selection 确保进入 buffer
+		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "copy-selection-and-cancel").Run()
+
+		// 等待 buffer 同步
+		time.Sleep(20 * time.Millisecond)
 		out, _ := exec.Command("tmux", "show-buffer").Output()
-		return strings.TrimSpace(string(out))
+		return string(out)
 	}
 	return ""
 }
