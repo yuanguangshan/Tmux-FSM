@@ -54,26 +54,9 @@ func (b *ShellFactBuilder) Build(intent core.Intent, snapshot core.Snapshot) ([]
 			Meta:    meta,
 		})
 
-	case core.IntentDelete:
-		facts = append(facts, core.Fact{
-			Kind:   core.FactDelete,
-			Anchor: anchor,
-			Meta:   meta,
-		})
-
-	case core.IntentReplace:
-		// Replace assumes AtCursor (Char) usually?
-		// meta["new_text"]
-		newText := ""
-		if v, ok := meta["new_text"].(string); ok {
-			newText = v
-		}
-		facts = append(facts, core.Fact{
-			Kind:    core.FactReplace,
-			Anchor:  anchor,
-			Payload: core.FactPayload{NewText: newText},
-			Meta:    meta,
-		})
+	// Note: IntentDelete and IntentChange intentionally omitted for Shell.
+	// We rely on high-fidelity legacy capture and reverse-bridge injection
+	// because semantic word-boundary resolution in the shell is imprecise.
 
 	case core.IntentMove:
 		// Move is FactMove.

@@ -617,7 +617,15 @@ func handleClient(conn net.Conn) bool {
 	}
 
 	// [Phase 4] Weaver 模式下接管执行（包括 Undo/Redo），唯有 repeat_last 仍走 Legacy
-	if action != "" && (GetMode() == ModeLegacy || (GetMode() == ModeShadow) || action == "repeat_last") {
+	// [Phase 7] Hybrid Execution:
+	// Even in Weaver mode, we allow high-fidelity capture actions (delete/change/yank)
+	// to fall through to Lexacy execution so they can be captured accurately via Reverse Bridge.
+	isHighFidelityAction := strings.HasPrefix(action, "delete_") ||
+		strings.HasPrefix(action, "change_") ||
+		strings.HasPrefix(action, "yank_") ||
+		strings.HasPrefix(action, "replace_")
+
+	if action != "" && (GetMode() == ModeLegacy || (GetMode() == ModeShadow) || action == "repeat_last" || isHighFidelityAction) {
 		// 统一写入本地日志以便直接调试
 		logFile, _ := os.OpenFile(os.Getenv("HOME")+"/tmux-fsm.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if logFile != nil {
