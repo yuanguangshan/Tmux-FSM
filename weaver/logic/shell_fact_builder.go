@@ -32,15 +32,16 @@ func (b *ShellFactBuilder) Build(intent core.Intent, snapshot core.Snapshot) ([]
 		Hash:   lineHash,
 	}
 
-	// 根据 Target 将语义映射到 AnchorKind
-	// 假设 TargetKind: 0=Char, 1=Word, 2=Line, 3=Selection
+	// 假设 TargetKind: 1=Char, 2=Word, 3=Line, 5=TextObject (from intent.go)
 	switch target.Kind {
-	case 1: // Word
+	case 1: // Char
+		anchor.Kind = core.AnchorAtCursor
+	case 2: // Word
 		anchor.Kind = core.AnchorWord
-	case 2: // Line
+	case 3: // Line
 		anchor.Kind = core.AnchorLine
-	case 3: // Selection
-		anchor.Kind = core.AnchorSelection
+	case 5: // TextObject
+		anchor.Kind = core.AnchorWord // Fallback or sophisticated resolution
 	}
 
 	switch intent.GetKind() {

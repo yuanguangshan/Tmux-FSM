@@ -141,11 +141,17 @@ func actionStringToIntent(action string, count int, paneID string) Intent {
 	// 解析 motion 为 SemanticTarget
 	target := parseMotionToTarget(motion)
 
+	// 将原本的 motion 和 operation 存入 Meta 以供 Weaver Projection 使用
+	meta := make(map[string]interface{})
+	meta["motion"] = motion
+	meta["operation"] = operation
+
 	return Intent{
 		Kind:   kind,
 		Target: target,
 		Count:  count,
 		PaneID: paneID,
+		Meta:   meta,
 	}
 }
 
