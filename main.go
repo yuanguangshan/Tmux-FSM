@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -14,6 +16,8 @@ import (
 	"syscall"
 	"time"
 	"tmux-fsm/fsm"
+	"tmux-fsm/weaver/adapter"
+	"tmux-fsm/weaver/core"
 )
 
 // Anchor 是“我指的不是光标，而是这段文本”
@@ -46,12 +50,14 @@ type ActionRecord struct {
 type TransactionID uint64
 
 type Transaction struct {
-	ID          TransactionID  `json:"id"`
-	Records     []ActionRecord `json:"records"`
-	CreatedAt   time.Time      `json:"created_at"`
-	Applied     bool           `json:"applied"`
-	Skipped     bool           `json:"skipped"`
-	SafetyLevel string         `json:"safety_level,omitempty"` // exact, fuzzy
+	ID              TransactionID  `json:"id"`
+	Records         []ActionRecord `json:"records"`
+	CreatedAt       time.Time      `json:"created_at"`
+	Applied         bool           `json:"applied"`
+	Skipped         bool           `json:"skipped"`
+	SafetyLevel     string         `json:"safety_level,omitempty"` // exact, fuzzy
+	PreSnapshotHash string         `json:"pre_snapshot_hash,omitempty"` // Phase 8: World state before transaction
+	PostSnapshotHash string        `json:"post_snapshot_hash,omitempty"` // Phase 8: World state after transaction
 }
 
 type TransactionManager struct {
@@ -59,12 +65,68 @@ type TransactionManager struct {
 	nextID  TransactionID
 }
 
-func (tm *TransactionManager) Begin() {
+// takeSnapshotForPane takes a snapshot of the given pane using the global weaver manager
+func takeSnapshotForPane(paneID string) (string, error) {
+	if weaverMgr != nil && weaverMgr.snapshotProvider != nil {
+		snapshot, err := weaverMgr.snapshotProvider.TakeSnapshot(paneID)
+		if err != nil {
+			return "", err
+		}
+		return string(snapshot.Hash), nil
+	}
+
+	// Fallback: Use direct tmux capture if weaver is not available
+	// This is a simplified approach - we'll capture the current line and hash it
+	cursor := adapter.TmuxGetCursorPos(paneID)
+	lines := adapter.TmuxCapturePane(paneID)
+
+	var snapLines []core.LineSnapshot
+	for i, line := range lines {
+		snapLines = append(snapLines, core.LineSnapshot{
+			Row:  i,
+			Text: line,
+			Hash: core.LineHash(adapter.TmuxHashLine(line)),
+		})
+	}
+
+	snapshot := core.Snapshot{
+		PaneID: paneID,
+		Cursor: core.CursorPos{
+			Row: cursor[0],
+			Col: cursor[1],
+		},
+		Lines:   snapLines,
+		TakenAt: time.Now(),
+	}
+
+	snapshot.Hash = computeSnapshotHash(snapshot)
+	return string(snapshot.Hash), nil
+}
+
+// computeSnapshotHash computes the hash of a snapshot
+func computeSnapshotHash(s core.Snapshot) core.SnapshotHash {
+	h := sha256.New()
+
+	h.Write([]byte(s.PaneID))
+	for _, line := range s.Lines {
+		h.Write([]byte(line.Hash))
+	}
+
+	return core.SnapshotHash(hex.EncodeToString(h.Sum(nil)))
+}
+
+func (tm *TransactionManager) Begin(paneID string) {
 	tm.current = &Transaction{
 		ID:        tm.nextID,
 		CreatedAt: time.Now(),
 		Records:   []ActionRecord{},
 	}
+
+	// Take a snapshot before any changes occur
+	if hash, err := takeSnapshotForPane(paneID); err == nil {
+		tm.current.PreSnapshotHash = hash
+	}
+
 	tm.nextID++
 }
 
@@ -74,20 +136,38 @@ func (tm *TransactionManager) Append(r ActionRecord) {
 	}
 }
 
-func (tm *TransactionManager) Commit(stack *[]Transaction) {
+func (tm *TransactionManager) Commit(
+	stack *[]Transaction,
+	paneID string,
+) {
+	// --- Phase 8.0: 空事务直接丢弃 ---
 	if tm.current == nil || len(tm.current.Records) == 0 {
 		tm.current = nil
 		return
 	}
-	*stack = append(*stack, *tm.current)
 
-	// [Phase 4] Reverse Bridge: Inject into Weaver History
-	if weaverMgr != nil {
-		weaverMgr.InjectLegacyTransaction(tm.current)
+	tx := tm.current
+
+	// --- Phase 8.1: 记录 PostSnapshot（事实，不做判断） ---
+	if hash, err := takeSnapshotForPane(paneID); err == nil {
+		tx.PostSnapshotHash = hash
 	}
 
+	// --- Phase 8.2: 标记为 Applied（仅表示"已执行完成"） ---
+	tx.Applied = true
+
+	// --- Phase 8.3: 提交到 Legacy 时间线 ---
+	*stack = append(*stack, *tx)
+
+	// --- Phase 8.4: 注入 Weaver（只有"存在的事务"才允许） ---
+	if weaverMgr != nil && !tx.Skipped {
+		weaverMgr.InjectLegacyTransaction(tx)
+	}
+
+	// --- Phase 8.5: 结束事务 ---
 	tm.current = nil
 }
+
 
 type FSMState struct {
 	Mode                 string                 `json:"mode"`
@@ -661,12 +741,12 @@ func handleClient(conn net.Conn) bool {
 					if countToUse <= 0 {
 						countToUse = int(savedCount)
 					}
-					transMgr.Begin()
+					transMgr.Begin(paneID)
 					orig := globalState.Count
 					globalState.Count = countToUse
 					executeAction(savedAction, &globalState, paneID, clientName)
 					globalState.Count = orig
-					transMgr.Commit(&globalState.UndoStack)
+					transMgr.Commit(&globalState.UndoStack, paneID)
 					return false
 				}
 			}
@@ -674,11 +754,11 @@ func handleClient(conn net.Conn) bool {
 			// Execute action wrapped in transaction
 			// --- [ABI: Verdict Trigger] ---
 			// Kernel begins deliberation for the given intent.
-			transMgr.Begin()
+			transMgr.Begin(paneID)
 			executeAction(action, &globalState, paneID, clientName)
 			// --- [ABI: Audit Closure] ---
 			// Kernel finalizes the verdict and commits to the timeline.
-			transMgr.Commit(&globalState.UndoStack)
+			transMgr.Commit(&globalState.UndoStack, paneID)
 
 			// Record if repeatable
 			isRepeatable := strings.HasPrefix(action, "delete_") ||
