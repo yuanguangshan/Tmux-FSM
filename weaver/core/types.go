@@ -1,7 +1,5 @@
 package core
 
-import "time"
-
 // Fact 表示一个已发生的编辑事实（不可变）
 // 这是 Weaver Core 的核心数据结构
 type Fact struct {
@@ -50,16 +48,19 @@ type FactPayload struct {
 	Text     string `json:"text,omitempty"`
 	OldText  string `json:"old_text,omitempty"`
 	NewText  string `json:"new_text,omitempty"`
+	Value    string `json:"value,omitempty"`
 	Position int    `json:"position,omitempty"`
 }
 
-// Transaction 事务（一组原子性的 Facts）
+// Transaction 事务
+// 包含一组 Facts，具有原子性
 type Transaction struct {
 	ID           TransactionID `json:"id"`
-	Facts        []Fact        `json:"facts"`
-	InverseFacts []Fact        `json:"inverse_facts"` // 用于 Undo
+	Intent       Intent        `json:"intent"`        // 原始意图
+	Facts        []Fact        `json:"facts"`         // 正向事实序列
+	InverseFacts []Fact        `json:"inverse_facts"` // 反向事实序列（用于 Undo）
 	Safety       SafetyLevel   `json:"safety"`
-	CreatedAt    time.Time     `json:"created_at"`
+	Timestamp    int64         `json:"timestamp"`
 	Applied      bool          `json:"applied"`
 	Skipped      bool          `json:"skipped"`
 }

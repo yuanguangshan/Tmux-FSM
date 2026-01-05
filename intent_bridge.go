@@ -5,49 +5,60 @@ import "strings"
 // actionStringToIntent 将 legacy action string 转换为 Intent
 // 这是阶段 1 的临时桥接函数，用于保持向后兼容
 // 最终会被移除，直接从 handleXXX 函数返回 Intent
-func actionStringToIntent(action string, count int) Intent {
+// actionStringToIntent 将 legacy action string 转换为 Intent
+// 这是阶段 1 的临时桥接函数，用于保持向后兼容
+// 最终会被移除，直接从 handleXXX 函数返回 Intent
+func actionStringToIntent(action string, count int, paneID string) Intent {
+	base := Intent{PaneID: paneID}
+
 	if action == "" {
-		return Intent{Kind: IntentNone}
+		base.Kind = IntentNone
+		return base
 	}
 
 	// 特殊的单一动作
 	switch action {
 	case "undo":
-		return Intent{Kind: IntentUndo, Count: count}
+		return Intent{Kind: IntentUndo, Count: count, PaneID: paneID}
 	case "redo":
-		return Intent{Kind: IntentRedo, Count: count}
+		return Intent{Kind: IntentRedo, Count: count, PaneID: paneID}
 	case "repeat_last":
-		return Intent{Kind: IntentRepeat, Count: count}
+		return Intent{Kind: IntentRepeat, Count: count, PaneID: paneID}
 	case "exit":
-		return Intent{Kind: IntentExit}
+		return Intent{Kind: IntentExit, PaneID: paneID}
 	case "toggle_case":
-		return Intent{Kind: IntentToggleCase, Count: count}
+		return Intent{Kind: IntentToggleCase, Count: count, PaneID: paneID}
 	case "search_next":
 		return Intent{
 			Kind:   IntentSearch,
 			Target: SemanticTarget{Kind: TargetSearch, Direction: "next"},
 			Count:  count,
+			PaneID: paneID,
 		}
 	case "search_prev":
 		return Intent{
 			Kind:   IntentSearch,
 			Target: SemanticTarget{Kind: TargetSearch, Direction: "prev"},
 			Count:  count,
+			PaneID: paneID,
 		}
 	case "start_visual_char":
 		return Intent{
 			Kind:   IntentVisual,
 			Target: SemanticTarget{Scope: "char"},
+			PaneID: paneID,
 		}
 	case "start_visual_line":
 		return Intent{
 			Kind:   IntentVisual,
 			Target: SemanticTarget{Scope: "line"},
+			PaneID: paneID,
 		}
 	case "cancel_selection":
 		return Intent{
 			Kind:   IntentVisual,
 			Target: SemanticTarget{Scope: "cancel"},
+			PaneID: paneID,
 		}
 	}
 
@@ -58,6 +69,7 @@ func actionStringToIntent(action string, count int) Intent {
 			Kind:   IntentSearch,
 			Target: SemanticTarget{Kind: TargetSearch, Value: query},
 			Count:  count,
+			PaneID: paneID,
 		}
 	}
 
@@ -67,6 +79,7 @@ func actionStringToIntent(action string, count int) Intent {
 			Kind:   IntentReplace,
 			Target: SemanticTarget{Value: char},
 			Count:  count,
+			PaneID: paneID,
 		}
 	}
 
@@ -80,6 +93,7 @@ func actionStringToIntent(action string, count int) Intent {
 					"find_type": parts[1],
 					"char":      parts[2],
 				},
+				PaneID: paneID,
 			}
 		}
 	}
@@ -87,9 +101,10 @@ func actionStringToIntent(action string, count int) Intent {
 	if strings.HasPrefix(action, "visual_") {
 		op := strings.TrimPrefix(action, "visual_")
 		return Intent{
-			Kind:  IntentVisual,
-			Count: count,
-			Meta:  map[string]interface{}{"operation": op},
+			Kind:   IntentVisual,
+			Count:  count,
+			Meta:   map[string]interface{}{"operation": op},
+			PaneID: paneID,
 		}
 	}
 
@@ -97,7 +112,8 @@ func actionStringToIntent(action string, count int) Intent {
 	parts := strings.SplitN(action, "_", 2)
 	if len(parts) < 2 {
 		// 单一动作，无法解析
-		return Intent{Kind: IntentNone}
+		base.Kind = IntentNone
+		return base
 	}
 
 	operation := parts[0]
@@ -118,7 +134,8 @@ func actionStringToIntent(action string, count int) Intent {
 	case "paste":
 		kind = IntentPaste
 	default:
-		return Intent{Kind: IntentNone}
+		base.Kind = IntentNone
+		return base
 	}
 
 	// 解析 motion 为 SemanticTarget
@@ -128,6 +145,7 @@ func actionStringToIntent(action string, count int) Intent {
 		Kind:   kind,
 		Target: target,
 		Count:  count,
+		PaneID: paneID,
 	}
 }
 

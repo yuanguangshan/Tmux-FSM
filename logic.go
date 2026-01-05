@@ -19,7 +19,7 @@ func processKeyToIntent(state *FSMState, key string) Intent {
 
 	// 将 action string 转换为 Intent
 	// 注意：这是一个临时的反向转换，最终会被移除
-	return actionStringToIntent(action, state.Count)
+	return actionStringToIntent(action, state.Count, "") // PaneID 暂时为空，由 context 注入
 }
 
 // processKey 保持原有签名，内部调用 processKeyToIntent

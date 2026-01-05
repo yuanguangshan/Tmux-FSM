@@ -7,6 +7,12 @@ type Intent struct {
 	Target SemanticTarget         `json:"target"`
 	Count  int                    `json:"count"`
 	Meta   map[string]interface{} `json:"meta,omitempty"`
+	PaneID string                 `json:"pane_id"`
+}
+
+// GetPaneID 获取 PaneID
+func (i Intent) GetPaneID() string {
+	return i.PaneID
 }
 
 // IntentKind 意图类型

@@ -29,20 +29,46 @@ type Projection interface {
 }
 
 // Intent 意图接口（从主包导入）
-// 这里只是声明，实际定义在主包的 intent.go
 type Intent interface {
 	GetKind() IntentKind
 	GetTarget() SemanticTarget
 	GetCount() int
+	GetMeta() map[string]interface{}
+	GetPaneID() string // 新增：Phase 3 需要
 }
 
-// IntentKind 意图类型（占位符）
+// IntentKind 意图类型
 type IntentKind int
 
-// SemanticTarget 语义目标（占位符）
+const (
+	IntentNone IntentKind = iota
+	IntentMove
+	IntentDelete
+	IntentChange
+	IntentYank
+	IntentInsert
+	IntentPaste
+	IntentUndo
+	IntentRedo
+	IntentSearch
+	IntentVisual
+	IntentToggleCase
+	IntentReplace
+	IntentRepeat
+	IntentFind
+	IntentExit
+)
+
+// SemanticTarget 语义目标
 type SemanticTarget struct {
 	Kind      int
 	Direction string
 	Scope     string
 	Value     string
+}
+
+// Planner 规划器接口
+// 负责将 Intent 转换为 Facts
+type Planner interface {
+	Build(intent Intent, paneID string) ([]Fact, []Fact, error)
 }

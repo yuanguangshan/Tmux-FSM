@@ -392,9 +392,11 @@ func runServer() {
 	fmt.Printf("Server starting (v3-merged) at %s...\n", socketPath)
 	// 阶段 2：加载配置
 	LoadConfig()
-	fmt.Printf("Server starting (Phase 2) at %s...\n", socketPath)
-	fmt.Printf("Execution mode: %s\n", modeString(GetMode()))
-
+	// 初始化 Weaver Core (Phase 2+)
+	InitWeaver(globalConfig.Mode)
+	if GetMode() != ModeLegacy {
+		fmt.Printf("Execution mode: %s\n", modeString(GetMode()))
+	}
 	// 检查是否已有服务在运行 (且能响应)
 	if conn, err := net.DialTimeout("unix", socketPath, 1*time.Second); err == nil {
 		conn.Close()
@@ -602,10 +604,10 @@ func handleClient(conn net.Conn) bool {
 	}
 	// --- [融合逻辑结束] ---
 
-	// 阶段 2：Shadow 模式 - 让 Weaver 观察但不执行
-	if GetMode() == ModeShadow && action != "" {
+	// 阶段 3：Weaver 模式 - 接管执行；Shadow 模式 - 仅观察
+	if (GetMode() == ModeShadow || GetMode() == ModeWeaver) && action != "" {
 		// 将 action string 转换为 Intent
-		intent := actionStringToIntent(action, globalState.Count)
+		intent := actionStringToIntent(action, globalState.Count, paneID)
 		// 让 Weaver 处理（只记录，不执行）
 		ProcessIntentGlobal(intent)
 	}
@@ -621,7 +623,8 @@ func handleClient(conn net.Conn) bool {
 		logFile.Close()
 	}
 
-	if action != "" {
+	// [Phase 3] Weaver 模式下接管执行 (repeat_last, undo, redo 除外)
+	if action != "" && (GetMode() != ModeWeaver || (action == "repeat_last" || action == "undo" || action == "redo")) {
 		if action == "repeat_last" {
 			// Retrieve last repeatable action
 			if globalState.LastRepeatableAction != nil {

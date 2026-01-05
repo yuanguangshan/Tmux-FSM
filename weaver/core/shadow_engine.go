@@ -1,67 +1,63 @@
 package core
 
-import (
-	"fmt"
-	"time"
-)
+import "time"
 
-// ShadowEngine 影子引擎实现
-// 阶段 2：只产生 Fact，不执行 Projection
+// ShadowEngine 影子模式引擎
+// 目前也承担了 Execution Engine for Weaver Mode 的职责
 type ShadowEngine struct {
-	history []Transaction
-	cursor  int
-	nextID  int
+	planner Planner // 依赖注入：负责生成 Facts
 }
 
-// NewShadowEngine 创建新的影子引擎
-func NewShadowEngine() *ShadowEngine {
+func NewShadowEngine(planner Planner) *ShadowEngine {
 	return &ShadowEngine{
-		history: make([]Transaction, 0),
-		cursor:  -1,
-		nextID:  1,
+		planner: planner,
 	}
 }
 
-// ApplyIntent 应用意图（Shadow 模式：只记录，不执行）
 func (e *ShadowEngine) ApplyIntent(intent Intent, resolver AnchorResolver, projection Projection) (*Verdict, error) {
-	// 阶段 2：我们只是记录 Intent，不真正执行
-	// 这是"影子模式"的核心：观察但不干预
-
-	txID := TransactionID(fmt.Sprintf("tx-%d", e.nextID))
-	e.nextID++
-
-	// 创建一个空的事务（阶段 2 暂不生成真实 Fact）
-	tx := Transaction{
-		ID:        txID,
-		Facts:     []Fact{}, // 阶段 3 才会填充
-		Safety:    SafetyExact,
-		CreatedAt: time.Now(),
-		Applied:   false, // Shadow 模式不执行
+	// 1. Plan: 将 Intent 转换为 Fact 序列
+	// 这里的 PaneID 必须从 Intent 中获取
+	facts, inverseFacts, err := e.planner.Build(intent, intent.GetPaneID())
+	if err != nil {
+		// Log error but maybe continue if we want to default to something?
+		// For now, return error
+		return nil, err
 	}
 
-	// 记录到历史（但不执行）
-	e.history = append(e.history[:e.cursor+1], tx)
-	e.cursor++
+	// 2. Transact: 创建事务
+	// TODO: Replace with real UUID generator
+	tx := Transaction{
+		ID:           TransactionID("tx-" + time.Now().Format("150405")),
+		Intent:       intent,
+		Facts:        facts,
+		InverseFacts: inverseFacts,
+		Safety:       SafetyExact, // 暂时假设为 Exact
+		Timestamp:    time.Now().Unix(),
+		Skipped:      false,
+	}
 
+	// 3. Project: 执行 (Apply Facts)
+	// 无论是什么 Mode，Engine 都负责调用 Projection。
+	// 如果是 Shadow Mode，调用者应该传入 NoopProjection。
+	// 如果是 Weaver Mode，调用者应该传入 TmuxProjection。
+	if err := projection.Apply(nil, facts); err != nil {
+		return nil, err
+	}
+
+	tx.Applied = true
+
+	// 4. Return Verdict
 	return &Verdict{
-		Kind:    VerdictSkipped, // Shadow 模式总是 Skipped
-		Safety:  SafetyExact,
-		Message: fmt.Sprintf("Shadow mode: Intent recorded but not applied (tx: %s)", txID),
+		Kind:        VerdictApplied,
+		Message:     "Applied via Smart Projection",
+		Transaction: &tx,
 	}, nil
 }
 
-// Undo 撤销（Shadow 模式：不实现）
 func (e *ShadowEngine) Undo() (*Verdict, error) {
-	return &Verdict{
-		Kind:    VerdictSkipped,
-		Message: "Shadow mode: Undo not implemented",
-	}, nil
+	return nil, nil // Not implemented yet
 }
 
-// Redo 重做（Shadow 模式：不实现）
 func (e *ShadowEngine) Redo() (*Verdict, error) {
-	return &Verdict{
-		Kind:    VerdictSkipped,
-		Message: "Shadow mode: Redo not implemented",
-	}, nil
+	return nil, nil // Not implemented yet
 }
