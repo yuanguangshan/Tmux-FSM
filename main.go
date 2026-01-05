@@ -100,6 +100,7 @@ type FSMState struct {
 	RedoStack            []Transaction          `json:"redo_stack"`
 	LastUndoFailure      string                 `json:"last_undo_failure,omitempty"`
 	LastUndoSafetyLevel  string                 `json:"last_undo_safety_level,omitempty"`
+	AllowPartial         bool                   `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
 }
 
 var (

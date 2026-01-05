@@ -9,6 +9,7 @@ type Intent struct {
 	Meta         map[string]interface{} `json:"meta,omitempty"`
 	PaneID       string                 `json:"pane_id"`
 	SnapshotHash string                 `json:"snapshot_hash"` // Phase 6.2
+	AllowPartial bool                   `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
 }
 
 // GetPaneID 获取 PaneID
@@ -22,6 +23,10 @@ func (i Intent) GetKind() int {
 
 func (i Intent) GetSnapshotHash() string {
 	return i.SnapshotHash
+}
+
+func (i Intent) IsPartialAllowed() bool {
+	return i.AllowPartial
 }
 
 // IntentKind 意图类型

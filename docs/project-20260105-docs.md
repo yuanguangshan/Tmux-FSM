@@ -1,24 +1,23 @@
 # Project Documentation
 
-- **Generated at:** 2026-01-05 19:25:13
+- **Generated at:** 2026-01-05 19:59:37
 - **Root Dir:** `.`
-- **File Count:** 30
-- **Total Size:** 131.17 KB
+- **File Count:** 29
+- **Total Size:** 135.69 KB
 
 ## 📂 File List
 - `bridge/bridge.go` (2.00 KB)
 - `config.go` (1.37 KB)
-- `execute.go` (32.17 KB)
+- `execute.go` (32.65 KB)
 - `fsm/engine.go` (3.85 KB)
 - `fsm/keymap.go` (1.11 KB)
 - `fsm/ui.go` (0.76 KB)
 - `fsm/ui/interface.go` (0.08 KB)
 - `fsm/ui/popup.go` (0.78 KB)
-- `intent.go` (4.82 KB)
+- `intent.go` (5.00 KB)
 - `intent_bridge.go` (5.28 KB)
-- `main.go` (22.71 KB)
+- `main.go` (22.83 KB)
 - `tools/gen-docs.go` (10.41 KB)
-- `weaver/adapter/reality.go` (0.20 KB)
 - `weaver/adapter/snapshot.go` (0.23 KB)
 - `weaver/adapter/snapshot_hash.go` (0.31 KB)
 - `weaver/adapter/tmux_adapter.go` (1.42 KB)
@@ -29,13 +28,13 @@
 - `weaver/adapter/tmux_utils.go` (2.25 KB)
 - `weaver/core/anchor_kind.go` (0.24 KB)
 - `weaver/core/history.go` (2.51 KB)
-- `weaver/core/resolved_fact.go` (0.47 KB)
-- `weaver/core/shadow_engine.go` (3.74 KB)
+- `weaver/core/resolved_fact.go` (0.53 KB)
+- `weaver/core/shadow_engine.go` (6.45 KB)
 - `weaver/core/snapshot.go` (0.53 KB)
-- `weaver/core/types.go` (2.97 KB)
-- `weaver/logic/passthrough_resolver.go` (5.93 KB)
+- `weaver/core/types.go` (3.21 KB)
+- `weaver/logic/passthrough_resolver.go` (6.26 KB)
 - `weaver/logic/shell_fact_builder.go` (2.34 KB)
-- `weaver_manager.go` (6.21 KB)
+- `weaver_manager.go` (6.82 KB)
 
 ---
 
@@ -888,35 +887,54 @@ func handleUndo(state *FSMState, targetPane string) {
 	if len(state.UndoStack) == 0 {
 		return
 	}
-	// 弹出最近一组事务
+	// 弹出最近一个事务（先不正式移除，等成功后再说）
 	tx := state.UndoStack[len(state.UndoStack)-1]
-	state.UndoStack = state.UndoStack[:len(state.UndoStack)-1]
 
-	// Axiom 1: Transaction Atomicity - Process the whole transaction unit
-	tx.SafetyLevel = "exact" // Default
-	state.LastUndoSafetyLevel = "exact"
+	// [Phase 7] Phase 1: Resolve all anchors first (Axiom 7.2)
+	// 确保整个事务要么全做，要么不做，禁止“半次 Undo”
+	pendingFacts := make([]Fact, 0, len(tx.Records))
+	overallSafety := "exact"
+
 	for i := len(tx.Records) - 1; i >= 0; i-- {
 		r := tx.Records[i]
 		// Axiom 2: Anchor Primacy - Always resolve anchor before executing
-		if res, err := ResolveAnchor(r.Inverse.Target.Anchor); err == nil {
-			// Axiom 7: Transaction-Level Degradation - One fuzzy contaminates the whole TX
-			if res.Result == ResolveFuzzy {
-				tx.SafetyLevel = "fuzzy"
-				state.LastUndoSafetyLevel = "fuzzy"
-				r.Inverse.Target.Anchor.LineHint = res.Row
-			}
-			executeFact(r.Inverse)
-		} else {
-			// Axiom 4: Mandatory Failure Conditions - Fail the entire transaction
-			tx.Skipped = true
-			state.LastUndoSafetyLevel = "" // Axiom 5: No Partial Trust
+		res, err := ResolveAnchor(r.Inverse.Target.Anchor)
+		if err != nil {
+			// Axiom 4: Mandatory Failure Conditions - Reject the entire transaction
 			state.LastUndoFailure = fmt.Sprintf("Anchor mismatch for TX %d in pane %s", tx.ID, r.Inverse.Target.Anchor.PaneID)
-			// Axiom 11: Explainability - Log failure reasons
-			logLine(fmt.Sprintf("[UNDO-SKIP] %s", state.LastUndoFailure))
-			break
+			state.LastUndoSafetyLevel = ""
+			logLine(fmt.Sprintf("[UNDO-REJECT] %s", state.LastUndoFailure))
+			return // 立即退出，不执行任何写操作
 		}
+
+		// Axiom 7.4 & 7.9: Fuzzy Policy
+		if res.Result == ResolveFuzzy {
+			if !state.AllowPartial {
+				state.LastUndoFailure = fmt.Sprintf("Fuzzy match rejected by policy for TX %d", tx.ID)
+				logLine(fmt.Sprintf("[UNDO-REJECT] %s", state.LastUndoFailure))
+				return
+			}
+			overallSafety = "fuzzy"
+		}
+
+		// 准备执行用的 Fact，使用解析出的 Row
+		fact := r.Inverse
+		fact.Target.Anchor.LineHint = res.Row
+		pendingFacts = append(pendingFacts, fact)
 	}
 
+	// [Phase 7] Phase 2: Execution (Atomic commitment)
+	// 正式从栈中弹出
+	state.UndoStack = state.UndoStack[:len(state.UndoStack)-1]
+	tx.SafetyLevel = overallSafety
+	state.LastUndoSafetyLevel = overallSafety
+	state.LastUndoFailure = ""
+
+	for _, f := range pendingFacts {
+		executeFact(f)
+	}
+
+	// Move to Redo Stack
 	state.RedoStack = append(state.RedoStack, tx)
 }
 
@@ -998,7 +1016,7 @@ func performPhysicalDelete(motion string, targetPane string) {
 		exec.Command("tmux", "send-keys", "-t", targetPane, "C-k").Run()
 
 	case "word_forward", "inside_word", "around_word": // dw
-		// Robust fallback: Shell bindings for M-d are flaky. 
+		// Robust fallback: Shell bindings for M-d are flaky.
 		// Use tmux visual block deletion which works universally.
 		// 1. Enter copy mode
 		exec.Command("tmux", "copy-mode", "-t", targetPane).Run()
@@ -1008,29 +1026,29 @@ func performPhysicalDelete(motion string, targetPane string) {
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "next-word-end").Run()
 		// 4. Copy pipe and cancel (to get text for undo history if needed) - handled by captureText already?
 		// No, we just want to delete.
-		// 4. Delete the selection. In shell, this means we can't just 'delete' the selection easily 
-		// without pasting emptiness or similar hacks. 
-		// Wait, we need to DELETE in the shell prompt. 
+		// 4. Delete the selection. In shell, this means we can't just 'delete' the selection easily
+		// without pasting emptiness or similar hacks.
+		// Wait, we need to DELETE in the shell prompt.
 		// Tmux copy-mode doesn't edit the shell buffer.
 		// We MUST send keys to the shell.
-		
+
 		// If \033d failed, it means the shell simply doesn't support Alt+d.
 		// Let's try to simulate 'Delete' key repeatedly? No, we don't know the word length.
 		// Let's try Ctrl+w (delete word backward) but we are at the start.
-		// We can move to end of word (Alt+f) then Ctrl+w. 
+		// We can move to end of word (Alt+f) then Ctrl+w.
 		// But Alt+f might fail too!
-		
+
 		// Let's try the HEX code for M-d again but explicitly as bytes.
 		// Or assume user might be using zsh with a different binding.
-		
+
 		// Let's try `Escape` then `d` again but with a small sleep? No.
-		
+
 		// Let's try moving cursor right word, then backspace word?
 		// Alt+Right is also Meta.
-		
+
 		// Is there a standard way to delete word in ALL shells?
 		// No. But M-d is the readline standard.
-		
+
 		// Let's revert to "Escape" "d" but ensure proper argument passing.
 		// tmux send-keys -t target Escape d
 		exec.Command("tmux", "send-keys", "-t", targetPane, "Escape", "d").Run()
@@ -1267,7 +1285,7 @@ func getHelpText(state *FSMState) string {
 
 func showHelp(state *FSMState, targetPane string) {
 	helpText := getHelpText(state)
-	// Use fixed dimensions for a clean, centered look on desktop. 
+	// Use fixed dimensions for a clean, centered look on desktop.
 	// 80x28 is sufficient for the cheat sheet content.
 	exec.Command("tmux", "display-popup", "-t", targetPane, "-E", "-w", "80", "-h", "28", fmt.Sprintf("echo '%s'; read -n 1", helpText)).Run()
 }
@@ -1740,6 +1758,7 @@ type Intent struct {
 	Meta         map[string]interface{} `json:"meta,omitempty"`
 	PaneID       string                 `json:"pane_id"`
 	SnapshotHash string                 `json:"snapshot_hash"` // Phase 6.2
+	AllowPartial bool                   `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
 }
 
 // GetPaneID 获取 PaneID
@@ -1753,6 +1772,10 @@ func (i Intent) GetKind() int {
 
 func (i Intent) GetSnapshotHash() string {
 	return i.SnapshotHash
+}
+
+func (i Intent) IsPartialAllowed() bool {
+	return i.AllowPartial
 }
 
 // IntentKind 意图类型
@@ -2282,6 +2305,7 @@ type FSMState struct {
 	RedoStack            []Transaction          `json:"redo_stack"`
 	LastUndoFailure      string                 `json:"last_undo_failure,omitempty"`
 	LastUndoSafetyLevel  string                 `json:"last_undo_safety_level,omitempty"`
+	AllowPartial         bool                   `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
 }
 
 var (
@@ -3470,20 +3494,6 @@ func logf(verbose bool, format string, a ...any) {
 
 ````
 
-## 📄 `weaver/adapter/reality.go`
-
-````go
-package adapter
-
-import "tmux-fsm/weaver/core"
-
-// RealityReader 读取当前世界状态（用于一致性验证）
-type RealityReader interface {
-	ReadCurrent(paneID string) (core.Snapshot, error)
-}
-
-````
-
 ## 📄 `weaver/adapter/snapshot.go`
 
 ````go
@@ -4464,6 +4474,7 @@ type ResolvedFact struct {
 	Anchor  ResolvedAnchor
 	Payload FactPayload
 	Meta    map[string]interface{} // Phase 5.2: 保留 Meta 以兼容旧 Projection 逻辑
+	Safety  SafetyLevel            // Phase 7: Resolution safety
 }
 
 ````
@@ -4485,19 +4496,41 @@ type ShadowEngine struct {
 	history    History
 	resolver   AnchorResolver
 	projection Projection
+	reality    RealityReader
 }
 
-func NewShadowEngine(planner Planner, resolver AnchorResolver, projection Projection) *ShadowEngine {
+func NewShadowEngine(planner Planner, resolver AnchorResolver, projection Projection, reality RealityReader) *ShadowEngine {
 	return &ShadowEngine{
 		planner:    planner,
 		history:    NewInMemoryHistory(100),
 		resolver:   resolver,
 		projection: projection,
+		reality:    reality,
 	}
 }
 
 func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, error) {
 	var audit []AuditEntry
+
+	// Phase 6.3: Temporal Adjudication (World Drift Check)
+	// Engine owns the authority to reject execution if current reality != intent's expectation.
+	if intent.GetSnapshotHash() != "" && e.reality != nil {
+		current, err := e.reality.ReadCurrent(intent.GetPaneID())
+		if err == nil {
+			if string(current.Hash) != intent.GetSnapshotHash() {
+				audit = append(audit, AuditEntry{Step: "Adjudicate", Result: "Rejected: World Drift detected"})
+				return &Verdict{
+					Kind:    VerdictRejected,
+					Safety:  SafetyUnsafe,
+					Message: "World drift detected",
+					Audit:   audit,
+				}, ErrWorldDrift
+			}
+			audit = append(audit, AuditEntry{Step: "Adjudicate", Result: "Success: Time consistency verified"})
+		}
+		// If Reality check fails (IO error), we might proceed with warning or fail fast.
+		// For now, assume if we can't read reality, it's a structural error but not necessarily drift.
+	}
 
 	// 1. Handle Undo/Redo explicitly
 	kind := intent.GetKind()
@@ -4516,17 +4549,6 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 	}
 	audit = append(audit, AuditEntry{Step: "Plan", Result: "Success"})
 
-	// 3. Create Transaction
-	txID := TransactionID(fmt.Sprintf("tx-%d", time.Now().UnixNano()))
-	tx := &Transaction{
-		ID:           txID,
-		Intent:       intent,
-		Facts:        facts,
-		InverseFacts: inverseFacts,
-		Safety:       SafetyExact,
-		Timestamp:    time.Now().Unix(),
-	}
-
 	// [Phase 5.1] 4. Resolve: 定位权移交
 	// [Phase 5.4] 包含 Reconciliation 检查
 	// [Phase 6.3] 包含 World Drift 检查 (SnapshotHash)
@@ -4537,6 +4559,35 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 	}
 	audit = append(audit, AuditEntry{Step: "Resolve", Result: "Success"})
 
+	// [Phase 7] Determine overall safety
+	safety := SafetyExact
+	for _, rf := range resolvedFacts {
+		if rf.Safety > safety {
+			safety = rf.Safety
+		}
+	}
+
+	if safety == SafetyFuzzy && !intent.IsPartialAllowed() {
+		return &Verdict{
+			Kind:    VerdictRejected,
+			Safety:  SafetyUnsafe,
+			Message: "Fuzzy resolution disallowed by policy",
+			Audit:   audit,
+		}, ErrWorldDrift // Or a new error like ErrSafetyViolation
+	}
+
+	// 3. Create Transaction
+	txID := TransactionID(fmt.Sprintf("tx-%d", time.Now().UnixNano()))
+	tx := &Transaction{
+		ID:           txID,
+		Intent:       intent,
+		Facts:        facts,
+		InverseFacts: inverseFacts,
+		Safety:       safety,
+		Timestamp:    time.Now().Unix(),
+		AllowPartial: intent.IsPartialAllowed(),
+	}
+
 	// 5. Project: Execute
 	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
 		audit = append(audit, AuditEntry{Step: "Project", Result: fmt.Sprintf("Error: %v", err)})
@@ -4544,6 +4595,15 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 	}
 	audit = append(audit, AuditEntry{Step: "Project", Result: "Success"})
 	tx.Applied = true
+
+	// [Phase 7] Capture PostSnapshotHash for Undo verification
+	if e.reality != nil {
+		postSnap, err := e.reality.ReadCurrent(intent.GetPaneID())
+		if err == nil {
+			tx.PostSnapshotHash = string(postSnap.Hash)
+			audit = append(audit, AuditEntry{Step: "Record", Result: fmt.Sprintf("PostHash: %s", tx.PostSnapshotHash)})
+		}
+	}
 
 	// 6. Update History
 	if len(facts) > 0 {
@@ -4554,7 +4614,7 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 		Kind:        VerdictApplied,
 		Message:     "Applied via Smart Projection",
 		Transaction: tx,
-		Safety:      SafetyExact,
+		Safety:      safety,
 		Audit:       audit,
 	}, nil
 }
@@ -4565,15 +4625,31 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 		return &Verdict{Kind: VerdictSkipped, Message: "Nothing to undo"}, nil
 	}
 
+	// [Phase 7] Axiom 7.5: Undo Is Verified Replay
+	if tx.PostSnapshotHash != "" && e.reality != nil {
+		current, err := e.reality.ReadCurrent(tx.Intent.GetPaneID())
+		if err == nil && string(current.Hash) != tx.PostSnapshotHash {
+			// Put it back to undo stack since we didn't apply it
+			e.history.PushBack(tx)
+			return &Verdict{
+				Kind:    VerdictRejected,
+				Message: "World drift: cannot undo safely",
+				Safety:  SafetyUnsafe,
+			}, ErrWorldDrift
+		}
+	}
+
 	// [Phase 5.1] Resolve InverseFacts
-	// [Phase 6.3] Undo logic currently bypasses Hash check (TODO: State B Hash)
-	resolvedFacts, err := e.resolver.ResolveFacts(tx.InverseFacts, "")
+	// [Phase 6.3] Use recorded PostHash if available (passed as expectedHash)
+	resolvedFacts, err := e.resolver.ResolveFacts(tx.InverseFacts, tx.PostSnapshotHash)
 	if err != nil {
+		e.history.PushBack(tx)
 		return nil, err
 	}
 
 	// Apply
 	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
+		e.history.PushBack(tx)
 		return nil, err
 	}
 
@@ -4593,14 +4669,30 @@ func (e *ShadowEngine) performRedo() (*Verdict, error) {
 		return &Verdict{Kind: VerdictSkipped, Message: "Nothing to redo"}, nil
 	}
 
+	// [Phase 7] Redo verification (must match Pre-state)
+	preHash := tx.Intent.GetSnapshotHash()
+	if preHash != "" && e.reality != nil {
+		current, err := e.reality.ReadCurrent(tx.Intent.GetPaneID())
+		if err == nil && string(current.Hash) != preHash {
+			e.history.AddRedo(tx)
+			return &Verdict{
+				Kind:    VerdictRejected,
+				Message: "World drift: cannot redo safely",
+				Safety:  SafetyUnsafe,
+			}, ErrWorldDrift
+		}
+	}
+
 	// [Phase 5.1] Resolve Facts
-	resolvedFacts, err := e.resolver.ResolveFacts(tx.Facts, "")
+	resolvedFacts, err := e.resolver.ResolveFacts(tx.Facts, preHash)
 	if err != nil {
+		e.history.AddRedo(tx)
 		return nil, err
 	}
 
 	// Apply
 	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
+		e.history.AddRedo(tx)
 		return nil, err
 	}
 
@@ -4718,14 +4810,16 @@ type FactPayload struct {
 // Transaction 事务
 // 包含一组 Facts，具有原子性
 type Transaction struct {
-	ID           TransactionID `json:"id"`
-	Intent       Intent        `json:"intent"`        // 原始意图
-	Facts        []Fact        `json:"facts"`         // 正向事实序列
-	InverseFacts []Fact        `json:"inverse_facts"` // 反向事实序列（用于 Undo）
-	Safety       SafetyLevel   `json:"safety"`
-	Timestamp    int64         `json:"timestamp"`
-	Applied      bool          `json:"applied"`
-	Skipped      bool          `json:"skipped"`
+	ID               TransactionID `json:"id"`
+	Intent           Intent        `json:"intent"`        // 原始意图
+	Facts            []Fact        `json:"facts"`         // 正向事实序列
+	InverseFacts     []Fact        `json:"inverse_facts"` // 反向事实序列（用于 Undo）
+	Safety           SafetyLevel   `json:"safety"`
+	Timestamp        int64         `json:"timestamp"`
+	Applied          bool          `json:"applied"`
+	Skipped          bool          `json:"skipped"`
+	PostSnapshotHash string        `json:"post_snapshot_hash,omitempty"` // Phase 7: State after application
+	AllowPartial     bool          `json:"allow_partial,omitempty"`      // Phase 7: Explicit flag for fuzzy match
 }
 
 // TransactionID 事务 ID
@@ -4791,7 +4885,7 @@ import (
 // PassthroughResolver is a Phase 5.3 shim.
 // It implements real resolution logic for Semantic Anchors.
 type PassthroughResolver struct {
-	Reality adapter.RealityReader
+	Reality core.RealityReader
 }
 
 func (r *PassthroughResolver) ResolveFacts(facts []core.Fact, expectedHash string) ([]core.ResolvedFact, error) {
@@ -4800,19 +4894,18 @@ func (r *PassthroughResolver) ResolveFacts(facts []core.Fact, expectedHash strin
 	}
 
 	// Phase 6.3: Consistency Verification
+	// [DELETED] Check moved to ShadowEngine.ApplyIntent for unified adjudication.
+	// Resolver now trusts the caller or uses the hash solely for snapshot-based resolution optimization.
 	var currentSnapshot *core.Snapshot
 	if expectedHash != "" && r.Reality != nil {
-		// Assume homogeneous PaneID for this batch
 		paneID := facts[0].Anchor.PaneID
 		snap, err := r.Reality.ReadCurrent(paneID)
-		if err != nil {
-			return nil, err
+		if err == nil {
+			// Even if hashes drift, if we didn't fail at Engine level, we might still proceed
+			// or use the snapshot as a "best efforts" view.
+			// But since Engine already checked, Hash MUST match if we got here.
+			currentSnapshot = &snap
 		}
-
-		if string(snap.Hash) != expectedHash {
-			return nil, core.ErrWorldDrift
-		}
-		currentSnapshot = &snap
 	}
 
 	resolved := make([]core.ResolvedFact, 0, len(facts))
@@ -4866,6 +4959,7 @@ func (r *PassthroughResolver) ResolveFacts(facts []core.Fact, expectedHash strin
 			Anchor:  ra,
 			Payload: payload,
 			Meta:    f.Meta,
+			Safety:  core.SafetyExact, // Phase 7: All current successful resolutions are exact
 		})
 	}
 
@@ -5121,6 +5215,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 	"tmux-fsm/weaver/adapter"
 	"tmux-fsm/weaver/core"
@@ -5153,6 +5248,10 @@ func InitWeaver(mode ExecutionMode) {
 	// Phase 6.1: Snapshot Provider
 	snapProvider := &adapter.TmuxSnapshotProvider{}
 
+	// Phase 6.3: Reality Reader for consistency adjudication
+	reality := &adapter.TmuxRealityReader{Provider: snapProvider}
+	resolver.Reality = reality
+
 	var proj core.Projection
 	if mode == ModeWeaver {
 		proj = &adapter.TmuxProjection{}
@@ -5160,7 +5259,7 @@ func InitWeaver(mode ExecutionMode) {
 		proj = &adapter.NoopProjection{}
 	}
 
-	engine := core.NewShadowEngine(planner, resolver, proj)
+	engine := core.NewShadowEngine(planner, resolver, proj, reality)
 
 	weaverMgr = &WeaverManager{
 		mode:             mode,
@@ -5213,11 +5312,21 @@ func (m *WeaverManager) ProcessIntent(intent Intent) {
 		verdict, err := m.engine.ApplyIntent(coreIntent, snapshot)
 		if err != nil {
 			logWeaver("Engine Error: %v", err)
+			// Phase 7: Propagate to UI
+			stateMu.Lock()
+			globalState.LastUndoFailure = fmt.Sprintf("Engine: %v", err)
+			stateMu.Unlock()
 		} else {
 			logWeaver("Verdict: %v (Safe=%v)", verdict.Kind, verdict.Safety)
 			if len(verdict.Audit) > 0 {
 				logWeaver("Audit: %v", verdict.Audit)
 			}
+			// If applied successfully, clear failure
+			stateMu.Lock()
+			if globalState.LastUndoFailure != "" && strings.HasPrefix(globalState.LastUndoFailure, "Engine:") {
+				globalState.LastUndoFailure = ""
+			}
+			stateMu.Unlock()
 		}
 	}
 
@@ -5335,6 +5444,10 @@ func (a *intentAdapter) GetPaneID() string {
 
 func (a *intentAdapter) GetSnapshotHash() string {
 	return a.intent.GetSnapshotHash()
+}
+
+func (a *intentAdapter) IsPartialAllowed() bool {
+	return a.intent.IsPartialAllowed()
 }
 
 // logWeaver ...

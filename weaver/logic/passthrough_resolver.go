@@ -9,7 +9,7 @@ import (
 // PassthroughResolver is a Phase 5.3 shim.
 // It implements real resolution logic for Semantic Anchors.
 type PassthroughResolver struct {
-	Reality adapter.RealityReader
+	Reality core.RealityReader
 }
 
 func (r *PassthroughResolver) ResolveFacts(facts []core.Fact, expectedHash string) ([]core.ResolvedFact, error) {
@@ -18,19 +18,18 @@ func (r *PassthroughResolver) ResolveFacts(facts []core.Fact, expectedHash strin
 	}
 
 	// Phase 6.3: Consistency Verification
+	// [DELETED] Check moved to ShadowEngine.ApplyIntent for unified adjudication.
+	// Resolver now trusts the caller or uses the hash solely for snapshot-based resolution optimization.
 	var currentSnapshot *core.Snapshot
 	if expectedHash != "" && r.Reality != nil {
-		// Assume homogeneous PaneID for this batch
 		paneID := facts[0].Anchor.PaneID
 		snap, err := r.Reality.ReadCurrent(paneID)
-		if err != nil {
-			return nil, err
+		if err == nil {
+			// Even if hashes drift, if we didn't fail at Engine level, we might still proceed
+			// or use the snapshot as a "best efforts" view.
+			// But since Engine already checked, Hash MUST match if we got here.
+			currentSnapshot = &snap
 		}
-
-		if string(snap.Hash) != expectedHash {
-			return nil, core.ErrWorldDrift
-		}
-		currentSnapshot = &snap
 	}
 
 	resolved := make([]core.ResolvedFact, 0, len(facts))
@@ -84,6 +83,7 @@ func (r *PassthroughResolver) ResolveFacts(facts []core.Fact, expectedHash strin
 			Anchor:  ra,
 			Payload: payload,
 			Meta:    f.Meta,
+			Safety:  core.SafetyExact, // Phase 7: All current successful resolutions are exact
 		})
 	}
 

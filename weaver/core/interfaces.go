@@ -9,6 +9,12 @@ type Engine interface {
 	GetHistory() History
 }
 
+// RealityReader 读取当前世界状态（用于一致性验证）
+// Phase 6.3: 移至 core 以支持 Engine 级裁决
+type RealityReader interface {
+	ReadCurrent(paneID string) (Snapshot, error)
+}
+
 // AnchorResolver Anchor 解析器接口
 // 由环境层实现（tmux, vim, etc.）
 type AnchorResolver interface {
@@ -33,6 +39,7 @@ type Intent interface {
 	GetMeta() map[string]interface{}
 	GetPaneID() string
 	GetSnapshotHash() string // Phase 6.2
+	IsPartialAllowed() bool  // Phase 7: Explicit permission for fuzzy resolution
 } // 新增：Phase 3 需要
 
 // IntentKind 意图类型

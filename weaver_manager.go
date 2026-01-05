@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 	"tmux-fsm/weaver/adapter"
 	"tmux-fsm/weaver/core"
@@ -35,6 +36,10 @@ func InitWeaver(mode ExecutionMode) {
 	// Phase 6.1: Snapshot Provider
 	snapProvider := &adapter.TmuxSnapshotProvider{}
 
+	// Phase 6.3: Reality Reader for consistency adjudication
+	reality := &adapter.TmuxRealityReader{Provider: snapProvider}
+	resolver.Reality = reality
+
 	var proj core.Projection
 	if mode == ModeWeaver {
 		proj = &adapter.TmuxProjection{}
@@ -42,7 +47,7 @@ func InitWeaver(mode ExecutionMode) {
 		proj = &adapter.NoopProjection{}
 	}
 
-	engine := core.NewShadowEngine(planner, resolver, proj)
+	engine := core.NewShadowEngine(planner, resolver, proj, reality)
 
 	weaverMgr = &WeaverManager{
 		mode:             mode,
@@ -95,11 +100,21 @@ func (m *WeaverManager) ProcessIntent(intent Intent) {
 		verdict, err := m.engine.ApplyIntent(coreIntent, snapshot)
 		if err != nil {
 			logWeaver("Engine Error: %v", err)
+			// Phase 7: Propagate to UI
+			stateMu.Lock()
+			globalState.LastUndoFailure = fmt.Sprintf("Engine: %v", err)
+			stateMu.Unlock()
 		} else {
 			logWeaver("Verdict: %v (Safe=%v)", verdict.Kind, verdict.Safety)
 			if len(verdict.Audit) > 0 {
 				logWeaver("Audit: %v", verdict.Audit)
 			}
+			// If applied successfully, clear failure
+			stateMu.Lock()
+			if globalState.LastUndoFailure != "" && strings.HasPrefix(globalState.LastUndoFailure, "Engine:") {
+				globalState.LastUndoFailure = ""
+			}
+			stateMu.Unlock()
 		}
 	}
 
@@ -217,6 +232,10 @@ func (a *intentAdapter) GetPaneID() string {
 
 func (a *intentAdapter) GetSnapshotHash() string {
 	return a.intent.GetSnapshotHash()
+}
+
+func (a *intentAdapter) IsPartialAllowed() bool {
+	return a.intent.IsPartialAllowed()
 }
 
 // logWeaver ...

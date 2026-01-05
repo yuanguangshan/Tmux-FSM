@@ -52,14 +52,16 @@ type FactPayload struct {
 // Transaction 事务
 // 包含一组 Facts，具有原子性
 type Transaction struct {
-	ID           TransactionID `json:"id"`
-	Intent       Intent        `json:"intent"`        // 原始意图
-	Facts        []Fact        `json:"facts"`         // 正向事实序列
-	InverseFacts []Fact        `json:"inverse_facts"` // 反向事实序列（用于 Undo）
-	Safety       SafetyLevel   `json:"safety"`
-	Timestamp    int64         `json:"timestamp"`
-	Applied      bool          `json:"applied"`
-	Skipped      bool          `json:"skipped"`
+	ID               TransactionID `json:"id"`
+	Intent           Intent        `json:"intent"`        // 原始意图
+	Facts            []Fact        `json:"facts"`         // 正向事实序列
+	InverseFacts     []Fact        `json:"inverse_facts"` // 反向事实序列（用于 Undo）
+	Safety           SafetyLevel   `json:"safety"`
+	Timestamp        int64         `json:"timestamp"`
+	Applied          bool          `json:"applied"`
+	Skipped          bool          `json:"skipped"`
+	PostSnapshotHash string        `json:"post_snapshot_hash,omitempty"` // Phase 7: State after application
+	AllowPartial     bool          `json:"allow_partial,omitempty"`      // Phase 7: Explicit flag for fuzzy match
 }
 
 // TransactionID 事务 ID

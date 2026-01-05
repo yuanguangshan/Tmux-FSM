@@ -16,4 +16,5 @@ type ResolvedFact struct {
 	Anchor  ResolvedAnchor
 	Payload FactPayload
 	Meta    map[string]interface{} // Phase 5.2: 保留 Meta 以兼容旧 Projection 逻辑
+	Safety  SafetyLevel            // Phase 7: Resolution safety
 }

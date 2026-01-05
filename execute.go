@@ -680,35 +680,54 @@ func handleUndo(state *FSMState, targetPane string) {
 	if len(state.UndoStack) == 0 {
 		return
 	}
-	// 弹出最近一组事务
+	// 弹出最近一个事务（先不正式移除，等成功后再说）
 	tx := state.UndoStack[len(state.UndoStack)-1]
-	state.UndoStack = state.UndoStack[:len(state.UndoStack)-1]
 
-	// Axiom 1: Transaction Atomicity - Process the whole transaction unit
-	tx.SafetyLevel = "exact" // Default
-	state.LastUndoSafetyLevel = "exact"
+	// [Phase 7] Phase 1: Resolve all anchors first (Axiom 7.2)
+	// 确保整个事务要么全做，要么不做，禁止“半次 Undo”
+	pendingFacts := make([]Fact, 0, len(tx.Records))
+	overallSafety := "exact"
+
 	for i := len(tx.Records) - 1; i >= 0; i-- {
 		r := tx.Records[i]
 		// Axiom 2: Anchor Primacy - Always resolve anchor before executing
-		if res, err := ResolveAnchor(r.Inverse.Target.Anchor); err == nil {
-			// Axiom 7: Transaction-Level Degradation - One fuzzy contaminates the whole TX
-			if res.Result == ResolveFuzzy {
-				tx.SafetyLevel = "fuzzy"
-				state.LastUndoSafetyLevel = "fuzzy"
-				r.Inverse.Target.Anchor.LineHint = res.Row
-			}
-			executeFact(r.Inverse)
-		} else {
-			// Axiom 4: Mandatory Failure Conditions - Fail the entire transaction
-			tx.Skipped = true
-			state.LastUndoSafetyLevel = "" // Axiom 5: No Partial Trust
+		res, err := ResolveAnchor(r.Inverse.Target.Anchor)
+		if err != nil {
+			// Axiom 4: Mandatory Failure Conditions - Reject the entire transaction
 			state.LastUndoFailure = fmt.Sprintf("Anchor mismatch for TX %d in pane %s", tx.ID, r.Inverse.Target.Anchor.PaneID)
-			// Axiom 11: Explainability - Log failure reasons
-			logLine(fmt.Sprintf("[UNDO-SKIP] %s", state.LastUndoFailure))
-			break
+			state.LastUndoSafetyLevel = ""
+			logLine(fmt.Sprintf("[UNDO-REJECT] %s", state.LastUndoFailure))
+			return // 立即退出，不执行任何写操作
 		}
+
+		// Axiom 7.4 & 7.9: Fuzzy Policy
+		if res.Result == ResolveFuzzy {
+			if !state.AllowPartial {
+				state.LastUndoFailure = fmt.Sprintf("Fuzzy match rejected by policy for TX %d", tx.ID)
+				logLine(fmt.Sprintf("[UNDO-REJECT] %s", state.LastUndoFailure))
+				return
+			}
+			overallSafety = "fuzzy"
+		}
+
+		// 准备执行用的 Fact，使用解析出的 Row
+		fact := r.Inverse
+		fact.Target.Anchor.LineHint = res.Row
+		pendingFacts = append(pendingFacts, fact)
 	}
 
+	// [Phase 7] Phase 2: Execution (Atomic commitment)
+	// 正式从栈中弹出
+	state.UndoStack = state.UndoStack[:len(state.UndoStack)-1]
+	tx.SafetyLevel = overallSafety
+	state.LastUndoSafetyLevel = overallSafety
+	state.LastUndoFailure = ""
+
+	for _, f := range pendingFacts {
+		executeFact(f)
+	}
+
+	// Move to Redo Stack
 	state.RedoStack = append(state.RedoStack, tx)
 }
 
@@ -790,7 +809,7 @@ func performPhysicalDelete(motion string, targetPane string) {
 		exec.Command("tmux", "send-keys", "-t", targetPane, "C-k").Run()
 
 	case "word_forward", "inside_word", "around_word": // dw
-		// Robust fallback: Shell bindings for M-d are flaky. 
+		// Robust fallback: Shell bindings for M-d are flaky.
 		// Use tmux visual block deletion which works universally.
 		// 1. Enter copy mode
 		exec.Command("tmux", "copy-mode", "-t", targetPane).Run()
@@ -800,29 +819,29 @@ func performPhysicalDelete(motion string, targetPane string) {
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "next-word-end").Run()
 		// 4. Copy pipe and cancel (to get text for undo history if needed) - handled by captureText already?
 		// No, we just want to delete.
-		// 4. Delete the selection. In shell, this means we can't just 'delete' the selection easily 
-		// without pasting emptiness or similar hacks. 
-		// Wait, we need to DELETE in the shell prompt. 
+		// 4. Delete the selection. In shell, this means we can't just 'delete' the selection easily
+		// without pasting emptiness or similar hacks.
+		// Wait, we need to DELETE in the shell prompt.
 		// Tmux copy-mode doesn't edit the shell buffer.
 		// We MUST send keys to the shell.
-		
+
 		// If \033d failed, it means the shell simply doesn't support Alt+d.
 		// Let's try to simulate 'Delete' key repeatedly? No, we don't know the word length.
 		// Let's try Ctrl+w (delete word backward) but we are at the start.
-		// We can move to end of word (Alt+f) then Ctrl+w. 
+		// We can move to end of word (Alt+f) then Ctrl+w.
 		// But Alt+f might fail too!
-		
+
 		// Let's try the HEX code for M-d again but explicitly as bytes.
 		// Or assume user might be using zsh with a different binding.
-		
+
 		// Let's try `Escape` then `d` again but with a small sleep? No.
-		
+
 		// Let's try moving cursor right word, then backspace word?
 		// Alt+Right is also Meta.
-		
+
 		// Is there a standard way to delete word in ALL shells?
 		// No. But M-d is the readline standard.
-		
+
 		// Let's revert to "Escape" "d" but ensure proper argument passing.
 		// tmux send-keys -t target Escape d
 		exec.Command("tmux", "send-keys", "-t", targetPane, "Escape", "d").Run()
@@ -1059,7 +1078,7 @@ func getHelpText(state *FSMState) string {
 
 func showHelp(state *FSMState, targetPane string) {
 	helpText := getHelpText(state)
-	// Use fixed dimensions for a clean, centered look on desktop. 
+	// Use fixed dimensions for a clean, centered look on desktop.
 	// 80x28 is sufficient for the cheat sheet content.
 	exec.Command("tmux", "display-popup", "-t", targetPane, "-E", "-w", "80", "-h", "28", fmt.Sprintf("echo '%s'; read -n 1", helpText)).Run()
 }

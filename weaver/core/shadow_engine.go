@@ -12,19 +12,41 @@ type ShadowEngine struct {
 	history    History
 	resolver   AnchorResolver
 	projection Projection
+	reality    RealityReader
 }
 
-func NewShadowEngine(planner Planner, resolver AnchorResolver, projection Projection) *ShadowEngine {
+func NewShadowEngine(planner Planner, resolver AnchorResolver, projection Projection, reality RealityReader) *ShadowEngine {
 	return &ShadowEngine{
 		planner:    planner,
 		history:    NewInMemoryHistory(100),
 		resolver:   resolver,
 		projection: projection,
+		reality:    reality,
 	}
 }
 
 func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, error) {
 	var audit []AuditEntry
+
+	// Phase 6.3: Temporal Adjudication (World Drift Check)
+	// Engine owns the authority to reject execution if current reality != intent's expectation.
+	if intent.GetSnapshotHash() != "" && e.reality != nil {
+		current, err := e.reality.ReadCurrent(intent.GetPaneID())
+		if err == nil {
+			if string(current.Hash) != intent.GetSnapshotHash() {
+				audit = append(audit, AuditEntry{Step: "Adjudicate", Result: "Rejected: World Drift detected"})
+				return &Verdict{
+					Kind:    VerdictRejected,
+					Safety:  SafetyUnsafe,
+					Message: "World drift detected",
+					Audit:   audit,
+				}, ErrWorldDrift
+			}
+			audit = append(audit, AuditEntry{Step: "Adjudicate", Result: "Success: Time consistency verified"})
+		}
+		// If Reality check fails (IO error), we might proceed with warning or fail fast.
+		// For now, assume if we can't read reality, it's a structural error but not necessarily drift.
+	}
 
 	// 1. Handle Undo/Redo explicitly
 	kind := intent.GetKind()
@@ -43,17 +65,6 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 	}
 	audit = append(audit, AuditEntry{Step: "Plan", Result: "Success"})
 
-	// 3. Create Transaction
-	txID := TransactionID(fmt.Sprintf("tx-%d", time.Now().UnixNano()))
-	tx := &Transaction{
-		ID:           txID,
-		Intent:       intent,
-		Facts:        facts,
-		InverseFacts: inverseFacts,
-		Safety:       SafetyExact,
-		Timestamp:    time.Now().Unix(),
-	}
-
 	// [Phase 5.1] 4. Resolve: 定位权移交
 	// [Phase 5.4] 包含 Reconciliation 检查
 	// [Phase 6.3] 包含 World Drift 检查 (SnapshotHash)
@@ -64,6 +75,35 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 	}
 	audit = append(audit, AuditEntry{Step: "Resolve", Result: "Success"})
 
+	// [Phase 7] Determine overall safety
+	safety := SafetyExact
+	for _, rf := range resolvedFacts {
+		if rf.Safety > safety {
+			safety = rf.Safety
+		}
+	}
+
+	if safety == SafetyFuzzy && !intent.IsPartialAllowed() {
+		return &Verdict{
+			Kind:    VerdictRejected,
+			Safety:  SafetyUnsafe,
+			Message: "Fuzzy resolution disallowed by policy",
+			Audit:   audit,
+		}, ErrWorldDrift // Or a new error like ErrSafetyViolation
+	}
+
+	// 3. Create Transaction
+	txID := TransactionID(fmt.Sprintf("tx-%d", time.Now().UnixNano()))
+	tx := &Transaction{
+		ID:           txID,
+		Intent:       intent,
+		Facts:        facts,
+		InverseFacts: inverseFacts,
+		Safety:       safety,
+		Timestamp:    time.Now().Unix(),
+		AllowPartial: intent.IsPartialAllowed(),
+	}
+
 	// 5. Project: Execute
 	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
 		audit = append(audit, AuditEntry{Step: "Project", Result: fmt.Sprintf("Error: %v", err)})
@@ -71,6 +111,15 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 	}
 	audit = append(audit, AuditEntry{Step: "Project", Result: "Success"})
 	tx.Applied = true
+
+	// [Phase 7] Capture PostSnapshotHash for Undo verification
+	if e.reality != nil {
+		postSnap, err := e.reality.ReadCurrent(intent.GetPaneID())
+		if err == nil {
+			tx.PostSnapshotHash = string(postSnap.Hash)
+			audit = append(audit, AuditEntry{Step: "Record", Result: fmt.Sprintf("PostHash: %s", tx.PostSnapshotHash)})
+		}
+	}
 
 	// 6. Update History
 	if len(facts) > 0 {
@@ -81,7 +130,7 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 		Kind:        VerdictApplied,
 		Message:     "Applied via Smart Projection",
 		Transaction: tx,
-		Safety:      SafetyExact,
+		Safety:      safety,
 		Audit:       audit,
 	}, nil
 }
@@ -92,15 +141,31 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 		return &Verdict{Kind: VerdictSkipped, Message: "Nothing to undo"}, nil
 	}
 
+	// [Phase 7] Axiom 7.5: Undo Is Verified Replay
+	if tx.PostSnapshotHash != "" && e.reality != nil {
+		current, err := e.reality.ReadCurrent(tx.Intent.GetPaneID())
+		if err == nil && string(current.Hash) != tx.PostSnapshotHash {
+			// Put it back to undo stack since we didn't apply it
+			e.history.PushBack(tx)
+			return &Verdict{
+				Kind:    VerdictRejected,
+				Message: "World drift: cannot undo safely",
+				Safety:  SafetyUnsafe,
+			}, ErrWorldDrift
+		}
+	}
+
 	// [Phase 5.1] Resolve InverseFacts
-	// [Phase 6.3] Undo logic currently bypasses Hash check (TODO: State B Hash)
-	resolvedFacts, err := e.resolver.ResolveFacts(tx.InverseFacts, "")
+	// [Phase 6.3] Use recorded PostHash if available (passed as expectedHash)
+	resolvedFacts, err := e.resolver.ResolveFacts(tx.InverseFacts, tx.PostSnapshotHash)
 	if err != nil {
+		e.history.PushBack(tx)
 		return nil, err
 	}
 
 	// Apply
 	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
+		e.history.PushBack(tx)
 		return nil, err
 	}
 
@@ -120,14 +185,30 @@ func (e *ShadowEngine) performRedo() (*Verdict, error) {
 		return &Verdict{Kind: VerdictSkipped, Message: "Nothing to redo"}, nil
 	}
 
+	// [Phase 7] Redo verification (must match Pre-state)
+	preHash := tx.Intent.GetSnapshotHash()
+	if preHash != "" && e.reality != nil {
+		current, err := e.reality.ReadCurrent(tx.Intent.GetPaneID())
+		if err == nil && string(current.Hash) != preHash {
+			e.history.AddRedo(tx)
+			return &Verdict{
+				Kind:    VerdictRejected,
+				Message: "World drift: cannot redo safely",
+				Safety:  SafetyUnsafe,
+			}, ErrWorldDrift
+		}
+	}
+
 	// [Phase 5.1] Resolve Facts
-	resolvedFacts, err := e.resolver.ResolveFacts(tx.Facts, "")
+	resolvedFacts, err := e.resolver.ResolveFacts(tx.Facts, preHash)
 	if err != nil {
+		e.history.AddRedo(tx)
 		return nil, err
 	}
 
 	// Apply
 	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
+		e.history.AddRedo(tx)
 		return nil, err
 	}
 
