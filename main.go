@@ -13,6 +13,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"tmux-fsm/fsm"
 )
 
 // Anchor 是“我指的不是光标，而是这段文本”
@@ -39,7 +40,7 @@ type Fact struct {
 
 type ActionRecord struct {
 	Fact    Fact `json:"fact"`
-	Inverse Fact `inverse:"fact"`
+	Inverse Fact `json:"inverse"`
 }
 
 type TransactionID uint64
@@ -102,58 +103,278 @@ var (
 	socketPath  = os.Getenv("HOME") + "/.tmux-fsm.sock"
 )
 
-func main() {
-	serverMode := flag.Bool("server", false, "run as daemon server")
-	stopServer := flag.Bool("stop", false, "stop the running daemon")
-	flag.Parse()
+// isServerRunning 检查服务器是否已经在运行
+func isServerRunning() bool {
+	conn, err := net.DialTimeout("unix", socketPath, 500*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
 
-	if *stopServer {
-		shutdownServer()
-		return
+	// 发送心跳请求确认服务器响应
+	conn.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	conn.Write([]byte("test|test|__PING__"))
+
+	// 读取响应
+	buf := make([]byte, 1024)
+	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+	_, err = conn.Read(buf)
+	return err == nil
+}
+
+func main() {
+	// 记录启动参数用于调试
+	argLog, _ := os.OpenFile(os.Getenv("HOME")+"/tmux-fsm-args.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if argLog != nil {
+		fmt.Fprintf(argLog, "[%s] ARGS: %v\n", time.Now().Format("15:04:05"), os.Args)
+		argLog.Close()
 	}
 
-	if *serverMode {
+	// 定义命令行参数
+	var (
+		enterFSM   = flag.Bool("enter", false, "Enter FSM mode")
+		exitFSM    = flag.Bool("exit", false, "Exit FSM mode")
+		dispatch   = flag.String("key", "", "Dispatch key to FSM")
+		nvimMode   = flag.String("nvim-mode", "", "Handle Neovim mode change")
+		uiShow     = flag.Bool("ui-show", false, "Show UI")
+		uiHide     = flag.Bool("ui-hide", false, "Hide UI")
+		reload     = flag.Bool("reload", false, "Reload keymap configuration")
+		configPath = flag.String("config", "", "Path to keymap configuration file")
+	)
+	
+	// 保留原有的服务器模式参数
+	serverMode := flag.Bool("server", false, "run as daemon server")
+	stopServer := flag.Bool("stop", false, "stop the running daemon")
+	
+	flag.Parse()
+
+	// 确定配置文件路径
+	configFile := *configPath
+	if configFile == "" {
+		// 默认配置文件路径
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting home directory: %v\n", err)
+		} else {
+			configFile = homeDir + "/.config/tmux-fsm/keymap.yaml"
+		}
+	}
+
+	// 尝试加载新的配置
+	if err := fsm.LoadKeymap(configFile); err != nil {
+		// 如果默认路径加载失败，尝试当前目录
+		if err := fsm.LoadKeymap("./keymap.yaml"); err != nil {
+			// 如果还是失败，创建一个默认配置
+			createDefaultKeymap()
+			if err := fsm.LoadKeymap("./keymap.yaml"); err != nil {
+				fmt.Printf("Failed to load keymap: %v\n", err)
+			}
+		}
+	}
+
+	// 初始化 FSM 引擎
+	fsm.InitEngine(&fsm.KM)
+
+	// 根据命令行参数执行相应操作
+	switch {
+	case *enterFSM:
+		// 检查服务器是否已经在运行，如果没有则启动
+		if !isServerRunning() {
+			exec.Command(os.Args[0], "-server").Start()
+			// 等待服务器启动，最多等待 2 秒
+			for i := 0; i < 20; i++ {
+				time.Sleep(100 * time.Millisecond)
+				if isServerRunning() {
+					break
+				}
+			}
+		}
+
+		// 解析 pane 和 client
+		paneAndClient := ""
+		clientName := ""
+		if len(flag.Args()) > 0 {
+			paneAndClient = flag.Args()[0]
+			// 添加参数验证，防止异常参数导致问题
+			if paneAndClient == "|" || paneAndClient == "" {
+				// 如果参数异常，尝试获取当前pane和client
+				paneIDBytes, err1 := exec.Command("tmux", "display-message", "-p", "#{pane_id}").Output()
+				clientNameBytes, err2 := exec.Command("tmux", "display-message", "-p", "#{client_name}").Output()
+				
+				pID := strings.TrimSpace(string(paneIDBytes))
+				cName := strings.TrimSpace(string(clientNameBytes))
+				
+				if err1 == nil && err2 == nil && pID != "" && cName != "" {
+					paneID := pID
+					clientName = cName
+					paneAndClient = paneID + "|" + clientName
+				} else {
+					// 如果无法获取当前pane/client，使用默认值
+					paneAndClient = "default|default"
+					clientName = "default"
+				}
+			} else {
+				parts := strings.Split(paneAndClient, "|")
+				if len(parts) >= 2 {
+					clientName = parts[1]
+					// 验证 clientName 是否为有效的 tmux client
+					// Tmux 支持使用 TTY 路径作为 client target，所以不需要过滤 /dev/
+				}
+			}
+		} else {
+			// 如果没有参数，获取当前pane和client
+			paneIDBytes, err1 := exec.Command("tmux", "display-message", "-p", "#{pane_id}").Output()
+			clientNameBytes, err2 := exec.Command("tmux", "display-message", "-p", "#{client_name}").Output()
+			
+			pID := strings.TrimSpace(string(paneIDBytes))
+			cName := strings.TrimSpace(string(clientNameBytes))
+
+			if err1 == nil && err2 == nil && pID != "" && cName != "" {
+				paneID := pID
+				clientName = cName
+				paneAndClient = paneID + "|" + clientName
+			} else {
+				paneAndClient = "default|default"
+				clientName = "default"
+			}
+		}
+
+		// 通知服务器情况状态并刷新指定 client 的 UI
+		runClient("__CLEAR_STATE__", paneAndClient)
+
+		// 强制设置 tmux 变量并切换键表
+		exec.Command("tmux", "set-option", "-g", "@fsm_active", "true").Run()
+		if clientName != "" && clientName != "default" {
+			exec.Command("tmux", "switch-client", "-t", clientName, "-T", "fsm").Run()
+		} else {
+			exec.Command("tmux", "switch-client", "-T", "fsm").Run()
+		}
+		exec.Command("tmux", "refresh-client", "-S").Run()
+
+	case *exitFSM:
+		// 直接通过 tmux 直接设置退出状态，保证响应速度
+		exec.Command("tmux", "set-option", "-g", "@fsm_active", "false").Run()
+		exec.Command("tmux", "set-option", "-g", "@fsm_state", "").Run()
+		exec.Command("tmux", "set-option", "-g", "@fsm_keys", "").Run()
+		exec.Command("tmux", "switch-client", "-T", "root").Run()
+		exec.Command("tmux", "refresh-client", "-S").Run()
+	case *dispatch != "":
+		// 使用 Legacy 系统：将按键发送到服务器
+		paneAndClient := ""
+		if len(flag.Args()) > 0 {
+			paneAndClient = flag.Args()[0]
+		}
+		runClient(*dispatch, paneAndClient)
+	case *nvimMode != "":
+		// Neovim 模式同步 (如果需要的话，也可以通过服务器同步)
+		fsm.OnNvimMode(*nvimMode)
+	case *uiShow:
+		// 使用新的 FSM 系统
+		fsm.ShowUI()
+	case *uiHide:
+		// 使用新的 FSM 系统
+		fsm.HideUI()
+	case *reload:
+		// 使用新的 FSM 系统
+		if err := fsm.LoadKeymap(configFile); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to reload keymap: %v\n", err)
+			os.Exit(1)
+		}
+		fsm.UpdateUI()
+	case *stopServer:
+		shutdownServer()
+	case *serverMode:
 		runServer()
-	} else {
-		// Client mode
-		key := ""
-		paneID := ""
-
-		// Parse arguments more robustly
-		// Expect: tmux-fsm [key] [pane_id] OR flags
-		// For backward compatibility and simplicity, let's look at Args
-		args := flag.Args()
-		if len(args) >= 1 {
-			key = args[0]
-		} else {
-			key = os.Getenv("TMUX_FSM_KEY")
-		}
-
-		if len(args) >= 2 {
-			paneID = args[1]
-		} else {
-			paneID = os.Getenv("TMUX_FSM_PANE")
-		}
-
-		if key == "" {
+	default:
+		// If key is empty but we were called, it might be a ghost trigger or #{key} fail.
+		// Don't show usage manual as it interrupts user.
+		if *dispatch == "" {
 			return
 		}
-		// If paneID is empty, server might default to something or fail,
-		// but we should try to send what we have.
-		runClient(key, paneID)
+
+		// 如果没有参数，显示帮助
+		fmt.Println("tmux-fsm: A flexible FSM-based keybinding system for tmux")
+		fmt.Println("Usage:")
+		fmt.Println("  -enter        Enter FSM mode")
+		fmt.Println("  -exit         Exit FSM mode")
+		fmt.Println("  -key <key>    Dispatch key to FSM")
+		fmt.Println("  -nvim-mode <mode>  Handle Neovim mode change")
+		fmt.Println("  -ui-show      Show UI")
+		fmt.Println("  -ui-hide      Hide UI")
+		fmt.Println("  -reload       Reload keymap configuration")
+		fmt.Println("  -config <path>  Path to keymap configuration file")
+		fmt.Println("")
+		fmt.Println("Legacy server mode:")
+		fmt.Println("  -server       Run as daemon server")
+		fmt.Println("  -stop         Stop the running daemon")
 	}
 }
 
+// createDefaultKeymap 创建默认的 keymap.yaml 文件
+func createDefaultKeymap() {
+	// 创建配置目录
+	homeDir, _ := os.UserHomeDir()
+	configDir := homeDir + "/.config/tmux-fsm"
+	os.MkdirAll(configDir, 0755)
+
+	// 默认配置内容
+	// 注意：移除 NAV 层的 h/j/k/l 绑定，以便它们可以回退到 logic.go 处理光标移动
+	defaultConfig := `states:
+  NAV:
+    hint: "g goto · : cmd · q quit"
+    keys:
+      g: { layer: "GOTO", timeout_ms: 800 }
+      q: { action: "exit" }
+      ":": { action: "prompt" }
+
+  GOTO:
+    hint: "h far-left · l far-right · g top · G bottom"
+    keys:
+      h: { action: "far_left" }
+      l: { action: "far_right" }
+      g: { action: "goto_top" }
+      G: { action: "goto_bottom" }
+      q: { action: "exit" }
+      Escape: { action: "exit" }
+`
+
+	configFile := configDir + "/keymap.yaml"
+	if err := os.WriteFile(configFile, []byte(defaultConfig), 0644); err != nil {
+		// 如果无法写入用户目录，写入当前目录
+		os.WriteFile("keymap.yaml", []byte(defaultConfig), 0644)
+	}
+}
+
+// 以下是原有的服务器模式代码
 func runClient(key, paneID string) {
-	conn, err := net.Dial("unix", socketPath)
+	// 添加参数验证
+	if paneID == "" || paneID == "|" {
+		// 尝试获取当前pane和client
+		paneIDBytes, err1 := exec.Command("tmux", "display-message", "-p", "#{pane_id}").Output()
+		clientNameBytes, err2 := exec.Command("tmux", "display-message", "-p", "#{client_name}").Output()
+		if err1 == nil && err2 == nil {
+			paneID = strings.TrimSpace(string(paneIDBytes)) + "|" + strings.TrimSpace(string(clientNameBytes))
+		} else {
+			paneID = "default|default"
+		}
+	}
+
+	conn, err := net.DialTimeout("unix", socketPath, 1*time.Second)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: daemon not running. Start it with 'tmux-fsm -server'\n")
 		return
 	}
 	defer conn.Close()
 
+	if err := conn.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		fmt.Fprintf(os.Stderr, "Error setting deadline: %v\n", err)
+		return
+	}
+
 	payload := fmt.Sprintf("%s|%s", paneID, key)
-	conn.Write([]byte(payload))
+	if _, err := conn.Write([]byte(payload)); err != nil {
+		return
+	}
 
 	// Read response (synchronize)
 	buf, err := io.ReadAll(conn)
@@ -161,12 +382,14 @@ func runClient(key, paneID string) {
 		return
 	}
 	// Only print if it's not the standard "ok" heartbeat
-	if string(buf) != "ok" {
-		os.Stdout.Write(buf)
+	resp := strings.TrimSpace(string(buf))
+	if resp != "ok" && resp != "" {
+		fmt.Println(resp)
 	}
 }
 
 func runServer() {
+	fmt.Printf("Server starting (v3-merged) at %s...\n", socketPath)
 	// 检查是否已有服务在运行 (且能响应)
 	if conn, err := net.DialTimeout("unix", socketPath, 1*time.Second); err == nil {
 		conn.Close()
@@ -175,14 +398,26 @@ func runServer() {
 	}
 
 	// 如果 Socket 文件存在但无法连接，说明是残留文件，直接移除
-	os.Remove(socketPath)
+	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
+		fmt.Printf("Warning: Failed to remove old socket: %v\n", err)
+	}
 	listener, err := net.Listen("unix", socketPath)
 	if err != nil {
-		fmt.Printf("Failed to start server: %v\n", err)
+		fmt.Printf("CRITICAL: Failed to start server: %v\n", err)
 		return
 	}
 	defer listener.Close()
-	os.Chmod(socketPath, 0666)
+	if err := os.Chmod(socketPath, 0666); err != nil {
+		fmt.Printf("Warning: Failed to chmod socket: %v\n", err)
+	}
+
+	// 初始化新架构回调：当新架构状态变化时，强制触发老架构的状态栏刷新
+	fsm.OnUpdateUI = func() {
+		stateMu.Lock()
+		s := globalState
+		stateMu.Unlock()
+		updateStatusBar(s, "") // 兜底更新，不针对特定 client
+	}
 
 	// Load initial state from tmux option
 	globalState = loadState()
@@ -250,6 +485,9 @@ shutdown:
 func handleClient(conn net.Conn) bool {
 	defer conn.Close()
 
+	// Set read deadline to prevent blocking the single-threaded server
+	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+
 	// --- [ABI: Intent Submission Layer] ---
 	// Frontend sends raw signals or internal commands to the kernel.
 	buf := make([]byte, 4096)
@@ -287,11 +525,12 @@ func handleClient(conn net.Conn) bool {
 	}
 
 	if key == "__PING__" {
-		exec.Command("tmux", "display-message", "PONG: Server is responsive").Run()
+		conn.Write([]byte("PONG"))
 		return false
 	}
 
 	if key == "__CLEAR_STATE__" {
+		fsm.Reset() // 重置新架构层级
 		stateMu.Lock()
 		globalState.Mode = "NORMAL"
 		globalState.Operator = ""
@@ -339,14 +578,29 @@ func handleClient(conn net.Conn) bool {
 		return false
 	}
 
-	// Process Key through FSM
-	action := processKey(&globalState, key)
-	// 添加调试日志
+	// --- [融合逻辑控制：Kernel vs Module] ---
+	// 铁律：只有当 FSM 显式处于某一层（非 NAV）且该层定义了此键时，才允许 FSM 抢键。
+	var action string
+	fsmHandled := false
+	if fsm.InLayer() && fsm.CanHandle(key) {
+		fsmHandled = fsm.Dispatch(key)
+	}
+
+	if fsmHandled {
+		action = "" // 新架构已处理
+	} else {
+		// 永远兜底：进入高性能遗留逻辑 (logic.go)
+		action = processKey(&globalState, key)
+	}
+	// --- [融合逻辑结束] ---
+
+	// 统一写入本地日志以便直接调试
 	logFile, _ := os.OpenFile(os.Getenv("HOME")+"/tmux-fsm.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if logFile != nil {
-		fmt.Fprintf(logFile, "[%s] DEBUG: Key='%s', Action='%s', Mode='%s'\n", time.Now().Format("15:04:05"), key, action, globalState.Mode)
+		fmt.Fprintf(logFile, "[%s] DEBUG: Key='%s', FSM_Handled=%v, Action='%s', Mode='%s'\n", 
+			time.Now().Format("15:04:05"), key, fsmHandled, action, globalState.Mode)
 		if action != "" {
-			fmt.Fprintf(logFile, "[%s] DEBUG: Executing action: %s\n", time.Now().Format("15:04:05"), action)
+			fmt.Fprintf(logFile, "[%s] DEBUG: Executing legacy action: %s\n", time.Now().Format("15:04:05"), action)
 		}
 		logFile.Close()
 	}
@@ -433,18 +687,28 @@ func updateStatusBar(state FSMState, clientName string) {
 	modeMsg := state.Mode
 	if modeMsg == "" {
 		modeMsg = "NORMAL"
-	} else if modeMsg == "VISUAL_CHAR" {
-		modeMsg = "VISUAL"
-	} else if modeMsg == "VISUAL_LINE" {
-		modeMsg = "V-LINE"
-	} else if modeMsg == "OPERATOR_PENDING" {
-		modeMsg = "PENDING"
-	} else if modeMsg == "REGISTER_SELECT" {
-		modeMsg = "REGISTER"
-	} else if modeMsg == "MOTION_PENDING" {
-		modeMsg = "MOTION"
-	} else if modeMsg == "SEARCH" {
-		modeMsg = "SEARCH"
+	}
+
+	// 融合显示逻辑
+	activeLayer := fsm.GetActiveLayer()
+	if activeLayer != "NAV" && activeLayer != "" {
+		// 如果处于新架构的层级（如 GOTO），覆盖显示
+		modeMsg = activeLayer
+	} else {
+		// 转换老架构的模式名称用于显示
+		if modeMsg == "VISUAL_CHAR" {
+			modeMsg = "VISUAL"
+		} else if modeMsg == "VISUAL_LINE" {
+			modeMsg = "V-LINE"
+		} else if modeMsg == "OPERATOR_PENDING" {
+			modeMsg = "PENDING"
+		} else if modeMsg == "REGISTER_SELECT" {
+			modeMsg = "REGISTER"
+		} else if modeMsg == "MOTION_PENDING" {
+			modeMsg = "MOTION"
+		} else if modeMsg == "SEARCH" {
+			modeMsg = "SEARCH"
+		}
 	}
 
 	if state.Operator != "" {

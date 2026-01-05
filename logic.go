@@ -154,6 +154,8 @@ func handleNormal(state *FSMState, key string) string {
 		"^":   "start_of_line",
 		"C-b": "word_backward", // Adding C-b as word_backward alias
 		"C-f": "word_forward",  // Adding C-f as word_forward alias
+		"Home": "start_of_line",
+		"End":  "end_of_line",
 	}
 	if m, ok := motions[key]; ok {
 		res := fmt.Sprintf("move_%s", m)

@@ -1,7 +1,6 @@
 # 🧠 Tmux‑FSM / Weaver Core Design Philosophy
 ## 设计哲学宣言（Design Philosophy）
 
-> Weaver Core
 
 > Weaver Core does not try to be helpful.
 It tries to be correct.
@@ -9,11 +8,11 @@ It tries to be correct.
 
 ---
 
-
 ## 一、编辑不是 UI 行为，而是语义事件
 
 传统编辑系统将“编辑”视为 **按键 → 光标 → 字符变化** 的过程。  
 这种模型隐含了一个错误前提：
+
 
 > 编辑必须依附于某个界面。
 

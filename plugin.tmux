@@ -1,66 +1,59 @@
-##### ==================================================
-##### tmux-fsm plugin
-##### ==================================================
+##### tmux-fsm plugin (New Architecture with Legacy Support) #####
 
-# Plugin root
-set -g @fsm_root "$HOME/.tmux/plugins/tmux-fsm"
-set -g @fsm_bin  "#{@fsm_root}/tmux-fsm"
+# 1. 变量初始化
+set -g @fsm_state ""
+set -g @fsm_keys ""
 
+# 2. 状态栏配置
+set -g status-right "#[fg=yellow,bold]#{@fsm_state}#{@fsm_keys}#[default] | #S | %m-%d %H:%M"
 
-##### --------------------------------------------------
-##### Config (user overridable)
-##### --------------------------------------------------
+# 3. 获取插件路径 (使用 TPM 标准路径)
+set -g @fsm_bin "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm"
 
-# No-prefix entry key (default C-f)
-if -F '#{?@fsm_bind_no_prefix,1,0}' '' \
-  'set -g @fsm_bind_no_prefix "C-f"'
+# 4. 入口：支持自定义按键 (Prefix 和 No-Prefix)
+# 使用 run-shell 动态绑定
+run-shell "
+    # 1. 绑定 Prefix + Key (Default: f)
+    prefix_key=\$(tmux show-option -gqv @fsm_toggle_key)
+    [ -z \"\$prefix_key\" ] && prefix_key=\"f\"
+    tmux bind-key \"\$prefix_key\" run-shell -b '$HOME/.tmux/plugins/tmux-fsm/enter_fsm.sh'
 
+    # 2. 绑定 No-Prefix Key (Root Table)
+    root_key=\$(tmux show-option -gqv @fsm_bind_no_prefix)
+    if [ -n \"\$root_key\" ]; then
+        tmux bind-key -n \"\$root_key\" run-shell -b '$HOME/.tmux/plugins/tmux-fsm/enter_fsm.sh'
+    fi
 
-##### --------------------------------------------------
-##### Internal helpers
-##### --------------------------------------------------
+    # 3. 启动服务器守护进程
+    $HOME/.tmux/plugins/tmux-fsm/tmux-fsm -server >/dev/null 2>&1 &
+"
 
-# Server (singleton handled inside binary)
-run-shell -b "#{@fsm_bin} -server"
+# 5. FSM 键表配置 (新架构)
+bind-key -T fsm -n C-c run-shell -b "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -exit"
+bind-key -T fsm -n Escape run-shell -b "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -exit"
 
-# Enter FSM
-enter_fsm="run-shell -b \
-  'TMUX_FSM_ENTER=1 #{@fsm_bin} enter \"#{pane_id}|#{client_name}\"'"
+# 6. Explicitly bind alphanumeric keys (POSIX compliant)
+# {a..z} is a bash extension, we must use explicit lists for /bin/sh compatibility
+run-shell "
+    for key in a b c d e f g h i j k l m n o p q r s t u v w x y z A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9; do
+        tmux bind-key -T fsm \"\$key\" run-shell -b \"$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -key '\$key' '#{pane_id}|#{client_name}'\"
+    done
+"
 
-# Exit FSM
-exit_fsm="run-shell -b \
-  'TMUX_FSM_EXIT=1 #{@fsm_bin} exit \"#{pane_id}|#{client_name}\"'"
+# 7. Bind common punctuation explicitly - REMOVED due to shell escaping issues. 
+# Relying on 'Any' fallback for punctuation.
 
-
-##### --------------------------------------------------
-##### Key Bindings
-##### --------------------------------------------------
-
-# Entry (no prefix)
-bind -n #{@fsm_bind_no_prefix} $enter_fsm
-
-# FSM key table
-bind-key -T fsm Escape $exit_fsm
-bind-key -T fsm C-c    $exit_fsm
-bind-key -T fsm q      $exit_fsm
-
-# Help
-bind-key -T fsm ? run-shell -b "#{@fsm_bin} help"
-
-# Universal dispatcher (🔥 核心精简点)
+# Keep 'Any' as a fallback for special keys and punctuation.
 bind-key -T fsm Any run-shell -b \
-  "TMUX_FSM_KEY='#{key}' #{@fsm_bin} key '#{key}' '#{pane_id}|#{client_name}'"
+  "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -key '#{key}' '#{pane_id}|#{client_name}'"
 
+# 7. 额外的便捷键绑定
+bind-key -T fsm q run-shell -b "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -exit"
 
-##### --------------------------------------------------
-##### Status integration
-##### --------------------------------------------------
+# 8. 重新加载配置
+bind-key -T root R run-shell -b "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -reload"
 
-# These variables are updated by tmux-fsm binary
-#   @fsm_state  → e.g. [NAV], [CMD]
-#   @fsm_keys   → hint keys
-#
-# tmux.conf only needs to reference them in status-right
-#
-# Example:
-# set -g status-right '#{@fsm_state}#{@fsm_keys} | #S | %H:%M'
+# 9. 帮助功能
+bind-key -T root ? run-shell "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm '__HELP__' '#{pane_id}|#{client_name}'"
+
+##### end tmux-fsm #####

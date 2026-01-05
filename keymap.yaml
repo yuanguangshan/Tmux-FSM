@@ -1,0 +1,19 @@
+states:
+  NAV:
+    hint: "C-h/l next/prev · g goto · : cmd · q quit"
+    keys:
+      C-h: { action: "prev_pane" }
+      C-l: { action: "next_pane" }
+      g: { layer: "GOTO", timeout_ms: 800 }
+      q: { action: "exit" }
+      ":": { action: "prompt" }
+
+  GOTO:
+    hint: "h far-left · l far-right · g top · G bottom"
+    keys:
+      h: { action: "far_left" }
+      l: { action: "far_right" }
+      g: { action: "goto_top" }
+      G: { action: "goto_bottom" }
+      q: { action: "exit" }
+      Escape: { action: "exit" }
