@@ -12,9 +12,9 @@
 ✅ 阶段 0: 冻结基线
 ✅ 阶段 1: 抽出 Intent 层
 ✅ 阶段 2: 引入 Weaver Core（影子模式）
-⏭️  阶段 3: Projection 接管执行
-⏭️  阶段 4: AnchorResolver 接管定位
-⏭️  阶段 5: Undo 权力上移
+✅ 阶段 3: Projection 接管执行 (Smart Projection)
+⏭️  阶段 4: Undo 权力上移 (Current)
+⏭️  阶段 5: Weaver 完全体 (AnchorResolver)
 ⏭️  阶段 6: 清理与固化
 ```
 
