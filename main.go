@@ -104,6 +104,9 @@ func takeSnapshotForPane(paneID string) (string, error) {
 }
 
 // computeSnapshotHash computes the hash of a snapshot
+// NOTE: This is currently "Pane-only" scoped (Phase 8)
+// For Phase 9+ (Split/Multi-pane), this will need to be upgraded to "World-scoped"
+// where the hash represents the state of the affected world subgraph, not just a single pane
 func computeSnapshotHash(s core.Snapshot) core.SnapshotHash {
 	h := sha256.New()
 
@@ -156,8 +159,10 @@ func (tm *TransactionManager) Commit(
 	// --- Phase 8.2: 标记为 Applied（仅表示"已执行完成"） ---
 	tx.Applied = true
 
-	// --- Phase 8.3: 提交到 Legacy 时间线 ---
-	*stack = append(*stack, *tx)
+	// --- Phase 8.3: 提交到 Legacy 时间线（只有非跳过事务） ---
+	if !tx.Skipped {
+		*stack = append(*stack, *tx)
+	}
 
 	// --- Phase 8.4: 注入 Weaver（只有"存在的事务"才允许） ---
 	if weaverMgr != nil && !tx.Skipped {
@@ -747,6 +752,7 @@ func handleClient(conn net.Conn) bool {
 					executeAction(savedAction, &globalState, paneID, clientName)
 					globalState.Count = orig
 					transMgr.Commit(&globalState.UndoStack, paneID)
+					globalState.RedoStack = nil
 					return false
 				}
 			}
@@ -759,6 +765,7 @@ func handleClient(conn net.Conn) bool {
 			// --- [ABI: Audit Closure] ---
 			// Kernel finalizes the verdict and commits to the timeline.
 			transMgr.Commit(&globalState.UndoStack, paneID)
+			globalState.RedoStack = nil
 
 			// Record if repeatable
 			isRepeatable := strings.HasPrefix(action, "delete_") ||
