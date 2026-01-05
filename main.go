@@ -141,11 +141,11 @@ func main() {
 		reload     = flag.Bool("reload", false, "Reload keymap configuration")
 		configPath = flag.String("config", "", "Path to keymap configuration file")
 	)
-	
+
 	// 保留原有的服务器模式参数
 	serverMode := flag.Bool("server", false, "run as daemon server")
 	stopServer := flag.Bool("stop", false, "stop the running daemon")
-	
+
 	flag.Parse()
 
 	// 确定配置文件路径
@@ -200,10 +200,10 @@ func main() {
 				// 如果参数异常，尝试获取当前pane和client
 				paneIDBytes, err1 := exec.Command("tmux", "display-message", "-p", "#{pane_id}").Output()
 				clientNameBytes, err2 := exec.Command("tmux", "display-message", "-p", "#{client_name}").Output()
-				
+
 				pID := strings.TrimSpace(string(paneIDBytes))
 				cName := strings.TrimSpace(string(clientNameBytes))
-				
+
 				if err1 == nil && err2 == nil && pID != "" && cName != "" {
 					paneID := pID
 					clientName = cName
@@ -225,7 +225,7 @@ func main() {
 			// 如果没有参数，获取当前pane和client
 			paneIDBytes, err1 := exec.Command("tmux", "display-message", "-p", "#{pane_id}").Output()
 			clientNameBytes, err2 := exec.Command("tmux", "display-message", "-p", "#{client_name}").Output()
-			
+
 			pID := strings.TrimSpace(string(paneIDBytes))
 			cName := strings.TrimSpace(string(clientNameBytes))
 
@@ -390,6 +390,11 @@ func runClient(key, paneID string) {
 
 func runServer() {
 	fmt.Printf("Server starting (v3-merged) at %s...\n", socketPath)
+	// 阶段 2：加载配置
+	LoadConfig()
+	fmt.Printf("Server starting (Phase 2) at %s...\n", socketPath)
+	fmt.Printf("Execution mode: %s\n", modeString(GetMode()))
+
 	// 检查是否已有服务在运行 (且能响应)
 	if conn, err := net.DialTimeout("unix", socketPath, 1*time.Second); err == nil {
 		conn.Close()
@@ -418,6 +423,9 @@ func runServer() {
 		stateMu.Unlock()
 		updateStatusBar(s, "") // 兜底更新，不针对特定 client
 	}
+
+	// 阶段 2：初始化 Weaver
+	InitWeaver()
 
 	// Load initial state from tmux option
 	globalState = loadState()
@@ -594,10 +602,18 @@ func handleClient(conn net.Conn) bool {
 	}
 	// --- [融合逻辑结束] ---
 
+	// 阶段 2：Shadow 模式 - 让 Weaver 观察但不执行
+	if GetMode() == ModeShadow && action != "" {
+		// 将 action string 转换为 Intent
+		intent := actionStringToIntent(action, globalState.Count)
+		// 让 Weaver 处理（只记录，不执行）
+		ProcessIntentGlobal(intent)
+	}
+
 	// 统一写入本地日志以便直接调试
 	logFile, _ := os.OpenFile(os.Getenv("HOME")+"/tmux-fsm.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if logFile != nil {
-		fmt.Fprintf(logFile, "[%s] DEBUG: Key='%s', FSM_Handled=%v, Action='%s', Mode='%s'\n", 
+		fmt.Fprintf(logFile, "[%s] DEBUG: Key='%s', FSM_Handled=%v, Action='%s', Mode='%s'\n",
 			time.Now().Format("15:04:05"), key, fsmHandled, action, globalState.Mode)
 		if action != "" {
 			fmt.Fprintf(logFile, "[%s] DEBUG: Executing legacy action: %s\n", time.Now().Format("15:04:05"), action)
