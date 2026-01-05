@@ -84,6 +84,7 @@ func (r *PassthroughResolver) ResolveFacts(facts []core.Fact, expectedHash strin
 			Payload: payload,
 			Meta:    f.Meta,
 			Safety:  core.SafetyExact, // Phase 7: All current successful resolutions are exact
+			LineID:  ra.LineID,        // Phase 9: Include stable LineID
 		})
 	}
 
@@ -99,8 +100,10 @@ func (r *PassthroughResolver) resolveAnchorWithSnapshot(a core.Anchor, s core.Sn
 	// Phase 6.3 checked SnapshotHash globally. LineHash is redundancy but good.
 
 	lineText := ""
+	var lineID core.LineID
 	if row < len(s.Lines) {
 		lineText = s.Lines[row].Text
+		lineID = s.Lines[row].ID
 		if a.Hash != "" {
 			// Compare with LineSnapshot Hash
 			if string(s.Lines[row].Hash) != a.Hash {
@@ -111,26 +114,30 @@ func (r *PassthroughResolver) resolveAnchorWithSnapshot(a core.Anchor, s core.Sn
 
 	switch a.Kind {
 	case core.AnchorAtCursor:
-		return core.ResolvedAnchor{PaneID: a.PaneID, Line: row, Start: col, End: col}, nil
+		return core.ResolvedAnchor{PaneID: a.PaneID, LineID: lineID, Line: row, Start: col, End: col}, nil
 	case core.AnchorWord:
 		start, end := findWordRange(lineText, col, false)
 		if start == -1 {
 			start, end = col, col
 		}
-		return core.ResolvedAnchor{PaneID: a.PaneID, Line: row, Start: start, End: end}, nil
+		return core.ResolvedAnchor{PaneID: a.PaneID, LineID: lineID, Line: row, Start: start, End: end}, nil
 	case core.AnchorLine:
-		return core.ResolvedAnchor{PaneID: a.PaneID, Line: row, Start: 0, End: len(lineText) - 1}, nil
+		return core.ResolvedAnchor{PaneID: a.PaneID, LineID: lineID, Line: row, Start: 0, End: len(lineText) - 1}, nil
 	case core.AnchorAbsolute:
 		// Ref is expected to be []int{line, col}
 		if coords, ok := a.Ref.([]int); ok && len(coords) >= 2 {
-			return core.ResolvedAnchor{PaneID: a.PaneID, Line: coords[0], Start: coords[1], End: coords[1]}, nil
+			// Find the corresponding LineID for the absolute line
+			absLine := coords[0]
+			if absLine >= 0 && absLine < len(s.Lines) {
+				return core.ResolvedAnchor{PaneID: a.PaneID, LineID: s.Lines[absLine].ID, Line: absLine, Start: coords[1], End: coords[1]}, nil
+			}
 		}
 		// Fallback to cursor
-		return core.ResolvedAnchor{PaneID: a.PaneID, Line: row, Start: col, End: col}, nil
+		return core.ResolvedAnchor{PaneID: a.PaneID, LineID: lineID, Line: row, Start: col, End: col}, nil
 	case core.AnchorLegacyRange:
 		return r.resolveAnchor(a) // Fallback or implement here
 	default:
-		return core.ResolvedAnchor{PaneID: a.PaneID, Line: row, Start: col, End: col}, nil
+		return core.ResolvedAnchor{PaneID: a.PaneID, LineID: lineID, Line: row, Start: col, End: col}, nil
 	}
 }
 
@@ -153,11 +160,16 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 		}
 	}
 
+	// For now, we'll create a temporary LineID based on the content
+	// In a real implementation, we'd want to get the stable LineID from the snapshot
+	lineID := core.LineID(adapter.TmuxHashLine(lineText))
+
 	switch a.Kind {
 
 	case core.AnchorAtCursor:
 		return core.ResolvedAnchor{
 			PaneID: a.PaneID,
+			LineID: lineID,
 			Line:   row,
 			Start:  col,
 			End:    col,
@@ -171,6 +183,7 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 		}
 		return core.ResolvedAnchor{
 			PaneID: a.PaneID,
+			LineID: lineID,
 			Line:   row,
 			Start:  start,
 			End:    end,
@@ -180,6 +193,7 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 		// use lineText already captured
 		return core.ResolvedAnchor{
 			PaneID: a.PaneID,
+			LineID: lineID,
 			Line:   row,
 			Start:  0,
 			End:    len(lineText) - 1,
@@ -188,8 +202,12 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 	case core.AnchorLegacyRange:
 		// Legacy Range encoded in Ref
 		if m, ok := a.Ref.(map[string]int); ok {
+			// Create a LineID for the legacy line
+			legacyLineText := adapter.TmuxCaptureLine(a.PaneID, m["line"])
+			legacyLineID := core.LineID(adapter.TmuxHashLine(legacyLineText))
 			return core.ResolvedAnchor{
 				PaneID: a.PaneID,
+				LineID: legacyLineID,
 				Line:   m["line"],
 				Start:  m["start"],
 				End:    m["end"],
@@ -201,6 +219,7 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 		// Fallback for unknown kinds (e.g. Selection? if not implemented)
 		return core.ResolvedAnchor{
 			PaneID: a.PaneID,
+			LineID: lineID,
 			Line:   row,
 			Start:  col,
 			End:    col,

@@ -138,6 +138,9 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 		AllowPartial: intent.IsPartialAllowed(),
 	}
 
+	// [Phase 9] Capture PreSnapshot for verification
+	preSnapshot := snapshot
+
 	// 5. Project: Execute
 	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
 		audit = append(audit, AuditEntry{Step: "Project", Result: fmt.Sprintf("Error: %v", err)})
@@ -147,11 +150,25 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 	tx.Applied = true
 
 	// [Phase 7] Capture PostSnapshotHash for Undo verification
+	var postSnap Snapshot
 	if e.reality != nil {
-		postSnap, err := e.reality.ReadCurrent(intent.GetPaneID())
+		var err error
+		postSnap, err = e.reality.ReadCurrent(intent.GetPaneID())
 		if err == nil {
 			tx.PostSnapshotHash = string(postSnap.Hash)
 			audit = append(audit, AuditEntry{Step: "Record", Result: fmt.Sprintf("PostHash: %s", tx.PostSnapshotHash)})
+		}
+	}
+
+	// [Phase 9] Verify that the projection achieved the expected result
+	if e.projection != nil && e.reality != nil {
+		verification := e.projection.Verify(preSnapshot, resolvedFacts, postSnap)
+		if !verification.OK {
+			audit = append(audit, AuditEntry{Step: "Verify", Result: fmt.Sprintf("Verification failed: %s", verification.Message)})
+			// For now, we still consider this applied but log the verification issue
+			log.Printf("[WEAVER] Projection verification failed: %s", verification.Message)
+		} else {
+			audit = append(audit, AuditEntry{Step: "Verify", Result: "Success: Projection matched expectations"})
 		}
 	}
 
@@ -201,6 +218,12 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 	}
 	audit = append(audit, AuditEntry{Step: "Resolve", Result: fmt.Sprintf("Success: %d facts", len(resolvedFacts))})
 
+	// [Phase 9] Capture PreSnapshot for verification
+	preSnapshot, err := e.reality.ReadCurrent(tx.Intent.GetPaneID())
+	if err != nil {
+		preSnapshot = Snapshot{} // fallback
+	}
+
 	// Apply
 	if len(resolvedFacts) > 0 {
 		log.Printf("[WEAVER] Undo: Applying %d inverse facts. Text length: %d chars.", len(resolvedFacts), len(resolvedFacts[0].Payload.Text))
@@ -210,6 +233,20 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 		return nil, err
 	}
 	audit = append(audit, AuditEntry{Step: "Project", Result: "Success"})
+
+	// [Phase 9] Verify undo operation
+	if e.projection != nil && e.reality != nil {
+		postSnap, err := e.reality.ReadCurrent(tx.Intent.GetPaneID())
+		if err == nil {
+			verification := e.projection.Verify(preSnapshot, resolvedFacts, postSnap)
+			if !verification.OK {
+				audit = append(audit, AuditEntry{Step: "Verify", Result: fmt.Sprintf("Undo verification failed: %s", verification.Message)})
+				log.Printf("[WEAVER] Undo projection verification failed: %s", verification.Message)
+			} else {
+				audit = append(audit, AuditEntry{Step: "Verify", Result: "Success: Undo projection matched expectations"})
+			}
+		}
+	}
 
 	// Move to Redo Stack
 	e.history.AddRedo(tx)
@@ -249,10 +286,29 @@ func (e *ShadowEngine) performRedo() (*Verdict, error) {
 		return nil, err
 	}
 
+	// [Phase 9] Capture PreSnapshot for verification
+	preSnapshot, err := e.reality.ReadCurrent(tx.Intent.GetPaneID())
+	if err != nil {
+		preSnapshot = Snapshot{} // fallback
+	}
+
 	// Apply
 	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
 		e.history.AddRedo(tx)
 		return nil, err
+	}
+
+	// [Phase 9] Verify redo operation
+	if e.projection != nil && e.reality != nil {
+		postSnap, err := e.reality.ReadCurrent(tx.Intent.GetPaneID())
+		if err == nil {
+			verification := e.projection.Verify(preSnapshot, resolvedFacts, postSnap)
+			if !verification.OK {
+				log.Printf("[WEAVER] Redo projection verification failed: %s", verification.Message)
+			} else {
+				// Verification successful
+			}
+		}
 	}
 
 	// Restore to Undo Stack

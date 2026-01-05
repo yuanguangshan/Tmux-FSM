@@ -29,6 +29,8 @@ type AnchorResolver interface {
 type Projection interface {
 	// Apply 应用一组 ResolvedFacts (Phase 5.2)
 	Apply(resolved []ResolvedAnchor, facts []ResolvedFact) error
+	// Verify 验证投影是否按预期执行 (Phase 9)
+	Verify(pre Snapshot, facts []ResolvedFact, post Snapshot) VerificationResult
 }
 
 // Intent 意图接口（从主包导入）

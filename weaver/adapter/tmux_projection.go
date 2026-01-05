@@ -108,6 +108,17 @@ func (p *TmuxProjection) Apply(resolved []core.ResolvedAnchor, facts []core.Reso
 	return nil
 }
 
+// Verify 验证投影是否按预期执行 (Phase 9)
+func (p *TmuxProjection) Verify(
+	pre core.Snapshot,
+	facts []core.ResolvedFact,
+	post core.Snapshot,
+) core.VerificationResult {
+	// Use the LineHashVerifier to check if the changes match expectations
+	verifier := core.NewLineHashVerifier()
+	return verifier.Verify(pre, facts, post)
+}
+
 // 辅助函数：安全获取 string meta
 func metaString(m map[string]interface{}, key string) string {
 	if v, ok := m[key]; ok {

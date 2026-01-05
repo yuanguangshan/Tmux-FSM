@@ -31,6 +31,18 @@ const (
 	FactMove
 )
 
+// AnchorKind 锚点类型
+type AnchorKind int
+
+const (
+	AnchorNone AnchorKind = iota
+	AnchorAtCursor
+	AnchorWord
+	AnchorLine
+	AnchorAbsolute
+	AnchorLegacyRange
+)
+
 // Anchor 描述“我们想要操作的目标”，而不是“它在哪里”
 // Phase 5.3: 纯语义 Anchor
 type Anchor struct {

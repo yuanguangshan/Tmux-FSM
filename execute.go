@@ -148,12 +148,23 @@ func executeAction(action string, state *FSMState, targetPane string, clientName
 	}
 
 	// 1. 处理特殊内核动作：Undo / Redo
+	// [Phase 9] Dispatch to Weaver as single source of truth
 	if action == "undo" {
-		handleUndo(state, targetPane)
+		// Create undo intent and dispatch to Weaver
+		undoIntent := Intent{
+			Kind:   IntentUndo,
+			PaneID: targetPane,
+		}
+		ProcessIntentGlobal(undoIntent)
 		return
 	}
 	if action == "redo" {
-		handleRedo(state, targetPane)
+		// Create redo intent and dispatch to Weaver
+		redoIntent := Intent{
+			Kind:   IntentRedo,
+			PaneID: targetPane,
+		}
+		ProcessIntentGlobal(redoIntent)
 		return
 	}
 
