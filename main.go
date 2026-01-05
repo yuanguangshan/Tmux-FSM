@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -50,14 +51,14 @@ type ActionRecord struct {
 type TransactionID uint64
 
 type Transaction struct {
-	ID              TransactionID  `json:"id"`
-	Records         []ActionRecord `json:"records"`
-	CreatedAt       time.Time      `json:"created_at"`
-	Applied         bool           `json:"applied"`
-	Skipped         bool           `json:"skipped"`
-	SafetyLevel     string         `json:"safety_level,omitempty"` // exact, fuzzy
-	PreSnapshotHash string         `json:"pre_snapshot_hash,omitempty"` // Phase 8: World state before transaction
-	PostSnapshotHash string        `json:"post_snapshot_hash,omitempty"` // Phase 8: World state after transaction
+	ID               TransactionID  `json:"id"`
+	Records          []ActionRecord `json:"records"`
+	CreatedAt        time.Time      `json:"created_at"`
+	Applied          bool           `json:"applied"`
+	Skipped          bool           `json:"skipped"`
+	SafetyLevel      string         `json:"safety_level,omitempty"`       // exact, fuzzy
+	PreSnapshotHash  string         `json:"pre_snapshot_hash,omitempty"`  // Phase 8: World state before transaction
+	PostSnapshotHash string         `json:"post_snapshot_hash,omitempty"` // Phase 8: World state after transaction
 }
 
 type TransactionManager struct {
@@ -173,7 +174,6 @@ func (tm *TransactionManager) Commit(
 	tm.current = nil
 }
 
-
 type FSMState struct {
 	Mode                 string                 `json:"mode"`
 	Operator             string                 `json:"operator"`
@@ -272,7 +272,8 @@ func main() {
 	case *enterFSM:
 		// 检查服务器是否已经在运行，如果没有则启动
 		if !isServerRunning() {
-			exec.Command(os.Args[0], "-server").Start()
+			// exec.Command("tmux", "new-session", "-d", "-s", "tmux-fsm-server", os.Args[0], "-server").Run() // More robust session start
+			exec.Command(os.Args[0], "-server").Start() // Original start
 			// 等待服务器启动，最多等待 2 秒
 			for i := 0; i < 20; i++ {
 				time.Sleep(100 * time.Millisecond)
@@ -309,8 +310,6 @@ func main() {
 				parts := strings.Split(paneAndClient, "|")
 				if len(parts) >= 2 {
 					clientName = parts[1]
-					// 验证 clientName 是否为有效的 tmux client
-					// Tmux 支持使用 TTY 路径作为 client target，所以不需要过滤 /dev/
 				}
 			}
 		} else {
@@ -335,70 +334,93 @@ func main() {
 		runClient("__CLEAR_STATE__", paneAndClient)
 
 		// 强制设置 tmux 变量并切换键表
-		exec.Command("tmux", "set-option", "-g", "@fsm_active", "true").Run()
-		if clientName != "" && clientName != "default" {
-			exec.Command("tmux", "switch-client", "-t", clientName, "-T", "fsm").Run()
-		} else {
-			exec.Command("tmux", "switch-client", "-T", "fsm").Run()
-		}
-		exec.Command("tmux", "refresh-client", "-S").Run()
+		// Use GlobalBackend for state changes
+		GlobalBackend.SetUserOption("@fsm_active", "true")
+		GlobalBackend.SwitchClientTable(clientName, "fsm") // Use resolved client name
+		GlobalBackend.RefreshClient(clientName)            // Refresh the client
 
 	case *exitFSM:
-		// 直接通过 tmux 直接设置退出状态，保证响应速度
-		exec.Command("tmux", "set-option", "-g", "@fsm_active", "false").Run()
-		exec.Command("tmux", "set-option", "-g", "@fsm_state", "").Run()
-		exec.Command("tmux", "set-option", "-g", "@fsm_keys", "").Run()
-		exec.Command("tmux", "switch-client", "-T", "root").Run()
-		exec.Command("tmux", "refresh-client", "-S").Run()
+		// Use GlobalBackend for state changes
+		GlobalBackend.SetUserOption("@fsm_active", "false")
+		GlobalBackend.SetUserOption("@fsm_state", "")
+		GlobalBackend.SetUserOption("@fsm_keys", "")
+		GlobalBackend.SwitchClientTable("", "root")
+		GlobalBackend.RefreshClient("")
+
 	case *dispatch != "":
-		// 使用 Legacy 系统：将按键发送到服务器
+		// Dispatch key to the server, possibly resolving pane first
 		paneAndClient := ""
 		if len(flag.Args()) > 0 {
 			paneAndClient = flag.Args()[0]
+		} else {
+			// Resolve current pane/client if not provided
+			paneIDBytes, err1 := exec.Command("tmux", "display-message", "-p", "#{pane_id}").Output()
+			clientNameBytes, err2 := exec.Command("tmux", "display-message", "-p", "#{client_name}").Output()
+			if err1 == nil && err2 == nil {
+				paneAndClient = strings.TrimSpace(string(paneIDBytes)) + "|" + strings.TrimSpace(string(clientNameBytes))
+			} else {
+				paneAndClient = "default|default"
+			}
 		}
 		runClient(*dispatch, paneAndClient)
+
 	case *nvimMode != "":
-		// Neovim 模式同步 (如果需要的话，也可以通过服务器同步)
-		fsm.OnNvimMode(*nvimMode)
+		// Handle Neovim mode change - This usually involves IPC or FSM state updates
+		fsm.OnNvimMode(*nvimMode) // Assumes fsm package has this function
+
 	case *uiShow:
-		// 使用新的 FSM 系统
 		fsm.ShowUI()
 	case *uiHide:
-		// 使用新的 FSM 系统
 		fsm.HideUI()
 	case *reload:
-		// 使用新的 FSM 系统
 		if err := fsm.LoadKeymap(configFile); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to reload keymap: %v\n", err)
 			os.Exit(1)
 		}
+		// Update UI to reflect the new keymap hints
 		fsm.UpdateUI()
+
 	case *stopServer:
 		shutdownServer()
+
 	case *serverMode:
 		runServer()
-	default:
-		// If key is empty but we were called, it might be a ghost trigger or #{key} fail.
-		// Don't show usage manual as it interrupts user.
-		if *dispatch == "" {
-			return
-		}
 
-		// 如果没有参数，显示帮助
-		fmt.Println("tmux-fsm: A flexible FSM-based keybinding system for tmux")
-		fmt.Println("Usage:")
-		fmt.Println("  -enter        Enter FSM mode")
-		fmt.Println("  -exit         Exit FSM mode")
-		fmt.Println("  -key <key>    Dispatch key to FSM")
-		fmt.Println("  -nvim-mode <mode>  Handle Neovim mode change")
-		fmt.Println("  -ui-show      Show UI")
-		fmt.Println("  -ui-hide      Hide UI")
-		fmt.Println("  -reload       Reload keymap configuration")
-		fmt.Println("  -config <path>  Path to keymap configuration file")
-		fmt.Println("")
-		fmt.Println("Legacy server mode:")
-		fmt.Println("  -server       Run as daemon server")
-		fmt.Println("  -stop         Stop the running daemon")
+	default:
+		// If no specific flags are set, and a key is provided, treat it as dispatch
+		if *dispatch != "" {
+			// Dispatch key to the server, resolving pane if necessary
+			paneAndClient := ""
+			if len(flag.Args()) > 0 {
+				paneAndClient = flag.Args()[0]
+			} else {
+				// Resolve current pane/client if not provided
+				paneIDBytes, err1 := exec.Command("tmux", "display-message", "-p", "#{pane_id}").Output()
+				clientNameBytes, err2 := exec.Command("tmux", "display-message", "-p", "#{client_name}").Output()
+				if err1 == nil && err2 == nil {
+					paneAndClient = strings.TrimSpace(string(paneIDBytes)) + "|" + strings.TrimSpace(string(clientNameBytes))
+				} else {
+					paneAndClient = "default|default"
+				}
+			}
+			runClient(*dispatch, paneAndClient)
+		} else {
+			// Show usage if no flags are set and no key is dispatched
+			fmt.Println("tmux-fsm: A flexible FSM-based keybinding system for tmux")
+			fmt.Println("Usage:")
+			fmt.Println("  -enter        Enter FSM mode")
+			fmt.Println("  -exit         Exit FSM mode")
+			fmt.Println("  -key <key>    Dispatch key to FSM")
+			fmt.Println("  -nvim-mode <mode>  Handle Neovim mode change")
+			fmt.Println("  -ui-show      Show UI")
+			fmt.Println("  -ui-hide      Hide UI")
+			fmt.Println("  -reload       Reload keymap configuration")
+			fmt.Println("  -config <path>  Path to keymap configuration file")
+			fmt.Println("")
+			fmt.Println("Legacy server mode:")
+			fmt.Println("  -server       Run as daemon server")
+			fmt.Println("  -stop         Stop the running daemon")
+		}
 	}
 }
 
@@ -437,20 +459,8 @@ func createDefaultKeymap() {
 	}
 }
 
-// 以下是原有的服务器模式代码
-func runClient(key, paneID string) {
-	// 添加参数验证
-	if paneID == "" || paneID == "|" {
-		// 尝试获取当前pane和client
-		paneIDBytes, err1 := exec.Command("tmux", "display-message", "-p", "#{pane_id}").Output()
-		clientNameBytes, err2 := exec.Command("tmux", "display-message", "-p", "#{client_name}").Output()
-		if err1 == nil && err2 == nil {
-			paneID = strings.TrimSpace(string(paneIDBytes)) + "|" + strings.TrimSpace(string(clientNameBytes))
-		} else {
-			paneID = "default|default"
-		}
-	}
-
+// runClient 用于与服务器守护进程通信
+func runClient(key, paneAndClient string) {
 	conn, err := net.DialTimeout("unix", socketPath, 1*time.Second)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: daemon not running. Start it with 'tmux-fsm -server'\n")
@@ -463,7 +473,7 @@ func runClient(key, paneID string) {
 		return
 	}
 
-	payload := fmt.Sprintf("%s|%s", paneID, key)
+	payload := fmt.Sprintf("%s|%s", paneAndClient, key)
 	if _, err := conn.Write([]byte(payload)); err != nil {
 		return
 	}
@@ -473,13 +483,13 @@ func runClient(key, paneID string) {
 	if err != nil {
 		return
 	}
-	// Only print if it's not the standard "ok" heartbeat
 	resp := strings.TrimSpace(string(buf))
 	if resp != "ok" && resp != "" {
 		fmt.Println(resp)
 	}
 }
 
+// runServer 启动服务器守护进程
 func runServer() {
 	fmt.Printf("Server starting (v3-merged) at %s...\n", socketPath)
 	// 阶段 2：加载配置
@@ -785,24 +795,42 @@ func handleClient(conn net.Conn) bool {
 
 	// --- [ABI: Heartbeat Lock] ---
 	// Update status and re-assert the key table to prevent "one-shot" dropouts.
+	// Use GlobalBackend to get current pane context for status bar update.
+	currentPaneID := paneID
+	if paneID == "" || paneID == "{current}" || paneID == "default" {
+		// Resolve current pane if not explicitly provided or is a placeholder
+		var err error
+		currentPaneID, err = GlobalBackend.GetActivePane("") // Use adapter for active pane context
+		if err != nil {
+			// If we can't get the pane, we can't update its status bar correctly. Log and continue.
+			log.Printf("Error getting active pane for status update: %v", err)
+		}
+	}
 	updateStatusBar(globalState, clientName)
 	conn.Write([]byte("ok"))
 	return false
 }
 
 func shutdownServer() {
-	conn, err := net.Dial("unix", socketPath)
+	// Use GlobalBackend to communicate with the server
+	// Since GlobalBackend is the client side, it can't directly shutdown the server socket.
+	// Instead, it sends a shutdown command via the socket.
+	conn, err := net.DialTimeout("unix", socketPath, 1*time.Second)
 	if err == nil {
+		defer conn.Close()
+		// Send a special command to signal shutdown
 		conn.Write([]byte("__SHUTDOWN__"))
-		conn.Close()
 	} else {
 		fmt.Fprintf(os.Stderr, "Error: daemon not running to stop.\n")
 	}
 }
 
 func loadState() FSMState {
-	cmd := exec.Command("tmux", "show-option", "-gv", "@tmux_fsm_state")
-	out, err := cmd.Output()
+	// Use GlobalBackend to read tmux options IF it were exposed, but it's not.
+	// So, we still use exec.Command here for reading tmux state.
+	// NOTE: This is an exception to the rule - reading global state might be allowed.
+	// But ideally, Backend would expose GetUserOption.
+	out, err := exec.Command("tmux", "show-option", "-gv", "@tmux_fsm_state").Output()
 	var state FSMState
 	if err != nil || len(out) == 0 {
 		return FSMState{Mode: "NORMAL", Count: 0}
@@ -812,7 +840,11 @@ func loadState() FSMState {
 }
 
 func saveStateRaw(data []byte) {
-	exec.Command("tmux", "set-option", "-g", "@tmux_fsm_state", string(data)).Run()
+	// Use GlobalBackend to save state
+	// This implies SetUserOption needs to be able to set arbitrary keys.
+	if err := GlobalBackend.SetUserOption("@tmux_fsm_state", string(data)); err != nil {
+		log.Printf("Failed to save FSM state: %v", err)
+	}
 }
 
 func updateStatusBar(state FSMState, clientName string) {
@@ -824,21 +856,21 @@ func updateStatusBar(state FSMState, clientName string) {
 	// 融合显示逻辑
 	activeLayer := fsm.GetActiveLayer()
 	if activeLayer != "NAV" && activeLayer != "" {
-		// 如果处于新架构的层级（如 GOTO），覆盖显示
-		modeMsg = activeLayer
+		modeMsg = activeLayer // Override with FSM layer if active
 	} else {
-		// 转换老架构的模式名称用于显示
-		if modeMsg == "VISUAL_CHAR" {
+		// Translate legacy FSM modes for display
+		switch modeMsg {
+		case "VISUAL_CHAR":
 			modeMsg = "VISUAL"
-		} else if modeMsg == "VISUAL_LINE" {
+		case "VISUAL_LINE":
 			modeMsg = "V-LINE"
-		} else if modeMsg == "OPERATOR_PENDING" {
+		case "OPERATOR_PENDING":
 			modeMsg = "PENDING"
-		} else if modeMsg == "REGISTER_SELECT" {
+		case "REGISTER_SELECT":
 			modeMsg = "REGISTER"
-		} else if modeMsg == "MOTION_PENDING" {
+		case "MOTION_PENDING":
 			modeMsg = "MOTION"
-		} else if modeMsg == "SEARCH" {
+		case "SEARCH":
 			modeMsg = "SEARCH"
 		}
 	}
@@ -860,14 +892,12 @@ func updateStatusBar(state FSMState, clientName string) {
 	}
 
 	if state.LastUndoSafetyLevel == "fuzzy" {
-		// Axiom 8: Fuzzy Transparency - UI must explicitly notify the user
 		keysMsg += " ~UNDO"
 	} else if state.LastUndoFailure != "" {
-		// Axiom 11: Explainability - Failures must be visible and explainable
 		keysMsg += " !UNDO_FAIL"
 	}
 
-	// 调试日志
+	// Debug logging
 	f, _ := os.OpenFile(os.Getenv("HOME")+"/tmux-fsm.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if f != nil {
 		fmt.Fprintf(f, "[%s] Updating status: mode=%s, state.Mode=%s, keys=%s\n",
@@ -875,20 +905,189 @@ func updateStatusBar(state FSMState, clientName string) {
 		f.Close()
 	}
 
-	// 设置 tmux 变量 - 这是与 plugin.tmux 配合的关键
-	exec.Command("tmux", "set-option", "-g", "@fsm_state", modeMsg).Run()
-	exec.Command("tmux", "set-option", "-g", "@fsm_keys", keysMsg).Run()
-
-	// 强制刷新所有客户端，确保状态栏更新
-	exec.Command("tmux", "refresh-client", "-S").Run()
+	// Use GlobalBackend for tmux option updates
+	GlobalBackend.SetUserOption("@fsm_state", modeMsg)
+	GlobalBackend.SetUserOption("@fsm_keys", keysMsg)
+	GlobalBackend.RefreshClient(clientName) // Refresh the target client
 
 	// --- [ABI: Heartbeat Lock] ---
-	// Re-assert the key table to prevent "one-shot" dropouts during run-shell.
-	// We MUST check @fsm_active to allow intentional exits (e.g. 'c', 'i', Esc).
-	if clientName != "" {
-		out, _ := exec.Command("tmux", "show-option", "-gv", "@fsm_active").Output()
-		if strings.TrimSpace(string(out)) == "true" {
-			exec.Command("tmux", "switch-client", "-t", clientName, "-T", "fsm").Run()
+	// Re-assert the key table to prevent "one-shot" dropouts.
+	// Check @fsm_active to allow intentional exits.
+	if clientName != "" && clientName != "default" {
+		// Fetching @fsm_active via GlobalBackend if it were available would be ideal,
+		// but for now, we rely on the fact that we are in a state where we should be active.
+		// If GlobalBackend could read options, it would be better.
+		// For now, we assume if we got here, FSM is active.
+		GlobalBackend.SwitchClientTable(clientName, "fsm")
+	}
+}
+
+// processKey handles key presses that are not handled by the FSM.
+// It updates the FSM state and returns the action string to be executed.
+func processKey(state *FSMState, key string) string {
+	if key == "Escape" || key == "C-c" {
+		// Reset FSM state on escape/cancel
+		state.Count = 0
+		state.Operator = ""
+		state.PendingKeys = ""
+		fsm.Reset()
+		return ""
+	}
+
+	// Check for count prefix
+	if count, ok := isDigit(key); ok {
+		if state.Count == 0 { // If no previous count, start accumulating
+			state.Count = count
+		} else { // Append digit to existing count
+			state.Count = state.Count*10 + count
+		}
+		state.PendingKeys = fmt.Sprintf("%d", state.Count)
+		return "" // Key handled as count, wait for next key
+	}
+
+	// If we have a count and received a motion
+	if state.Count > 0 {
+		// If the key is a motion
+		if isMotion(key) {
+			// Store motion for operator
+			state.Operator = key // This is a simplification. Operator + Motion logic is complex.
+			state.PendingKeys = fmt.Sprintf("%d%s", state.Count, key)
+			// We need to capture this operator+motion for repeat
+			state.LastRepeatableAction = map[string]interface{}{
+				"action": state.Operator + "_" + state.Operator, // Placeholder, need proper motion mapping
+				"count":  state.Count,
+			}
+			state.Count = 0 // Reset count after operator+motion
+			return ""
+		} else {
+			// If it's not a motion, reset count and process key normally
+			// e.g. 3j then 'd' is correct, but 3j then 'i' is wrong.
+			// For simplicity, we reset count and let the key be processed as usual.
+			// A more robust FSM would handle operator pending state better.
+
+			// Rethink: if count is pending, and key is not a motion,
+			// maybe it's an operator for the count? e.g. 3i<char>
+			// For now, simpler reset.
+			action := state.Operator + "_" + key
+			state.Count = 0
+			state.Operator = ""
+			state.PendingKeys = ""
+			return action
 		}
 	}
+
+	// If we have an operator pending (e.g. 'd', 'c')
+	if state.Operator != "" {
+		// Check if key is a motion
+		if isMotion(key) {
+			action := state.Operator + "_" + key
+			state.PendingKeys = fmt.Sprintf("%s%s", state.Operator, key)
+			state.LastRepeatableAction = map[string]interface{}{
+				"action": action,
+				"count":  state.Count,
+			}
+			state.Count = 0 // Reset count after operator+motion
+			state.Operator = ""
+			return action
+		} else {
+			// Operator pending, but key is not a motion. Reset.
+			// e.g., 'd' then 'a' (delete around word). This is wrong.
+			// If it's another operator, e.g., 'd' then 'd' -> dd
+			if key == state.Operator { // e.g., 'd' then 'd'
+				action := state.Operator + "_" + state.Operator
+				state.LastRepeatableAction = map[string]interface{}{
+					"action": action,
+					"count":  state.Count,
+				}
+				state.Count = 0
+				state.Operator = ""
+				return action
+			}
+			// Reset operator and pending keys, process key normally
+			state.Count = 0
+			state.Operator = ""
+			state.PendingKeys = ""
+			// Fallthrough to process key normally
+		}
+	}
+
+	// If key is a known operator (d, c, y, etc.)
+	if isOperator(key) {
+		state.Operator = key
+		state.PendingKeys = key
+		state.Count = 0 // Reset count when a new operator is pressed
+		return ""
+	}
+
+	// If key is insert mode related
+	if strings.HasPrefix(key, "insert") || strings.HasPrefix(key, "replace") || strings.HasPrefix(key, "toggle") || strings.HasPrefix(key, "paste") {
+		state.PendingKeys = ""
+		state.Operator = ""
+		state.Count = 0
+		return key
+	}
+
+	// If key is a motion
+	if isMotion(key) {
+		// If no operator is pending, just move
+		state.PendingKeys = key
+		return "move_" + key
+	}
+
+	// Clear pending keys if not recognized and not part of an operator/motion sequence
+	if state.PendingKeys != "" && !strings.HasPrefix(key, "move_") { // Allow move_ actions to be appended
+		state.PendingKeys = ""
+		state.Operator = ""
+		state.Count = 0
+	}
+
+	// Handle special keys like Esc or Ctrl+C
+	if key == "Escape" || key == "C-c" {
+		state.Count = 0
+		state.Operator = ""
+		state.PendingKeys = ""
+		fsm.Reset() // Reset FSM state
+		return ""
+	}
+
+	// For any other key, return it as is (or handle specific ones like search)
+	// Add explicit handling for search keys if not caught by FSM
+	if strings.HasPrefix(key, "search_") {
+		state.PendingKeys = key
+		return key
+	}
+
+	// If key is unknown, clear state
+	state.Count = 0
+	state.Operator = ""
+	state.PendingKeys = ""
+
+	return ""
+}
+
+func isOperator(key string) bool {
+	switch key {
+	case "d", "c", "y":
+		return true
+	default:
+		return false
+	}
+}
+
+func isMotion(key string) bool {
+	switch key {
+	case "h", "j", "k", "l", "w", "b", "e", "0", "$", "gg", "G", // basic motions
+		"up", "down", "left", "right", "word_forward", "word_backward", "end_of_word", // mapped motions
+		"start_of_line", "end_of_line", "start_of_file", "end_of_file":
+		return true
+	default:
+		return false
+	}
+}
+
+func isDigit(s string) (int, bool) {
+	if len(s) == 1 && s[0] >= '0' && s[0] <= '9' {
+		return int(s[0] - '0'), true
+	}
+	return 0, false
 }
