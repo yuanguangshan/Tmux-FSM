@@ -1,39 +1,39 @@
 # Project Documentation
 
-- **Generated at:** 2026-01-05 19:59:37
+- **Generated at:** 2026-01-05 22:00:30
 - **Root Dir:** `.`
 - **File Count:** 29
-- **Total Size:** 135.69 KB
+- **Total Size:** 138.10 KB
 
 ## 📂 File List
 - `bridge/bridge.go` (2.00 KB)
 - `config.go` (1.37 KB)
-- `execute.go` (32.65 KB)
+- `execute.go` (31.77 KB)
 - `fsm/engine.go` (3.85 KB)
 - `fsm/keymap.go` (1.11 KB)
 - `fsm/ui.go` (0.76 KB)
 - `fsm/ui/interface.go` (0.08 KB)
 - `fsm/ui/popup.go` (0.78 KB)
 - `intent.go` (5.00 KB)
-- `intent_bridge.go` (5.28 KB)
-- `main.go` (22.83 KB)
+- `intent_bridge.go` (5.47 KB)
+- `main.go` (24.01 KB)
 - `tools/gen-docs.go` (10.41 KB)
 - `weaver/adapter/snapshot.go` (0.23 KB)
 - `weaver/adapter/snapshot_hash.go` (0.31 KB)
 - `weaver/adapter/tmux_adapter.go` (1.42 KB)
 - `weaver/adapter/tmux_physical.go` (12.05 KB)
-- `weaver/adapter/tmux_projection.go` (3.53 KB)
+- `weaver/adapter/tmux_projection.go` (3.78 KB)
 - `weaver/adapter/tmux_reality.go` (0.23 KB)
 - `weaver/adapter/tmux_snapshot.go` (0.67 KB)
 - `weaver/adapter/tmux_utils.go` (2.25 KB)
-- `weaver/core/anchor_kind.go` (0.24 KB)
+- `weaver/core/anchor_kind.go` (0.25 KB)
 - `weaver/core/history.go` (2.51 KB)
 - `weaver/core/resolved_fact.go` (0.53 KB)
-- `weaver/core/shadow_engine.go` (6.45 KB)
+- `weaver/core/shadow_engine.go` (7.94 KB)
 - `weaver/core/snapshot.go` (0.53 KB)
 - `weaver/core/types.go` (3.21 KB)
-- `weaver/logic/passthrough_resolver.go` (6.26 KB)
-- `weaver/logic/shell_fact_builder.go` (2.34 KB)
+- `weaver/logic/passthrough_resolver.go` (6.59 KB)
+- `weaver/logic/shell_fact_builder.go` (2.16 KB)
 - `weaver_manager.go` (6.82 KB)
 
 ---
@@ -487,8 +487,15 @@ func executeShellAction(action string, state *FSMState, targetPane string) {
 				// Record semantic Fact in active transaction
 				record := captureShellDelete(targetPane, startPos[0], content)
 				transMgr.Append(record)
+
+				// [Phase 7] Robust Deletion:
+				// Since we know EXACTLY what we captured, we delete by character count.
+				// This is much safer than relying on shell M-d bindings.
+				exec.Command("tmux", "send-keys", "-t", targetPane, "-N", fmt.Sprint(len(content)), "Delete").Run()
+			} else {
+				// Fallback if capture failed
+				performPhysicalDelete(motion, targetPane)
 			}
-			performPhysicalDelete(motion, targetPane)
 		}
 		if op == "change" {
 			exitFSM(targetPane) // change implies entering insert mode
@@ -985,14 +992,40 @@ func abs(v int) int {
 
 func captureText(motion string, targetPane string) string {
 	if motion == "word_forward" {
-		// 直接通过 tmux 捕获内容
-		// 修复 Race Condition: tmux send-keys 是异步的，增加微调
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "begin-selection").Run()
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "next-word-end").Run()
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "copy-pipe", "tmux save-buffer -").Run()
-		time.Sleep(5 * time.Millisecond) // 给 tmux 5ms 时间刷入 buffer
-		out, _ := exec.Command("tmux", "show-buffer").Output()
-		return strings.TrimSpace(string(out))
+		// [Phase 7] Axiom 9: Deterministic Reality
+		// Instead of copy-mode UI (which is asynchronous and flaky),
+		// we use capture-pane and parse the word boundary in Go.
+		row, col := currentCursor(targetPane)
+		line := captureLine(targetPane, row)
+
+		if col >= len(line) {
+			return ""
+		}
+
+		isWordChar := func(c byte) bool {
+			return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
+		}
+
+		// Find end of current word
+		end := col
+		// If at start of word, or non-word chars, identify the range to delete
+		if isWordChar(line[col]) {
+			// Forward to end of word
+			for end < len(line) && isWordChar(line[end]) {
+				end++
+			}
+			// Include trailing whitespace (standard 'dw' behavior)
+			for end < len(line) && line[end] == ' ' {
+				end++
+			}
+		} else {
+			// On whitespace/punctuation: delete the sequence of those
+			for end < len(line) && !isWordChar(line[end]) {
+				end++
+			}
+		}
+
+		return line[col:end]
 	}
 	return ""
 }
@@ -1016,42 +1049,8 @@ func performPhysicalDelete(motion string, targetPane string) {
 		exec.Command("tmux", "send-keys", "-t", targetPane, "C-k").Run()
 
 	case "word_forward", "inside_word", "around_word": // dw
-		// Robust fallback: Shell bindings for M-d are flaky.
-		// Use tmux visual block deletion which works universally.
-		// 1. Enter copy mode
-		exec.Command("tmux", "copy-mode", "-t", targetPane).Run()
-		// 2. Start selection
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "begin-selection").Run()
-		// 3. Move to next word end (standard tmux key is 'e', but 'next-word-end' command)
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "next-word-end").Run()
-		// 4. Copy pipe and cancel (to get text for undo history if needed) - handled by captureText already?
-		// No, we just want to delete.
-		// 4. Delete the selection. In shell, this means we can't just 'delete' the selection easily
-		// without pasting emptiness or similar hacks.
-		// Wait, we need to DELETE in the shell prompt.
-		// Tmux copy-mode doesn't edit the shell buffer.
-		// We MUST send keys to the shell.
-
-		// If \033d failed, it means the shell simply doesn't support Alt+d.
-		// Let's try to simulate 'Delete' key repeatedly? No, we don't know the word length.
-		// Let's try Ctrl+w (delete word backward) but we are at the start.
-		// We can move to end of word (Alt+f) then Ctrl+w.
-		// But Alt+f might fail too!
-
-		// Let's try the HEX code for M-d again but explicitly as bytes.
-		// Or assume user might be using zsh with a different binding.
-
-		// Let's try `Escape` then `d` again but with a small sleep? No.
-
-		// Let's try moving cursor right word, then backspace word?
-		// Alt+Right is also Meta.
-
-		// Is there a standard way to delete word in ALL shells?
-		// No. But M-d is the readline standard.
-
-		// Let's revert to "Escape" "d" but ensure proper argument passing.
-		// tmux send-keys -t target Escape d
-		exec.Command("tmux", "send-keys", "-t", targetPane, "Escape", "d").Run()
+		// Robust implementation: M-d (Alt-d) is the shell standard for delete-word-forward.
+		exec.Command("tmux", "send-keys", "-t", targetPane, "M-d").Run()
 
 	case "word_backward": // db
 		// C-w: Unix word rubout (backward)
@@ -2123,11 +2122,17 @@ func actionStringToIntent(action string, count int, paneID string) Intent {
 	// 解析 motion 为 SemanticTarget
 	target := parseMotionToTarget(motion)
 
+	// 将原本的 motion 和 operation 存入 Meta 以供 Weaver Projection 使用
+	meta := make(map[string]interface{})
+	meta["motion"] = motion
+	meta["operation"] = operation
+
 	return Intent{
 		Kind:   kind,
 		Target: target,
 		Count:  count,
 		PaneID: paneID,
+		Meta:   meta,
 	}
 }
 
@@ -2815,25 +2820,47 @@ func handleClient(conn net.Conn) bool {
 
 	// 阶段 3：Weaver 模式 - 接管执行；Shadow 模式 - 仅观察
 	if (GetMode() == ModeShadow || GetMode() == ModeWeaver) && action != "" {
-		// 将 action string 转换为 Intent
-		intent := actionStringToIntent(action, globalState.Count, paneID)
-		// 让 Weaver 处理（只记录，不执行）
-		ProcessIntentGlobal(intent)
-	}
+		// [Phase 7] Hybrid Protection:
+		// If it's a high-fidelity action that will fall through to legacy below,
+		// we SKIP direct Weaver processing here to prevent physical interference.
+		// It will be captured via Reverse Bridge in Commit().
+		isHighFidelity := strings.HasPrefix(action, "delete_") ||
+			strings.HasPrefix(action, "change_") ||
+			strings.HasPrefix(action, "yank_") ||
+			strings.HasPrefix(action, "replace_")
 
-	// 统一写入本地日志以便直接调试
-	logFile, _ := os.OpenFile(os.Getenv("HOME")+"/tmux-fsm.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if logFile != nil {
-		fmt.Fprintf(logFile, "[%s] DEBUG: Key='%s', FSM_Handled=%v, Action='%s', Mode='%s'\n",
-			time.Now().Format("15:04:05"), key, fsmHandled, action, globalState.Mode)
-		if action != "" {
-			fmt.Fprintf(logFile, "[%s] DEBUG: Executing legacy action: %s\n", time.Now().Format("15:04:05"), action)
+		if !(GetMode() == ModeWeaver && isHighFidelity) {
+			intent := actionStringToIntent(action, globalState.Count, paneID)
+			ProcessIntentGlobal(intent)
 		}
-		logFile.Close()
 	}
 
 	// [Phase 4] Weaver 模式下接管执行（包括 Undo/Redo），唯有 repeat_last 仍走 Legacy
-	if action != "" && (GetMode() != ModeWeaver || action == "repeat_last") {
+	// [Phase 7] Hybrid Execution:
+	// Even in Weaver mode, we allow high-fidelity capture actions (delete/change/yank)
+	// to fall through to Lexacy execution so they can be captured accurately via Reverse Bridge.
+	isHighFidelityAction := strings.HasPrefix(action, "delete_") ||
+		strings.HasPrefix(action, "change_") ||
+		strings.HasPrefix(action, "yank_") ||
+		strings.HasPrefix(action, "replace_")
+
+	if action != "" && (GetMode() == ModeLegacy || (GetMode() == ModeShadow) || action == "repeat_last" || isHighFidelityAction) {
+		// 统一写入本地日志以便直接调试
+		logFile, _ := os.OpenFile(os.Getenv("HOME")+"/tmux-fsm.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if logFile != nil {
+			fmt.Fprintf(logFile, "[%s] DEBUG: Key='%s', FSM_Handled=%v, Action='%s', Mode='%s'\n",
+				time.Now().Format("15:04:05"), key, fsmHandled, action, globalState.Mode)
+			fmt.Fprintf(logFile, "[%s] DEBUG: Executing legacy action: %s\n", time.Now().Format("15:04:05"), action)
+			logFile.Close()
+		}
+
+		// [Phase 7] 再次确认：在 Weaver 模式下，Undo/Redo 必须由引擎完成，此处强制跳过
+		// [Phase 7] 再次确认：在 Weaver 模式下，Undo/Redo 必须由引擎完成，此处强制跳过
+		if GetMode() == ModeWeaver && (action == "undo" || action == "redo") {
+			updateStatusBar(globalState, clientName)
+			conn.Write([]byte("ok"))
+			return false
+		}
 		if action == "repeat_last" {
 			// Retrieve last repeatable action
 			if globalState.LastRepeatableAction != nil {
@@ -3687,9 +3714,9 @@ func PerformPhysicalMove(motion string, count int, targetPane string) {
 	case "right":
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-N", cStr, "Right").Run()
 	case "start_of_line": // 0
-		exec.Command("tmux", "send-keys", "-t", targetPane, "Home").Run()
+		exec.Command("tmux", "send-keys", "-t", targetPane, "C-a").Run()
 	case "end_of_line": // $
-		exec.Command("tmux", "send-keys", "-t", targetPane, "End").Run()
+		exec.Command("tmux", "send-keys", "-t", targetPane, "C-e").Run()
 	case "word_forward": // w
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-N", cStr, "M-f").Run()
 	case "word_backward": // b
@@ -3730,13 +3757,8 @@ func PerformPhysicalDelete(motion string, targetPane string) {
 		exec.Command("tmux", "send-keys", "-t", targetPane, "C-k").Run()
 
 	case "word_forward", "inside_word", "around_word": // dw
-		// Robust fallback: Shell bindings for M-d are flaky.
-		// Use tmux visual block deletion which works universally.
-		exec.Command("tmux", "copy-mode", "-t", targetPane).Run()
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "begin-selection").Run()
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "next-word-end").Run()
-		// Note: Legacy code comment regarding copy-pipe omitted for brevity, but logic kept
-		exec.Command("tmux", "send-keys", "-t", targetPane, "Escape", "d").Run()
+		// Simple and robust: most shells bind M-d to delete-word-forward
+		exec.Command("tmux", "send-keys", "-t", targetPane, "M-d").Run()
 
 	case "word_backward": // db
 		// C-w: Unix word rubout (backward)
@@ -4032,6 +4054,17 @@ func findBracketRange(line string, x int, motion string, around bool) (int, int)
 	return start + 1, end - 1
 }
 
+// PerformPhysicalRawInsert 物理插入原始文本
+func PerformPhysicalRawInsert(text, targetPane string) {
+	// 使用管道 load-buffer 是最健壮的，彻底避免 '?' 乱码问题
+	cmd := exec.Command("tmux", "load-buffer", "-")
+	cmd.Stdin = strings.NewReader(text)
+	cmd.Run()
+
+	// 确保粘贴到目标
+	exec.Command("tmux", "paste-buffer", "-t", targetPane).Run()
+}
+
 ````
 
 ## 📄 `weaver/adapter/tmux_projection.go`
@@ -4052,7 +4085,12 @@ func (p *TmuxProjection) Apply(resolved []core.ResolvedAnchor, facts []core.Reso
 	for _, fact := range facts {
 		targetPane := fact.Anchor.PaneID
 		if targetPane == "" {
-			targetPane = "{current}" // 容错，虽然应该由 Logic 层填充
+			targetPane = "{current}" // 容错
+		}
+
+		// Phase 7: For exact restoration, we must jump to the coordinate first
+		if fact.Anchor.Start >= 0 {
+			TmuxJumpTo(fact.Anchor.Start, fact.Anchor.Line, targetPane)
 		}
 
 		// 从 Meta 中提取 legacy motion
@@ -4074,6 +4112,9 @@ func (p *TmuxProjection) Apply(resolved []core.ResolvedAnchor, facts []core.Reso
 				// 如果是 paste:
 				if motion == "paste" { // Hack: check motion
 					PerformPhysicalPaste(metaString(fact.Meta, "sub_motion"), targetPane)
+				} else {
+					// Phase 7: Undo recovery or raw text projection
+					PerformPhysicalRawInsert(text, targetPane)
 				}
 			} else {
 				// 动作 (e.g. insert_after -> a)
@@ -4314,6 +4355,7 @@ const (
 
 	// Structural
 	AnchorSelection
+	AnchorAbsolute
 
 	// Legacy Support
 	AnchorLegacyRange
@@ -4486,6 +4528,7 @@ package core
 
 import (
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -4576,6 +4619,39 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 		}, ErrWorldDrift // Or a new error like ErrSafetyViolation
 	}
 
+	// [Phase 7] Inverse Fact Enrichment:
+	// If the planner couldn't generate inverse facts (common for semantic deletes),
+	// we generate them now using the reality captured during resolution.
+	if len(inverseFacts) == 0 && len(resolvedFacts) > 0 {
+		for _, rf := range resolvedFacts {
+			if rf.Kind == FactDelete && rf.Payload.OldText != "" {
+				// [Phase 7] Axiom 7.6: Paradox Resolved
+				// Undo is return-to-origin, not a new fork.
+				// Line-level semantic fingerprints are ignored because global post-hash already secured the timeline.
+				invAnchor := Anchor{
+					PaneID: rf.Anchor.PaneID,
+					Kind:   AnchorAbsolute,
+					Ref:    []int{rf.Anchor.Line, rf.Anchor.Start},
+				}
+
+				invMeta := make(map[string]interface{})
+				for k, v := range rf.Meta {
+					invMeta[k] = v
+				}
+				invMeta["operation"] = "undo_restore"
+
+				inverseFacts = append(inverseFacts, Fact{
+					Kind:   FactInsert,
+					Anchor: invAnchor,
+					Payload: FactPayload{
+						Text: rf.Payload.OldText,
+					},
+					Meta: invMeta,
+				})
+			}
+		}
+	}
+
 	// 3. Create Transaction
 	txID := TransactionID(fmt.Sprintf("tx-%d", time.Now().UnixNano()))
 	tx := &Transaction{
@@ -4639,6 +4715,9 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 		}
 	}
 
+	var audit []AuditEntry
+	audit = append(audit, AuditEntry{Step: "Adjudicate", Result: "Undo context verified"})
+
 	// [Phase 5.1] Resolve InverseFacts
 	// [Phase 6.3] Use recorded PostHash if available (passed as expectedHash)
 	resolvedFacts, err := e.resolver.ResolveFacts(tx.InverseFacts, tx.PostSnapshotHash)
@@ -4646,12 +4725,17 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 		e.history.PushBack(tx)
 		return nil, err
 	}
+	audit = append(audit, AuditEntry{Step: "Resolve", Result: fmt.Sprintf("Success: %d facts", len(resolvedFacts))})
 
 	// Apply
+	if len(resolvedFacts) > 0 {
+		log.Printf("[WEAVER] Undo: Applying %d inverse facts. Text length: %d chars.", len(resolvedFacts), len(resolvedFacts[0].Payload.Text))
+	}
 	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
 		e.history.PushBack(tx)
 		return nil, err
 	}
+	audit = append(audit, AuditEntry{Step: "Project", Result: "Success"})
 
 	// Move to Redo Stack
 	e.history.AddRedo(tx)
@@ -4660,6 +4744,7 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 		Kind:        VerdictApplied,
 		Message:     fmt.Sprintf("Undone tx: %s", tx.ID),
 		Transaction: tx,
+		Audit:       audit,
 	}, nil
 }
 
@@ -4996,6 +5081,13 @@ func (r *PassthroughResolver) resolveAnchorWithSnapshot(a core.Anchor, s core.Sn
 		return core.ResolvedAnchor{PaneID: a.PaneID, Line: row, Start: start, End: end}, nil
 	case core.AnchorLine:
 		return core.ResolvedAnchor{PaneID: a.PaneID, Line: row, Start: 0, End: len(lineText) - 1}, nil
+	case core.AnchorAbsolute:
+		// Ref is expected to be []int{line, col}
+		if coords, ok := a.Ref.([]int); ok && len(coords) >= 2 {
+			return core.ResolvedAnchor{PaneID: a.PaneID, Line: coords[0], Start: coords[1], End: coords[1]}, nil
+		}
+		// Fallback to cursor
+		return core.ResolvedAnchor{PaneID: a.PaneID, Line: row, Start: col, End: col}, nil
 	case core.AnchorLegacyRange:
 		return r.resolveAnchor(a) // Fallback or implement here
 	default:
@@ -5146,15 +5238,16 @@ func (b *ShellFactBuilder) Build(intent core.Intent, snapshot core.Snapshot) ([]
 		Hash:   lineHash,
 	}
 
-	// 根据 Target 将语义映射到 AnchorKind
-	// 假设 TargetKind: 0=Char, 1=Word, 2=Line, 3=Selection
+	// 假设 TargetKind: 1=Char, 2=Word, 3=Line, 5=TextObject (from intent.go)
 	switch target.Kind {
-	case 1: // Word
+	case 1: // Char
+		anchor.Kind = core.AnchorAtCursor
+	case 2: // Word
 		anchor.Kind = core.AnchorWord
-	case 2: // Line
+	case 3: // Line
 		anchor.Kind = core.AnchorLine
-	case 3: // Selection
-		anchor.Kind = core.AnchorSelection
+	case 5: // TextObject
+		anchor.Kind = core.AnchorWord // Fallback or sophisticated resolution
 	}
 
 	switch intent.GetKind() {
@@ -5167,26 +5260,9 @@ func (b *ShellFactBuilder) Build(intent core.Intent, snapshot core.Snapshot) ([]
 			Meta:    meta,
 		})
 
-	case core.IntentDelete:
-		facts = append(facts, core.Fact{
-			Kind:   core.FactDelete,
-			Anchor: anchor,
-			Meta:   meta,
-		})
-
-	case core.IntentReplace:
-		// Replace assumes AtCursor (Char) usually?
-		// meta["new_text"]
-		newText := ""
-		if v, ok := meta["new_text"].(string); ok {
-			newText = v
-		}
-		facts = append(facts, core.Fact{
-			Kind:    core.FactReplace,
-			Anchor:  anchor,
-			Payload: core.FactPayload{NewText: newText},
-			Meta:    meta,
-		})
+	// Note: IntentDelete and IntentChange intentionally omitted for Shell.
+	// We rely on high-fidelity legacy capture and reverse-bridge injection
+	// because semantic word-boundary resolution in the shell is imprecise.
 
 	case core.IntentMove:
 		// Move is FactMove.
