@@ -27,14 +27,9 @@ func InitWeaver(mode ExecutionMode) {
 	}
 
 	// 初始化组件
-	// 1. Planner (Logic)
 	planner := &logic.ShellFactBuilder{}
-
-	// 2. Engine (Core)
 	engine := core.NewShadowEngine(planner)
 
-	// 3. Adapter (Environment)
-	// 根据模式选择 Projection
 	var proj core.Projection
 	if mode == ModeWeaver {
 		proj = &adapter.TmuxProjection{}
@@ -42,7 +37,6 @@ func InitWeaver(mode ExecutionMode) {
 		proj = &adapter.NoopProjection{}
 	}
 
-	// Resolver 目前还是 Noop
 	resolver := &adapter.NoopResolver{}
 
 	weaverMgr = &WeaverManager{
@@ -64,10 +58,7 @@ func ProcessIntentGlobal(intent Intent) {
 
 // ProcessIntent 处理 Intent
 func (m *WeaverManager) ProcessIntent(intent Intent) {
-	// 1. 适配 Intent
 	coreIntent := &intentAdapter{intent: intent}
-
-	// 2. 调用 Engine (Apply)
 	verdict, err := m.engine.ApplyIntent(coreIntent, m.resolver, m.projection)
 
 	if err != nil {
@@ -75,8 +66,7 @@ func (m *WeaverManager) ProcessIntent(intent Intent) {
 		return
 	}
 
-	// 3. 日志记录
-	if config.LogFacts {
+	if globalConfig.LogFacts {
 		txID := "nil"
 		safety := core.SafetyExact
 		if verdict.Transaction != nil {
@@ -86,18 +76,90 @@ func (m *WeaverManager) ProcessIntent(intent Intent) {
 		logWeaver("Verdict: %s (tx: %s) (Safety: %v)", verdict.Message, txID, safety)
 	}
 
-	// 4. Undo 注入 (Phase 3 关键：Legacy Undo Bridge)
-	if m.mode == ModeWeaver && verdict.Transaction != nil && len(verdict.Transaction.Facts) > 0 {
-		record := convertToLegacyRecord(verdict.Transaction)
-		if record != nil {
-			stateMu.Lock()
-			// globalState 是 main 包的全局变量
-			globalState.transMgr.Append(*record)
-			stateMu.Unlock()
+	// [Phase 4] Phase 3 的 Weaver -> Legacy 桥接已禁用
+	// 现在 Weaver History 是 Source of Truth，Legacy 操作将通过反向桥接注入 Weaver
+}
 
-			logWeaver("Injected Legacy ActionRecord for tx: %s", verdict.Transaction.ID)
-		}
+// InjectLegacyTransaction 将 Legacy 事务注入到 Weaver History (Reverse Bridge)
+func (m *WeaverManager) InjectLegacyTransaction(legacyTx *Transaction) {
+	if m.engine == nil {
+		return
 	}
+	// 获取 ShadowEngine 的 History
+	se, ok := m.engine.(*core.ShadowEngine)
+	if !ok {
+		return
+	}
+
+	coreTx := &core.Transaction{
+		ID:           core.TransactionID(fmt.Sprintf("legacy-%d", legacyTx.ID)),
+		Timestamp:    legacyTx.CreatedAt.Unix(),
+		Facts:        make([]core.Fact, 0),
+		InverseFacts: make([]core.Fact, 0),
+		Applied:      true,
+		Safety:       core.SafetyExact,
+	}
+
+	// 转换正向事实
+	for _, rec := range legacyTx.Records {
+		f := convertLegacyFactToCore(rec.Fact)
+		coreTx.Facts = append(coreTx.Facts, f)
+	}
+
+	// 转换反向事实 (通常 Inverse 用于 Undo。Legacy Undo 执行 Inverse。
+	// Weaver Undo 执行 InverseFacts。顺序：Record1, Record2. Undo: Inv2, Inv1。
+	// 所以我们需要倒序遍历 Records)
+	for i := len(legacyTx.Records) - 1; i >= 0; i-- {
+		rec := legacyTx.Records[i]
+		inv := convertLegacyFactToCore(rec.Inverse)
+		coreTx.InverseFacts = append(coreTx.InverseFacts, inv)
+	}
+
+	if len(coreTx.Facts) > 0 {
+		se.GetHistory().Push(coreTx)
+		logWeaver("Injected Legacy Transaction %d -> %s", legacyTx.ID, coreTx.ID)
+	}
+}
+
+func convertLegacyFactToCore(lf Fact) core.Fact {
+	// 构造 Fact
+	cf := core.Fact{
+		Anchor: core.Anchor{
+			ResourceID: lf.Target.Anchor.PaneID,
+			Hint: core.AnchorHint{
+				Line:   lf.Target.Anchor.LineHint,
+				Column: 0, // Legacy Anchor doesn't strictly track column in hint, but Fact.Target might? Cursor is [row, col]
+			},
+			Hash: []byte(lf.Target.Anchor.LineHash),
+		},
+		Range: core.Range{
+			StartOffset: lf.Target.StartOffset,
+			EndOffset:   lf.Target.EndOffset,
+		},
+		SideEffects: lf.SideEffects,
+	}
+
+	if lf.Target.Anchor.Cursor != nil {
+		cf.Anchor.Hint.Column = lf.Target.Anchor.Cursor[1]
+	}
+
+	switch lf.Kind {
+	case "delete":
+		cf.Kind = core.FactDelete
+		cf.Payload.OldText = lf.Target.Text
+	case "insert":
+		cf.Kind = core.FactInsert
+		cf.Payload.Text = lf.Target.Text
+	case "replace":
+		cf.Kind = core.FactReplace
+		cf.Payload.OldText = lf.Target.Text
+		if s, ok := lf.Meta["new_text"].(string); ok {
+			cf.Payload.NewText = s
+		}
+	default:
+		cf.Kind = core.FactNone
+	}
+	return cf
 }
 
 // intentAdapter 适配 main.Intent 到 core.Intent
@@ -122,20 +184,22 @@ func (a *intentAdapter) GetCount() int {
 	return a.intent.Count
 }
 
-// logWeaverInfo 记录 Weaver 信息日志
-func logWeaverInfo(msg string) {
-	f, _ := os.OpenFile(os.Getenv("HOME")+"/tmux-fsm.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if f != nil {
-		fmt.Fprintf(f, "[%s] [WEAVER] %s\n", time.Now().Format("15:04:05"), msg)
-		f.Close()
-	}
+func (a *intentAdapter) GetMeta() map[string]interface{} {
+	return a.intent.Meta
 }
 
-// logWeaverError 记录 Weaver 错误日志
-func logWeaverError(msg string) {
+func (a *intentAdapter) GetPaneID() string {
+	return a.intent.PaneID
+}
+
+// logWeaver ...
+func logWeaver(format string, args ...interface{}) {
+	if !globalConfig.LogFacts {
+		return
+	}
 	f, _ := os.OpenFile(os.Getenv("HOME")+"/tmux-fsm.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if f != nil {
-		fmt.Fprintf(f, "[%s] [WEAVER-ERROR] %s\n", time.Now().Format("15:04:05"), msg)
+		fmt.Fprintf(f, "[%s] [WEAVER] %s\n", time.Now().Format("15:04:05"), fmt.Sprintf(format, args...))
 		f.Close()
 	}
 }

@@ -80,6 +80,12 @@ func (tm *TransactionManager) Commit(stack *[]Transaction) {
 		return
 	}
 	*stack = append(*stack, *tm.current)
+
+	// [Phase 4] Reverse Bridge: Inject into Weaver History
+	if weaverMgr != nil {
+		weaverMgr.InjectLegacyTransaction(tm.current)
+	}
+
 	tm.current = nil
 }
 
@@ -426,9 +432,6 @@ func runServer() {
 		updateStatusBar(s, "") // 兜底更新，不针对特定 client
 	}
 
-	// 阶段 2：初始化 Weaver
-	InitWeaver()
-
 	// Load initial state from tmux option
 	globalState = loadState()
 	fmt.Println("tmux-fsm daemon started at", socketPath)
@@ -623,8 +626,8 @@ func handleClient(conn net.Conn) bool {
 		logFile.Close()
 	}
 
-	// [Phase 3] Weaver 模式下接管执行 (repeat_last, undo, redo 除外)
-	if action != "" && (GetMode() != ModeWeaver || (action == "repeat_last" || action == "undo" || action == "redo")) {
+	// [Phase 4] Weaver 模式下接管执行（包括 Undo/Redo），唯有 repeat_last 仍走 Legacy
+	if action != "" && (GetMode() != ModeWeaver || action == "repeat_last") {
 		if action == "repeat_last" {
 			// Retrieve last repeatable action
 			if globalState.LastRepeatableAction != nil {

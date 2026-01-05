@@ -79,10 +79,12 @@ const (
 
 // Verdict 裁决结果（可审计输出）
 type Verdict struct {
-	Kind    VerdictKind  `json:"kind"`
-	Safety  SafetyLevel  `json:"safety"`
-	Message string       `json:"message"`
-	Details []AuditEntry `json:"details,omitempty"`
+	Kind        VerdictKind        `json:"kind"`
+	Safety      SafetyLevel        `json:"safety"`
+	Message     string             `json:"message"`
+	Transaction *Transaction       `json:"transaction,omitempty"`
+	Resolutions []AnchorResolution `json:"resolutions,omitempty"`
+	Details     []AuditEntry       `json:"details,omitempty"`
 }
 
 // VerdictKind 裁决类型
