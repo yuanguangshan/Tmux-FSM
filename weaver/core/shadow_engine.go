@@ -202,7 +202,9 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 	audit = append(audit, AuditEntry{Step: "Resolve", Result: fmt.Sprintf("Success: %d facts", len(resolvedFacts))})
 
 	// Apply
-	log.Printf("[WEAVER] Undo: Applying %d inverse facts. line-level fingerprints intentionally ignored.", len(resolvedFacts))
+	if len(resolvedFacts) > 0 {
+		log.Printf("[WEAVER] Undo: Applying %d inverse facts. Text length: %d chars.", len(resolvedFacts), len(resolvedFacts[0].Payload.Text))
+	}
 	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
 		e.history.PushBack(tx)
 		return nil, err
