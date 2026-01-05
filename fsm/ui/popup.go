@@ -1,8 +1,8 @@
 package ui
 
 import (
-	"os/exec"
 	"fmt"
+	tmux_fsm "tmux-fsm"
 )
 
 // StateProvider 接口用于获取状态信息
@@ -29,13 +29,8 @@ func (p *PopupUI) Show() {
 		return
 	}
 
-	cmd := exec.Command("tmux", "display-popup",
-		"-E",
-		"-w", "50%",
-		"-h", "5",
-		fmt.Sprintf("echo '%s'; echo '%s'", active, hint),
-	)
-	cmd.Run()
+	cmd := fmt.Sprintf("display-popup -E -w 50%% -h 5 'echo \"%s\"; echo \"%s\"'", active, hint)
+	tmux_fsm.GlobalBackend.ExecRaw(cmd)
 }
 
 func (p *PopupUI) Update() {
@@ -44,5 +39,5 @@ func (p *PopupUI) Update() {
 }
 
 func (p *PopupUI) Hide() {
-	exec.Command("tmux", "display-popup", "-C").Run()
+	tmux_fsm.GlobalBackend.ExecRaw("display-popup -C")
 }

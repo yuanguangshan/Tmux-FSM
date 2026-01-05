@@ -2,10 +2,10 @@ package fsm
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 	"tmux-fsm/fsm/ui"
+	tmux_fsm "tmux-fsm"
 )
 
 // Engine FSM 引擎结构体
@@ -175,7 +175,8 @@ func (e *Engine) RunAction(name string) {
 }
 
 func tmux(cmd string) {
-	exec.Command("tmux", strings.Split(cmd, " ")...).Run()
+	// Use GlobalBackend to execute the command
+	tmux_fsm.GlobalBackend.ExecRaw(cmd)
 }
 
 // 全局函数，支持在其他包调用
@@ -203,5 +204,5 @@ func ExitFSM() {
 		defaultEngine.Reset()
 	}
 	HideUI()
-	exec.Command("tmux", "set-option", "-u", "key-table").Run()
+	tmux_fsm.GlobalBackend.UnsetUserOption("key-table")
 }

@@ -826,16 +826,13 @@ func shutdownServer() {
 }
 
 func loadState() FSMState {
-	// Use GlobalBackend to read tmux options IF it were exposed, but it's not.
-	// So, we still use exec.Command here for reading tmux state.
-	// NOTE: This is an exception to the rule - reading global state might be allowed.
-	// But ideally, Backend would expose GetUserOption.
-	out, err := exec.Command("tmux", "show-option", "-gv", "@tmux_fsm_state").Output()
+	// Use GlobalBackend to read tmux options
+	out, err := GlobalBackend.GetUserOption("@tmux_fsm_state")
 	var state FSMState
 	if err != nil || len(out) == 0 {
 		return FSMState{Mode: "NORMAL", Count: 0}
 	}
-	json.Unmarshal(out, &state)
+	json.Unmarshal([]byte(out), &state)
 	return state
 }
 

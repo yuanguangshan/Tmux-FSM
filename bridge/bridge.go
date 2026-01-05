@@ -1,9 +1,9 @@
 package bridge
 
 import (
-	"os/exec"
 	"time"
 	"tmux-fsm/fsm"
+	tmux_fsm "tmux-fsm"
 )
 
 // LegacyFSMHandler 处理与旧 FSM 系统的交互
@@ -65,8 +65,8 @@ func (h *LegacyFSMHandler) EnterFSM() {
 		fsm.EnterFSM()
 	} else {
 		// 保留旧的进入逻辑
-		exec.Command("tmux", "set", "-g", "@fsm_active", "true").Run()
-		exec.Command("tmux", "switch-client", "-T", "fsm").Run()
+		tmux_fsm.GlobalBackend.SetUserOption("@fsm_active", "true")
+		tmux_fsm.GlobalBackend.SwitchClientTable("", "fsm")
 	}
 }
 
@@ -76,10 +76,10 @@ func (h *LegacyFSMHandler) ExitFSM() {
 		fsm.ExitFSM()
 	} else {
 		// 保留旧的退出逻辑
-		exec.Command("tmux", "set", "-g", "@fsm_active", "false").Run()
-		exec.Command("tmux", "set", "-g", "@fsm_state", "").Run()
-		exec.Command("tmux", "set", "-g", "@fsm_keys", "").Run()
-		exec.Command("tmux", "switch-client", "-T", "root").Run()
-		exec.Command("tmux", "refresh-client", "-S").Run()
+		tmux_fsm.GlobalBackend.SetUserOption("@fsm_active", "false")
+		tmux_fsm.GlobalBackend.SetUserOption("@fsm_state", "")
+		tmux_fsm.GlobalBackend.SetUserOption("@fsm_keys", "")
+		tmux_fsm.GlobalBackend.SwitchClientTable("", "root")
+		tmux_fsm.GlobalBackend.RefreshClient("")
 	}
 }

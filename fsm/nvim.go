@@ -1,8 +1,8 @@
 package fsm
 
 import (
-	"os/exec"
 	"strings"
+	tmux_fsm "tmux-fsm"
 )
 
 // OnNvimMode 处理来自 Neovim 的模式变化
@@ -18,12 +18,12 @@ func OnNvimMode(mode string) {
 // 更好的方案是使用 Neovim 的 RPC 机制
 func NotifyNvimMode() {
 	// 获取当前活跃的窗口/面板
-	out, err := exec.Command("tmux", "display-message", "-p", "#{pane_current_command}").Output()
+	out, err := tmux_fsm.GlobalBackend.GetCommandOutput("display-message -p '#{pane_current_command}'")
 	if err != nil {
 		return
 	}
 
-	cmd := strings.TrimSpace(string(out))
+	cmd := strings.TrimSpace(out)
 	// 如果当前面板是 vim/nvim，则可以考虑发送模式信息
 	// 但目前我们不执行任何操作，避免干扰用户输入
 	// 更好的方式是通过 Neovim server/client 机制通信
