@@ -785,17 +785,40 @@ func abs(v int) int {
 
 func captureText(motion string, targetPane string) string {
 	if motion == "word_forward" {
-		// 1. 进入 copy-mode 并执行标准化抓取
-		exec.Command("tmux", "copy-mode", "-t", targetPane).Run()
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "begin-selection").Run()
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "next-word-end").Run()
-		// 使用 selection 模式自带的 copy-selection 确保进入 buffer
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "copy-selection-and-cancel").Run()
+		// [Phase 7] Axiom 9: Deterministic Reality
+		// Instead of copy-mode UI (which is asynchronous and flaky),
+		// we use capture-pane and parse the word boundary in Go.
+		row, col := currentCursor(targetPane)
+		line := captureLine(targetPane, row)
 
-		// 等待 buffer 同步
-		time.Sleep(20 * time.Millisecond)
-		out, _ := exec.Command("tmux", "show-buffer").Output()
-		return string(out)
+		if col >= len(line) {
+			return ""
+		}
+
+		isWordChar := func(c byte) bool {
+			return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
+		}
+
+		// Find end of current word
+		end := col
+		// If at start of word, or non-word chars, identify the range to delete
+		if isWordChar(line[col]) {
+			// Forward to end of word
+			for end < len(line) && isWordChar(line[end]) {
+				end++
+			}
+			// Include trailing whitespace (standard 'dw' behavior)
+			for end < len(line) && line[end] == ' ' {
+				end++
+			}
+		} else {
+			// On whitespace/punctuation: delete the sequence of those
+			for end < len(line) && !isWordChar(line[end]) {
+				end++
+			}
+		}
+
+		return line[col:end]
 	}
 	return ""
 }
