@@ -28,7 +28,9 @@ type AnchorResolver interface {
 // 将 Fact 投影到实际环境（tmux send-keys, vim commands, etc.）
 type Projection interface {
 	// Apply 应用一组 ResolvedFacts (Phase 5.2)
-	Apply(resolved []ResolvedAnchor, facts []ResolvedFact) error
+	Apply(resolved []ResolvedAnchor, facts []ResolvedFact) ([]UndoEntry, error)
+	// Rollback 回滚已应用的更改 (Phase 12.0)
+	Rollback(log []UndoEntry) error
 	// Verify 验证投影是否按预期执行 (Phase 9)
 	Verify(pre Snapshot, facts []ResolvedFact, post Snapshot) VerificationResult
 }
@@ -42,6 +44,7 @@ type Intent interface {
 	GetPaneID() string
 	GetSnapshotHash() string // Phase 6.2
 	IsPartialAllowed() bool  // Phase 7: Explicit permission for fuzzy resolution
+	GetAnchors() []Anchor    // Phase 11.0: Support for multi-cursor / multi-selection
 } // 新增：Phase 3 需要
 
 // IntentKind 意图类型

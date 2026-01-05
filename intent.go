@@ -10,6 +10,7 @@ type Intent struct {
 	PaneID       string                 `json:"pane_id"`
 	SnapshotHash string                 `json:"snapshot_hash"` // Phase 6.2
 	AllowPartial bool                   `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
+	Anchors      []Anchor               `json:"anchors,omitempty"` // Phase 11.0: Support for multi-cursor / multi-selection
 }
 
 // GetPaneID 获取 PaneID
@@ -27,6 +28,11 @@ func (i Intent) GetSnapshotHash() string {
 
 func (i Intent) IsPartialAllowed() bool {
 	return i.AllowPartial
+}
+
+// GetAnchors returns the anchors for this intent
+func (i Intent) GetAnchors() []Anchor {
+	return i.Anchors
 }
 
 // IntentKind 意图类型

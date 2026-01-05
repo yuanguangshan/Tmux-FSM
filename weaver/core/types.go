@@ -50,6 +50,9 @@ type Anchor struct {
 	Kind   AnchorKind `json:"kind"`
 	Ref    any        `json:"ref,omitempty"`
 	Hash   string     `json:"hash,omitempty"` // Phase 5.4: Reconciliation Expectation
+	LineID LineID     `json:"line_id,omitempty"` // Phase 9: Stable line identifier
+	Start  int        `json:"start,omitempty"`   // Phase 11: Start position in line
+	End    int        `json:"end,omitempty"`     // Phase 11: End position in line
 }
 
 // FactPayload 事实的具体内容
@@ -122,3 +125,11 @@ const (
 	AnchorFuzzy
 	AnchorFailed
 )
+
+// UndoEntry represents a single undo operation
+// Phase 12.0: Projection-level undo log
+type UndoEntry struct {
+	LineID LineID `json:"line_id"`
+	Before string `json:"before"`
+	After  string `json:"after"`
+}
