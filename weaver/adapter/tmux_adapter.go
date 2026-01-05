@@ -32,20 +32,25 @@ func (a *TmuxAdapter) Projection() core.Projection {
 // NoopResolver 空的 Resolver 实现（阶段 2）
 type NoopResolver struct{}
 
-// Resolve 空实现
-func (r *NoopResolver) Resolve(anchor core.Anchor) (core.ResolvedAnchor, core.AnchorResolution, error) {
-	return core.ResolvedAnchor{
-		ResourceID: anchor.ResourceID,
-		Offset:     anchor.Offset,
-		Resolution: core.AnchorExact,
-	}, core.AnchorExact, nil
+// ResolveFacts 不做任何事，仅转换
+func (r *NoopResolver) ResolveFacts(facts []core.Fact, expectedHash string) ([]core.ResolvedFact, error) {
+	resolved := make([]core.ResolvedFact, len(facts))
+	for i, f := range facts {
+		resolved[i] = core.ResolvedFact{
+			Kind:    f.Kind,
+			Anchor:  core.ResolvedAnchor{PaneID: f.Anchor.PaneID},
+			Payload: f.Payload,
+			Meta:    f.Meta,
+		}
+	}
+	return resolved, nil
 }
 
 // NoopProjection 空的 Projection 实现（阶段 2）
 type NoopProjection struct{}
 
 // Apply 空实现（不执行任何操作）
-func (p *NoopProjection) Apply(resolved []core.ResolvedAnchor, facts []core.Fact) error {
+func (p *NoopProjection) Apply(resolved []core.ResolvedAnchor, facts []core.ResolvedFact) error {
 	// Shadow 模式：不执行任何操作
 	return nil
 }

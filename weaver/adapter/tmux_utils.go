@@ -22,6 +22,12 @@ func TmuxCaptureLine(paneID string, line int) string {
 	return strings.TrimRight(string(out), "\n")
 }
 
+// TmuxCapturePane 获取整个面板内容 (Joined lines)
+func TmuxCapturePane(paneID string) []string {
+	out, _ := exec.Command("tmux", "capture-pane", "-p", "-t", paneID, "-J").Output()
+	return strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+}
+
 // TmuxHashLine 计算行哈希
 func TmuxHashLine(s string) string {
 	h := sha256.New()

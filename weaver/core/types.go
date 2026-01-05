@@ -1,11 +1,19 @@
 package core
 
+import (
+	"errors"
+)
+
+// ErrWorldDrift 世界漂移错误（快照不匹配）
+// 表示 Intent 基于的历史与当前现实不一致
+var ErrWorldDrift = errors.New("world drift: snapshot mismatch")
+
 // Fact 表示一个已发生的编辑事实（不可变）
 // 这是 Weaver Core 的核心数据结构
+// Phase 5.3: 不再包含物理 Range
 type Fact struct {
 	Kind        FactKind               `json:"kind"`
 	Anchor      Anchor                 `json:"anchor"`
-	Range       Range                  `json:"range"`
 	Payload     FactPayload            `json:"payload"`
 	Meta        map[string]interface{} `json:"meta,omitempty"`
 	Timestamp   int64                  `json:"timestamp"`
@@ -23,24 +31,13 @@ const (
 	FactMove
 )
 
-// Anchor 语义锚点（"我指的不是光标，而是这段文本"）
+// Anchor 描述“我们想要操作的目标”，而不是“它在哪里”
+// Phase 5.3: 纯语义 Anchor
 type Anchor struct {
-	ResourceID string     `json:"resource_id"` // pane_id, buffer_id, etc.
-	Hint       AnchorHint `json:"hint"`
-	Hash       []byte     `json:"hash"`
-	Offset     int        `json:"offset"`
-}
-
-// AnchorHint 锚点提示（用于快速定位）
-type AnchorHint struct {
-	Line   int `json:"line"`
-	Column int `json:"column"`
-}
-
-// Range 范围（基于 Anchor）
-type Range struct {
-	StartOffset int `json:"start_offset"`
-	EndOffset   int `json:"end_offset"`
+	PaneID string     `json:"pane_id"`
+	Kind   AnchorKind `json:"kind"`
+	Ref    any        `json:"ref,omitempty"`
+	Hash   string     `json:"hash,omitempty"` // Phase 5.4: Reconciliation Expectation
 }
 
 // FactPayload 事实的具体内容
@@ -84,7 +81,7 @@ type Verdict struct {
 	Message     string             `json:"message"`
 	Transaction *Transaction       `json:"transaction,omitempty"`
 	Resolutions []AnchorResolution `json:"resolutions,omitempty"`
-	Details     []AuditEntry       `json:"details,omitempty"`
+	Audit       []AuditEntry       `json:"audit,omitempty"` // Renamed from Details
 }
 
 // VerdictKind 裁决类型
@@ -94,6 +91,7 @@ const (
 	VerdictApplied VerdictKind = iota
 	VerdictRejected
 	VerdictSkipped
+	VerdictBlocked // Phase 5.4: Blocked by Reconciliation
 )
 
 // AuditEntry 审计条目
@@ -110,10 +108,3 @@ const (
 	AnchorFuzzy
 	AnchorFailed
 )
-
-// ResolvedAnchor 已解析的 Anchor
-type ResolvedAnchor struct {
-	ResourceID string
-	Offset     int
-	Resolution AnchorResolution
-}

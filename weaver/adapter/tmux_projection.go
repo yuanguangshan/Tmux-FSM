@@ -9,9 +9,9 @@ import (
 // 仅负责执行，不负责 Undo，不负责 Logic
 type TmuxProjection struct{}
 
-func (p *TmuxProjection) Apply(resolved []core.ResolvedAnchor, facts []core.Fact) error {
+func (p *TmuxProjection) Apply(resolved []core.ResolvedAnchor, facts []core.ResolvedFact) error {
 	for _, fact := range facts {
-		targetPane := fact.Anchor.ResourceID
+		targetPane := fact.Anchor.PaneID
 		if targetPane == "" {
 			targetPane = "{current}" // 容错，虽然应该由 Logic 层填充
 		}

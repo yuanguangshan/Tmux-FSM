@@ -8,32 +8,40 @@ import (
 // ShadowEngine 核心执行引擎
 // 负责处理 Intent，生成并应用 Transaction，维护 History
 type ShadowEngine struct {
-	planner Planner
-	history History
+	planner    Planner
+	history    History
+	resolver   AnchorResolver
+	projection Projection
 }
 
-func NewShadowEngine(planner Planner) *ShadowEngine {
+func NewShadowEngine(planner Planner, resolver AnchorResolver, projection Projection) *ShadowEngine {
 	return &ShadowEngine{
-		planner: planner,
-		history: NewInMemoryHistory(100),
+		planner:    planner,
+		history:    NewInMemoryHistory(100),
+		resolver:   resolver,
+		projection: projection,
 	}
 }
 
-func (e *ShadowEngine) ApplyIntent(intent Intent, resolver AnchorResolver, projection Projection) (*Verdict, error) {
+func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, error) {
+	var audit []AuditEntry
+
 	// 1. Handle Undo/Redo explicitly
 	kind := intent.GetKind()
 	if kind == IntentUndo {
-		return e.performUndo(projection)
+		return e.performUndo()
 	}
 	if kind == IntentRedo {
-		return e.performRedo(projection)
+		return e.performRedo()
 	}
 
 	// 2. Plan: Generate Facts
-	facts, inverseFacts, err := e.planner.Build(intent, intent.GetPaneID())
+	facts, inverseFacts, err := e.planner.Build(intent, snapshot)
 	if err != nil {
-		return nil, err
+		audit = append(audit, AuditEntry{Step: "Plan", Result: fmt.Sprintf("Error: %v", err)})
+		return &Verdict{Kind: VerdictBlocked, Audit: audit}, err
 	}
+	audit = append(audit, AuditEntry{Step: "Plan", Result: "Success"})
 
 	// 3. Create Transaction
 	txID := TransactionID(fmt.Sprintf("tx-%d", time.Now().UnixNano()))
@@ -46,14 +54,25 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, resolver AnchorResolver, proje
 		Timestamp:    time.Now().Unix(),
 	}
 
-	// 4. Project: Execute
-	if err := projection.Apply(nil, facts); err != nil {
-		return nil, err
+	// [Phase 5.1] 4. Resolve: 定位权移交
+	// [Phase 5.4] 包含 Reconciliation 检查
+	// [Phase 6.3] 包含 World Drift 检查 (SnapshotHash)
+	resolvedFacts, err := e.resolver.ResolveFacts(facts, intent.GetSnapshotHash())
+	if err != nil {
+		audit = append(audit, AuditEntry{Step: "Resolve", Result: fmt.Sprintf("Error: %v", err)})
+		return &Verdict{Kind: VerdictBlocked, Audit: audit}, err
 	}
+	audit = append(audit, AuditEntry{Step: "Resolve", Result: "Success"})
+
+	// 5. Project: Execute
+	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
+		audit = append(audit, AuditEntry{Step: "Project", Result: fmt.Sprintf("Error: %v", err)})
+		return &Verdict{Kind: VerdictBlocked, Audit: audit}, err
+	}
+	audit = append(audit, AuditEntry{Step: "Project", Result: "Success"})
 	tx.Applied = true
 
-	// 5. Update History
-	// 只有产生副作用的操作才记录历史
+	// 6. Update History
 	if len(facts) > 0 {
 		e.history.Push(tx)
 	}
@@ -63,19 +82,25 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, resolver AnchorResolver, proje
 		Message:     "Applied via Smart Projection",
 		Transaction: tx,
 		Safety:      SafetyExact,
+		Audit:       audit,
 	}, nil
 }
 
-func (e *ShadowEngine) performUndo(projection Projection) (*Verdict, error) {
+func (e *ShadowEngine) performUndo() (*Verdict, error) {
 	tx := e.history.PopUndo()
 	if tx == nil {
 		return &Verdict{Kind: VerdictSkipped, Message: "Nothing to undo"}, nil
 	}
 
-	// Apply Inverse Facts
-	if err := projection.Apply(nil, tx.InverseFacts); err != nil {
-		// Undo failure is critical.
-		// For now, return error.
+	// [Phase 5.1] Resolve InverseFacts
+	// [Phase 6.3] Undo logic currently bypasses Hash check (TODO: State B Hash)
+	resolvedFacts, err := e.resolver.ResolveFacts(tx.InverseFacts, "")
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply
+	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
 		return nil, err
 	}
 
@@ -89,14 +114,20 @@ func (e *ShadowEngine) performUndo(projection Projection) (*Verdict, error) {
 	}, nil
 }
 
-func (e *ShadowEngine) performRedo(projection Projection) (*Verdict, error) {
+func (e *ShadowEngine) performRedo() (*Verdict, error) {
 	tx := e.history.PopRedo()
 	if tx == nil {
 		return &Verdict{Kind: VerdictSkipped, Message: "Nothing to redo"}, nil
 	}
 
-	// Apply Facts (Original Facts)
-	if err := projection.Apply(nil, tx.Facts); err != nil {
+	// [Phase 5.1] Resolve Facts
+	resolvedFacts, err := e.resolver.ResolveFacts(tx.Facts, "")
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply
+	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
 		return nil, err
 	}
 

@@ -11,10 +11,11 @@ import (
 
 // WeaverManager 全局协调器
 type WeaverManager struct {
-	mode       ExecutionMode
-	engine     core.Engine
-	resolver   core.AnchorResolver
-	projection core.Projection
+	mode             ExecutionMode
+	engine           core.Engine // Interface? No, ShadowEngine struct usually.
+	resolver         core.AnchorResolver
+	projection       core.Projection
+	snapshotProvider adapter.SnapshotProvider // Phase 6.2
 }
 
 // weaverMgr 全局 Weaver 实例
@@ -28,7 +29,11 @@ func InitWeaver(mode ExecutionMode) {
 
 	// 初始化组件
 	planner := &logic.ShellFactBuilder{}
-	engine := core.NewShadowEngine(planner)
+	// Phase 5.1: 使用 PassthroughResolver
+	resolver := &logic.PassthroughResolver{}
+
+	// Phase 6.1: Snapshot Provider
+	snapProvider := &adapter.TmuxSnapshotProvider{}
 
 	var proj core.Projection
 	if mode == ModeWeaver {
@@ -37,13 +42,14 @@ func InitWeaver(mode ExecutionMode) {
 		proj = &adapter.NoopProjection{}
 	}
 
-	resolver := &adapter.NoopResolver{}
+	engine := core.NewShadowEngine(planner, resolver, proj)
 
 	weaverMgr = &WeaverManager{
-		mode:       mode,
-		engine:     engine,
-		resolver:   resolver,
-		projection: proj,
+		mode:             mode,
+		engine:           engine,
+		resolver:         resolver,
+		projection:       proj,
+		snapshotProvider: snapProvider,
 	}
 	logWeaver("Weaver initialized in %s mode", modeString(mode))
 }
@@ -56,24 +62,45 @@ func ProcessIntentGlobal(intent Intent) {
 	weaverMgr.ProcessIntent(intent)
 }
 
-// ProcessIntent 处理 Intent
+// ProcessIntent 处理意图 (Gateway)
 func (m *WeaverManager) ProcessIntent(intent Intent) {
-	coreIntent := &intentAdapter{intent: intent}
-	verdict, err := m.engine.ApplyIntent(coreIntent, m.resolver, m.projection)
+	logWeaver("ProcessIntent: Kind=%v Target=%v", intent.Kind, intent.Target)
 
+	// Phase 6.2: Capture Snapshot (Time Freeze)
+	paneID := intent.GetPaneID()
+	if paneID == "" {
+		// Try to deduce or fail
+		logWeaver("No PaneID in intent, skipping snapshot")
+		return // Or handle non-pane intents
+	}
+
+	snapshot, err := m.snapshotProvider.TakeSnapshot(paneID)
 	if err != nil {
-		logWeaver("Error applying intent: %v", err)
+		logWeaver("Snapshot failed: %v", err)
 		return
 	}
 
-	if globalConfig.LogFacts {
-		txID := "nil"
-		safety := core.SafetyExact
-		if verdict.Transaction != nil {
-			txID = string(verdict.Transaction.ID)
-			safety = verdict.Transaction.Safety
+	// Inject Hash into Intent (mutable struct in main)
+	intent.SnapshotHash = string(snapshot.Hash)
+
+	coreIntent := &intentAdapter{intent: intent}
+
+	// 此时如果是 Undo/Redo，它们不需要 Snapshot?
+	// Phase 6.2 定义：Any ApplyIntent needs Snapshot.
+	// Undo/Redo often imply "Previous State", but current implementation calls Planner even for Undo/Redo?
+	// No, `ApplyIntent` handles Undo/Redo specially.
+	// It calls `performUndo`.
+
+	if m.mode == ModeShadow || m.mode == ModeWeaver {
+		verdict, err := m.engine.ApplyIntent(coreIntent, snapshot)
+		if err != nil {
+			logWeaver("Engine Error: %v", err)
+		} else {
+			logWeaver("Verdict: %v (Safe=%v)", verdict.Kind, verdict.Safety)
+			if len(verdict.Audit) > 0 {
+				logWeaver("Audit: %v", verdict.Audit)
+			}
 		}
-		logWeaver("Verdict: %s (tx: %s) (Safety: %v)", verdict.Message, txID, safety)
 	}
 
 	// [Phase 4] Phase 3 的 Weaver -> Legacy 桥接已禁用
@@ -122,26 +149,22 @@ func (m *WeaverManager) InjectLegacyTransaction(legacyTx *Transaction) {
 }
 
 func convertLegacyFactToCore(lf Fact) core.Fact {
-	// 构造 Fact
+	// Construct Semantic Anchor with Legacy Physical Info for Resolver to unpack
+	ref := map[string]int{
+		"line":  lf.Target.Anchor.LineHint,
+		"start": lf.Target.StartOffset,
+		"end":   lf.Target.EndOffset,
+	}
+
 	cf := core.Fact{
 		Anchor: core.Anchor{
-			ResourceID: lf.Target.Anchor.PaneID,
-			Hint: core.AnchorHint{
-				Line:   lf.Target.Anchor.LineHint,
-				Column: 0, // Legacy Anchor doesn't strictly track column in hint, but Fact.Target might? Cursor is [row, col]
-			},
-			Hash: []byte(lf.Target.Anchor.LineHash),
-		},
-		Range: core.Range{
-			StartOffset: lf.Target.StartOffset,
-			EndOffset:   lf.Target.EndOffset,
+			PaneID: lf.Target.Anchor.PaneID,
+			Kind:   core.AnchorLegacyRange,
+			Ref:    ref,
 		},
 		SideEffects: lf.SideEffects,
 	}
-
-	if lf.Target.Anchor.Cursor != nil {
-		cf.Anchor.Hint.Column = lf.Target.Anchor.Cursor[1]
-	}
+	// Note: Hash is currently ignored in legacy conversion
 
 	switch lf.Kind {
 	case "delete":
@@ -189,7 +212,11 @@ func (a *intentAdapter) GetMeta() map[string]interface{} {
 }
 
 func (a *intentAdapter) GetPaneID() string {
-	return a.intent.PaneID
+	return a.intent.GetPaneID()
+}
+
+func (a *intentAdapter) GetSnapshotHash() string {
+	return a.intent.GetSnapshotHash()
 }
 
 // logWeaver ...

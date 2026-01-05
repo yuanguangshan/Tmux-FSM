@@ -3,16 +3,25 @@ package main
 // Intent 表示用户的编辑意图（语义层）
 // 这是从 FSM 到执行器的中间层，将"按键序列"转换为"编辑语义"
 type Intent struct {
-	Kind   IntentKind             `json:"kind"`
-	Target SemanticTarget         `json:"target"`
-	Count  int                    `json:"count"`
-	Meta   map[string]interface{} `json:"meta,omitempty"`
-	PaneID string                 `json:"pane_id"`
+	Kind         IntentKind             `json:"kind"`
+	Target       SemanticTarget         `json:"target"`
+	Count        int                    `json:"count"`
+	Meta         map[string]interface{} `json:"meta,omitempty"`
+	PaneID       string                 `json:"pane_id"`
+	SnapshotHash string                 `json:"snapshot_hash"` // Phase 6.2
 }
 
 // GetPaneID 获取 PaneID
 func (i Intent) GetPaneID() string {
 	return i.PaneID
+}
+
+func (i Intent) GetKind() int {
+	return int(i.Kind)
+}
+
+func (i Intent) GetSnapshotHash() string {
+	return i.SnapshotHash
 }
 
 // IntentKind 意图类型
