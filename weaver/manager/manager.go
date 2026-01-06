@@ -95,13 +95,13 @@ func (m *WeaverManager) ProcessIntentGlobal(intent core.Intent) error {
 }
 
 // Process 实现 IntentExecutor 接口
-func (m *WeaverManager) Process(intent *types.Intent) error {
+func (m *WeaverManager) Process(intent *intent.Intent) error {
 	if m == nil || m.mode == ModeLegacy {
 		return nil // Fallback to legacy
 	}
 
 	// 将统一的intent.Intent转换为core.Intent
-	coreIntent := &intentAdapter{intent: convertToCoreIntent(intent)}
+	coreIntent := convertToCoreIntent(intent)
 
 	// Phase 6.2: 获取当前快照作为时间冻结点
 	snapshot, err := m.snapshotProvider.TakeSnapshot(coreIntent.GetPaneID())
@@ -121,6 +121,27 @@ func (m *WeaverManager) Process(intent *types.Intent) error {
 	}
 
 	return nil
+}
+
+// convertToCoreIntent 将统一的intent.Intent转换为core.Intent
+func convertToCoreIntent(intent *intent.Intent) core.Intent {
+	return &intentAdapter{
+		intent: Intent{
+			Kind:         IntentKind(intent.Kind),
+			Target:       SemanticTarget{
+				Kind:      TargetKind(0), // 简化处理
+				Direction: intent.Target.Direction,
+				Scope:     intent.Target.Scope,
+				Value:     intent.Target.Value,
+			},
+			Count:        intent.Count,
+			Meta:         intent.Meta,
+			PaneID:       intent.PaneID,
+			SnapshotHash: intent.SnapshotHash,
+			AllowPartial: intent.AllowPartial,
+			Anchors:      []Anchor{}, // 简化处理
+		},
+	}
 }
 
 // GetWeaverManager 获取全局 Weaver 管理器实例
