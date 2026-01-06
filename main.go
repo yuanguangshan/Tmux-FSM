@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"tmux-fsm/intent"
 	"tmux-fsm/server"
 	"tmux-fsm/weaver/core"
 	"tmux-fsm/weaver/manager"
@@ -56,9 +57,9 @@ func main() {
 	log.Println("no mode specified")
 }
 
-// intentAdapter 适配 main.Intent 到 core.Intent
+// intentAdapter 适配 intent.Intent 到 core.Intent
 type intentAdapter struct {
-	intent Intent
+	intent intent.Intent
 }
 
 func (a *intentAdapter) GetKind() core.IntentKind {
@@ -95,13 +96,13 @@ func (a *intentAdapter) IsPartialAllowed() bool {
 }
 
 func (a *intentAdapter) GetAnchors() []core.Anchor {
-	// 将 main.Anchor 转换为 core.Anchor
-	anchors := a.intent.GetAnchors()
+	// 将 intent.Anchor 转换为 core.Anchor
+	anchors := a.intent.Anchors
 	coreAnchors := make([]core.Anchor, len(anchors))
 	for i, anchor := range anchors {
 		coreAnchors[i] = core.Anchor{
 			PaneID: anchor.PaneID,
-			Kind:   core.AnchorKind(anchor.Kind), // 假设Kind是int类型
+			Kind:   core.AnchorKind(anchor.Kind),
 			Ref:    anchor.Ref,
 			Hash:   anchor.Hash,
 			LineID: core.LineID(anchor.LineID),
@@ -114,7 +115,7 @@ func (a *intentAdapter) GetAnchors() []core.Anchor {
 
 // ProcessIntentGlobal 全局意图处理入口
 // RFC-WC-002: Intent ABI - 统一入口，统一审计
-func ProcessIntentGlobal(intent Intent) error {
+func ProcessIntentGlobal(intent intent.Intent) error {
 	// 如果 weaverMgr 未初始化，返回
 	if weaverMgr == nil {
 		return nil

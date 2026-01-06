@@ -52,3 +52,18 @@ type Intent struct {
 	AllowPartial bool                   `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
 	Anchors      []Anchor               `json:"anchors,omitempty"` // Phase 11.0: Support for multi-cursor / multi-selection
 }
+
+// GetPaneID 获取面板ID
+func (i Intent) GetPaneID() string {
+	return i.PaneID
+}
+
+// GetSnapshotHash 获取快照哈希
+func (i Intent) GetSnapshotHash() string {
+	return i.SnapshotHash
+}
+
+// IsPartialAllowed 是否允许部分匹配
+func (i Intent) IsPartialAllowed() bool {
+	return i.AllowPartial
+}
