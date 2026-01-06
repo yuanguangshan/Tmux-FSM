@@ -1,597 +1,1031 @@
-diff --git a/backend/backend.go b/backend/backend.go
-index 3bcbf8b..1fabd38 100644
---- a/backend/backend.go
-+++ b/backend/backend.go
-@@ -51,7 +51,7 @@ func (b *TmuxBackend) RefreshClient(clientName string) error {
- 
- // GetActivePane gets the active pane ID
- func (b *TmuxBackend) GetActivePane(clientName string) (string, error) {
--	var cmd *exec.Command
-+	var cmd *exec.Cmd
- 	if clientName != "" && clientName != "default" {
- 		cmd = exec.Command("tmux", "display-message", "-p", "-t", clientName, "#{pane_id}")
- 	} else {
-diff --git a/kernel/decide.go b/kernel/decide.go
-index 4de325c..47426d3 100644
---- a/kernel/decide.go
-+++ b/kernel/decide.go
-@@ -1,9 +1,5 @@
- package kernel
- 
+diff --git a/backend/backend_test.go b/backend/backend_test.go
+deleted file mode 100644
+index 3bcbf8b..0000000
+--- a/backend/backend_test.go
++++ /dev/null
+@@ -1,105 +0,0 @@
+-package backend
+-
 -import (
--	"tmux-fsm/weaver/logic"
+-	"os/exec"
+-	"strings"
 -)
 -
+-// Backend interface defines the operations that interact with tmux
+-type Backend interface {
+-	SetUserOption(option, value string) error
+-	UnsetUserOption(option string) error
+-	GetUserOption(option string) (string, error)
+-	GetCommandOutput(cmd string) (string, error)
+-	SwitchClientTable(clientName, tableName string) error
+-	RefreshClient(clientName string) error
+-	GetActivePane(clientName string) (string, error)
+-	ExecRaw(cmd string) error
+-}
+-
+-// TmuxBackend implements the Backend interface using tmux commands
+-type TmuxBackend struct{}
+-
+-// GlobalBackend is the global instance of the backend
+-var GlobalBackend Backend = &TmuxBackend{}
+-
+-// SetUserOption sets a tmux user option
+-func (b *TmuxBackend) SetUserOption(option, value string) error {
+-	cmd := exec.Command("tmux", "set", "-g", option, value)
+-	return cmd.Run()
+-}
+-
+-// SwitchClientTable switches the client to a specific key table
+-func (b *TmuxBackend) SwitchClientTable(clientName, tableName string) error {
+-	args := []string{"switch-client", "-T", tableName}
+-	if clientName != "" && clientName != "default" {
+-		args = append(args, "-t", clientName)
+-	}
+-	cmd := exec.Command("tmux", args...)
+-	return cmd.Run()
+-}
+-
+-// RefreshClient refreshes the client display
+-func (b *TmuxBackend) RefreshClient(clientName string) error {
+-	args := []string{"refresh-client", "-S"}
+-	if clientName != "" && clientName != "default" {
+-		args = append(args, "-t", clientName)
+-	}
+-	cmd := exec.Command("tmux", args...)
+-	return cmd.Run()
+-}
+-
+-// GetActivePane gets the active pane ID
+-func (b *TmuxBackend) GetActivePane(clientName string) (string, error) {
+-	var cmd *exec.Command
+-	if clientName != "" && clientName != "default" {
+-		cmd = exec.Command("tmux", "display-message", "-p", "-t", clientName, "#{pane_id}")
+-	} else {
+-		cmd = exec.Command("tmux", "display-message", "-p", "#{pane_id}")
+-	}
+-	output, err := cmd.Output()
+-	if err != nil {
+-		return "", err
+-	}
+-	return strings.TrimSpace(string(output)), nil
+-}
+-
+-// UnsetUserOption unsets a tmux user option
+-func (b *TmuxBackend) UnsetUserOption(option string) error {
+-	cmd := exec.Command("tmux", "set", "-u", "-g", option)
+-	return cmd.Run()
+-}
+-
+-// GetUserOption gets a tmux user option value
+-func (b *TmuxBackend) GetUserOption(option string) (string, error) {
+-	cmd := exec.Command("tmux", "show-option", "-gv", option)
+-	output, err := cmd.Output()
+-	if err != nil {
+-		return "", err
+-	}
+-	return string(output), nil
+-}
+-
+-// GetCommandOutput executes a tmux command and returns its output
+-func (b *TmuxBackend) GetCommandOutput(cmd string) (string, error) {
+-	parts := strings.Split(cmd, " ")
+-	if len(parts) == 0 {
+-		return "", nil
+-	}
+-	execCmd := exec.Command("tmux", parts...)
+-	output, err := execCmd.Output()
+-	if err != nil {
+-		return "", err
+-	}
+-	return string(output), nil
+-}
+-
+-// ExecRaw executes a raw tmux command string
+-func (b *TmuxBackend) ExecRaw(cmd string) error {
+-	parts := strings.Split(cmd, " ")
+-	if len(parts) == 0 {
+-		return nil
+-	}
+-	execCmd := exec.Command("tmux", parts...)
+-	return execCmd.Run()
+-}
+\ No newline at end of file
+diff --git a/changes.diff b/changes.diff
+index 86a16e1..e69de29 100644
+--- a/changes.diff
++++ b/changes.diff
+@@ -1,597 +0,0 @@
+-diff --git a/backend/backend.go b/backend/backend.go
+-index 3bcbf8b..1fabd38 100644
+---- a/backend/backend.go
+-+++ b/backend/backend.go
+-@@ -51,7 +51,7 @@ func (b *TmuxBackend) RefreshClient(clientName string) error {
+- 
+- // GetActivePane gets the active pane ID
+- func (b *TmuxBackend) GetActivePane(clientName string) (string, error) {
+--	var cmd *exec.Command
+-+	var cmd *exec.Cmd
+- 	if clientName != "" && clientName != "default" {
+- 		cmd = exec.Command("tmux", "display-message", "-p", "-t", clientName, "#{pane_id}")
+- 	} else {
+-diff --git a/kernel/decide.go b/kernel/decide.go
+-index 4de325c..47426d3 100644
+---- a/kernel/decide.go
+-+++ b/kernel/decide.go
+-@@ -1,9 +1,5 @@
+- package kernel
+- 
+--import (
+--	"tmux-fsm/weaver/logic"
+--)
+--
+- type DecisionKind int
+- 
+- const (
+-@@ -13,19 +9,19 @@ const (
+- )
+- 
+- type Decision struct {
+--	Kind   DecisionKind
+--	Intent *intent.Intent
+-+	Kind DecisionKind
+-+	// Intent *intent.Intent  // Temporarily disabled
+- }
+- 
+- func (k *Kernel) Decide(key string) *Decision {
+- 	// ✅ 1. FSM 永远先拿 key
+- 	if k.FSM != nil {
+- 		if k.FSM.InLayer() && k.FSM.CanHandle(key) {
+--			intent := k.FSM.Dispatch(key)
+--			if intent != nil {
+-+			handled := k.FSM.Dispatch(key)
+-+			if handled {
+- 				return &Decision{
+--					Kind:   DecisionFSM,
+--					Intent: intent,
+-+					Kind: DecisionFSM,
+-+					// Intent: intent,  // Temporarily disabled
+- 				}
+- 			}
+- 			// FSM 明确吞掉
+-@@ -34,13 +30,13 @@ func (k *Kernel) Decide(key string) *Decision {
+- 	}
+- 
+- 	// ✅ 2. Legacy decoder（复用你现有逻辑）
+--	legacyIntent := DecodeLegacyKey(key)
+--	if legacyIntent != nil {
+--		return &Decision{
+--			Kind:   DecisionLegacy,
+--			Intent: legacyIntent,
+--		}
+--	}
+-+	// legacyIntent := DecodeLegacyKey(key)  // Temporarily disabled
+-+	// if legacyIntent != nil {
+-+	// 	return &Decision{
+-+	// 		Kind:   DecisionLegacy,
+-+	// 		Intent: legacyIntent,
+-+	// 	}
+-+	// }
+- 
+- 	return nil
+- }
+-diff --git a/kernel/execute.go b/kernel/execute.go
+-index e00a8a1..fb290fb 100644
+---- a/kernel/execute.go
+-+++ b/kernel/execute.go
+-@@ -1,14 +1,16 @@
+- package kernel
+- 
+- func (k *Kernel) Execute(decision *Decision) {
+--	if decision == nil || decision.Intent == nil {
+-+	if decision == nil {
+- 		return
+- 	}
+- 
+--	switch decision.Kind {
+--	case DecisionFSM:
+--		ExecuteIntent(decision.Intent)
+--	case DecisionLegacy:
+--		ExecuteIntent(decision.Intent)
+--	}
+-+	// switch decision.Kind {
+-+	// case DecisionFSM:
+-+	// 	ExecuteIntent(decision.Intent)
+-+	// case DecisionLegacy:
+-+	// 	ExecuteIntent(decision.Intent)
+-+	// }
+-+
+-+	// Temporarily disabled until interfaces are properly defined
+- }
+-diff --git a/kernel/kernel.go b/kernel/kernel.go
+-index dd9bc80..6a1a8bc 100644
+---- a/kernel/kernel.go
+-+++ b/kernel/kernel.go
+-@@ -3,15 +3,11 @@ package kernel
+- import (
+- 	"context"
+- 	"tmux-fsm/fsm"
+--  "tmux-fsm/weaver/core"
+--"tmux-fsm/weaver/adapter"
+--)
+--
+- )
+- 
+- type Kernel struct {
+- 	FSM    *fsm.Engine
+--	Weaver *weaver.Manager
+-+	// Weaver *WeaverManager  // Temporarily disabled to avoid import issues
+- }
+- 
+- // ✅ Kernel 的唯一上下文入口（现在先很薄，未来可扩展）
+-@@ -19,10 +15,10 @@ type HandleContext struct {
+- 	Ctx context.Context
+- }
+- 
+--func NewKernel(fsmEngine *fsm.Engine, weaverMgr *weaver.Manager) *Kernel {
+-+func NewKernel(fsmEngine *fsm.Engine, weaverMgr interface{}) *Kernel {
+- 	return &Kernel{
+--		FSM:    fsmEngine,
+--		Weaver: weaverMgr,
+-+		FSM: fsmEngine,
+-+		// Weaver: weaverMgr,  // Temporarily disabled
+- 	}
+- }
+- 
+-@@ -35,5 +31,5 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
+- 		return
+- 	}
+- 
+--	_ = k.Execute(decision)
+-+	k.Execute(decision)
+- }
+-diff --git a/legacy_logic.go b/legacy_logic.go
+-index 51ca302..4d80242 100644
+---- a/legacy_logic.go
+-+++ b/legacy_logic.go
+-@@ -6,7 +6,7 @@ import (
+- 	"strings"
+- )
+- 
+--func processKey(state *FSMState, key string) string {
+-+func processKeyLegacy(state *FSMState, key string) string {
+- 	if key == "Escape" || key == "C-c" {
+- 		// Reset FSM state on escape/cancel
+- 		state.Count = 0
+-diff --git a/server/server.go b/server/server.go
+-index 13fa7a9..f614776 100644
+---- a/server/server.go
+-+++ b/server/server.go
+-@@ -7,8 +7,6 @@ import (
+- 	"os"
+- 	"os/signal"
+- 	"syscall"
+--	"tmux-fsm/kernel"
+--	"tmux-fsm/weaver/adapter"
+- )
+- 
+- type Config struct {
+-@@ -17,13 +15,13 @@ type Config struct {
+- 
+- type Server struct {
+- 	cfg    Config
+--	kernel *kernel.Kernel
+-+	// kernel *kernel.Kernel  // Temporarily disabled
+- }
+- 
+--func New(cfg Config) *Server {
+-+func New(cfg Config, fsmEngine interface{}) *Server {
+- 	return &Server{
+--		cfg:    cfg,
+--		kernel: kernel.New(),
+-+		cfg: cfg,
+-+		// kernel: kernel.New(fsmEngine, nil),  // Temporarily disabled until kernel is fixed
+- 	}
+- }
+- 
+-@@ -53,14 +51,14 @@ func (s *Server) Run(ctx context.Context) error {
+- func (s *Server) handleClient(conn net.Conn) {
+- 	defer conn.Close()
+- 
+--	key, err := protocol.ReadKey(conn)
+--	if err != nil {
+--		log.Printf("[server] read error: %v\n", err)
+--		return
+--	}
+-+	// key, err := protocol.ReadKey(conn)  // Temporarily disabled
+-+	// if err != nil {
+-+	// 	log.Printf("[server] read error: %v\n", err)
+-+	// 	return
+-+	// }
+- 
+- 	// ✅ 关键点：Server 不做任何 if / else 判断
+--	s.kernel.HandleKey(key)
+-+	// s.kernel.HandleKey(kernel.HandleContext{Ctx: context.Background()}, key)  // Temporarily disabled
+- }
+- 
+- func (s *Server) handleSignals(ctx context.Context, ln net.Listener) {
+-diff --git a/weaver/adapter/tmux_adapter.go b/weaver/adapter/tmux_adapter.go
+-index 552622c..fab734f 100644
+---- a/weaver/adapter/tmux_adapter.go
+-+++ b/weaver/adapter/tmux_adapter.go
+-@@ -50,7 +50,21 @@ func (r *NoopResolver) ResolveFacts(facts []core.Fact, expectedHash string) ([]c
+- type NoopProjection struct{}
+- 
+- // Apply 空实现（不执行任何操作）
+--func (p *NoopProjection) Apply(resolved []core.ResolvedAnchor, facts []core.ResolvedFact) error {
+-+func (p *NoopProjection) Apply(resolved []core.ResolvedAnchor, facts []core.ResolvedFact) ([]core.UndoEntry, error) {
+- 	// Shadow 模式：不执行任何操作
+-+	return []core.UndoEntry{}, nil
+-+}
+-+
+-+// Rollback 空实现（不执行任何操作）
+-+func (p *NoopProjection) Rollback(log []core.UndoEntry) error {
+-+	// No-op
+- 	return nil
+- }
+-+
+-+// Verify 空实现（总是成功）
+-+func (p *NoopProjection) Verify(pre core.Snapshot, facts []core.ResolvedFact, post core.Snapshot) core.VerificationResult {
+-+	return core.VerificationResult{
+-+		OK:      true,
+-+		Message: "No-op verification always passes",
+-+	}
+-+}
+-diff --git a/weaver/adapter/tmux_projection.go b/weaver/adapter/tmux_projection.go
+-index c812b31..f4bbaff 100644
+---- a/weaver/adapter/tmux_projection.go
+-+++ b/weaver/adapter/tmux_projection.go
+-@@ -136,7 +136,7 @@ func (p *TmuxProjection) Apply(resolved []core.ResolvedAnchor, facts []core.Reso
+- func (p *TmuxProjection) Rollback(log []core.UndoEntry) error {
+- 	// Apply in reverse order
+- 	for i := len(log) - 1; i >= 0; i-- {
+--		entry := log[i]
+-+		_ = log[i] // Use the entry to avoid "declared and not used" error
+- 		// For this implementation, we need to find the line associated with this LineID
+- 		// Since we don't have a direct mapping from LineID to pane and line number in this context,
+- 		// we'll need to use a different approach.
+-diff --git a/weaver/core/shadow_engine.go b/weaver/core/shadow_engine.go
+-index 6149064..1de8f6f 100644
+---- a/weaver/core/shadow_engine.go
+-+++ b/weaver/core/shadow_engine.go
+-@@ -142,7 +142,7 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict,
+- 	preSnapshot := snapshot
+- 
+- 	// 5. Project: Execute
+--	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
+-+	if _, err := e.projection.Apply(nil, resolvedFacts); err != nil {
+- 		audit = append(audit, AuditEntry{Step: "Project", Result: fmt.Sprintf("Error: %v", err)})
+- 		return &Verdict{Kind: VerdictBlocked, Audit: audit}, err
+- 	}
+-@@ -228,7 +228,7 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
+- 	if len(resolvedFacts) > 0 {
+- 		log.Printf("[WEAVER] Undo: Applying %d inverse facts. Text length: %d chars.", len(resolvedFacts), len(resolvedFacts[0].Payload.Text))
+- 	}
+--	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
+-+	if _, err := e.projection.Apply(nil, resolvedFacts); err != nil {
+- 		e.history.PushBack(tx)
+- 		return nil, err
+- 	}
+-@@ -293,7 +293,7 @@ func (e *ShadowEngine) performRedo() (*Verdict, error) {
+- 	}
+- 
+- 	// Apply
+--	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
+-+	if _, err := e.projection.Apply(nil, resolvedFacts); err != nil {
+- 		e.history.AddRedo(tx)
+- 		return nil, err
+- 	}
+-diff --git a/weaver/core/types.go b/weaver/core/types.go
+-index 8e30a8c..eeea8c6 100644
+---- a/weaver/core/types.go
+-+++ b/weaver/core/types.go
+-@@ -4,6 +4,27 @@ import (
+- 	"errors"
+- )
+- 
+-+// AnchorKind 锚点类型
+-+type AnchorKind int
+-+
+-+const (
+-+	AnchorNone AnchorKind = iota
+-+	AnchorAtCursor
+-+	AnchorWord
+-+	AnchorLine
+-+	AnchorAbsolute
+-+	AnchorLegacyRange
+-+)
+-+
+-+// SafetyLevel 安全级别
+-+type SafetyLevel int
+-+
+-+const (
+-+	SafetyExact SafetyLevel = iota
+-+	SafetyFuzzy
+-+	SafetyUnsafe
+-+)
+-+
+- // ErrWorldDrift 世界漂移错误（快照不匹配）
+- // 表示 Intent 基于的历史与当前现实不一致
+- var ErrWorldDrift = errors.New("world drift: snapshot mismatch")
+-@@ -73,9 +94,10 @@ type TransactionID string
+- 
+- // VerificationResult for verifier
+- type VerificationResult struct {
+--    Safe  bool
+--    Level SafetyLevel
+--    Err   error
+-+    OK      bool
+-+    Safety  SafetyLevel
+-+    Diffs   []SnapshotDiff
+-+    Message string
+- }
+- 
+- // Verdict 裁决结果（可审计输出）
+-diff --git a/weaver_manager.go b/weaver_manager.go
+-deleted file mode 100644
+-index 77ed608..0000000
+---- a/weaver_manager.go
+-+++ /dev/null
+-@@ -1,265 +0,0 @@
+--package main
+--
+--import (
+--	"fmt"
+--	"os"
+--	"strings"
+--	"time"
+--	"tmux-fsm/weaver/adapter"
+--	"tmux-fsm/weaver/core"
+--	"tmux-fsm/weaver/logic"
+--)
+--
+--// WeaverManager 全局协调器
+--type WeaverManager struct {
+--	mode             ExecutionMode
+--	engine           core.Engine // Interface? No, ShadowEngine struct usually.
+--	resolver         core.AnchorResolver
+--	projection       core.Projection
+--	snapshotProvider adapter.SnapshotProvider // Phase 6.2
+--}
+--
+--// weaverMgr 全局 Weaver 实例
+--var weaverMgr *WeaverManager
+--
+--// InitWeaver 初始化 Weaver 系统
+--func InitWeaver(mode ExecutionMode) {
+--	if mode == ModeLegacy {
+--		return
+--	}
+--
+--	// 初始化组件
+--	planner := &logic.ShellFactBuilder{}
+--	// Phase 5.1: 使用 PassthroughResolver
+--	resolver := &logic.PassthroughResolver{}
+--
+--	// Phase 6.1: Snapshot Provider
+--	snapProvider := &adapter.TmuxSnapshotProvider{}
+--
+--	// Phase 6.3: Reality Reader for consistency adjudication
+--	reality := &adapter.TmuxRealityReader{Provider: snapProvider}
+--	resolver.Reality = reality
+--
+--	var proj core.Projection
+--	if mode == ModeWeaver {
+--		proj = &adapter.TmuxProjection{}
+--	} else {
+--		proj = &adapter.NoopProjection{}
+--	}
+--
+--	engine := core.NewShadowEngine(planner, resolver, proj, reality)
+--
+--	weaverMgr = &WeaverManager{
+--		mode:             mode,
+--		engine:           engine,
+--		resolver:         resolver,
+--		projection:       proj,
+--		snapshotProvider: snapProvider,
+--	}
+--	logWeaver("Weaver initialized in %s mode", modeString(mode))
+--}
+--
+--// ProcessIntentGlobal 全局处理入口
+--func ProcessIntentGlobal(intent Intent) {
+--	if weaverMgr == nil {
+--		return
+--	}
+--	weaverMgr.ProcessIntent(intent)
+--}
+--
+--// ProcessIntent 处理意图 (Gateway)
+--func (m *WeaverManager) ProcessIntent(intent Intent) {
+--	logWeaver("ProcessIntent: Kind=%v Target=%v", intent.Kind, intent.Target)
+--
+--	// Phase 6.2: Capture Snapshot (Time Freeze)
+--	paneID := intent.GetPaneID()
+--	if paneID == "" {
+--		// Try to deduce or fail
+--		logWeaver("No PaneID in intent, skipping snapshot")
+--		return // Or handle non-pane intents
+--	}
+--
+--	snapshot, err := m.snapshotProvider.TakeSnapshot(paneID)
+--	if err != nil {
+--		logWeaver("Snapshot failed: %v", err)
+--		return
+--	}
+--
+--	// Inject Hash into Intent (mutable struct in main)
+--	intent.SnapshotHash = string(snapshot.Hash)
+--
+--	coreIntent := &intentAdapter{intent: intent}
+--
+--	// 此时如果是 Undo/Redo，它们不需要 Snapshot?
+--	// Phase 6.2 定义：Any ApplyIntent needs Snapshot.
+--	// Undo/Redo often imply "Previous State", but current implementation calls Planner even for Undo/Redo?
+--	// No, `ApplyIntent` handles Undo/Redo specially.
+--	// It calls `performUndo`.
+--
+--	if m.mode == ModeShadow || m.mode == ModeWeaver {
+--		verdict, err := m.engine.ApplyIntent(coreIntent, snapshot)
+--		if err != nil {
+--			logWeaver("Engine Error: %v", err)
+--			// Phase 7: Propagate to UI
+--			stateMu.Lock()
+--			globalState.LastUndoFailure = fmt.Sprintf("Engine: %v", err)
+--			stateMu.Unlock()
+--		} else {
+--			logWeaver("Verdict: %v (Safe=%v)", verdict.Kind, verdict.Safety)
+--			if len(verdict.Audit) > 0 {
+--				logWeaver("Audit: %v", verdict.Audit)
+--			}
+--			// If applied successfully, clear failure
+--			stateMu.Lock()
+--			if globalState.LastUndoFailure != "" && strings.HasPrefix(globalState.LastUndoFailure, "Engine:") {
+--				globalState.LastUndoFailure = ""
+--			}
+--			stateMu.Unlock()
+--		}
+--	}
+--
+--	// [Phase 4] Phase 3 的 Weaver -> Legacy 桥接已禁用
+--	// 现在 Weaver History 是 Source of Truth，Legacy 操作将通过反向桥接注入 Weaver
+--}
+--
+--// InjectLegacyTransaction 将 Legacy 事务注入到 Weaver History (Reverse Bridge)
+--func (m *WeaverManager) InjectLegacyTransaction(legacyTx *Transaction) {
+--	if m.engine == nil {
+--		return
+--	}
+--	// 获取 ShadowEngine 的 History
+--	se, ok := m.engine.(*core.ShadowEngine)
+--	if !ok {
+--		return
+--	}
+--
+--	coreTx := &core.Transaction{
+--		ID:           core.TransactionID(fmt.Sprintf("legacy-%d", legacyTx.ID)),
+--		Timestamp:    legacyTx.CreatedAt.Unix(),
+--		Facts:        make([]core.Fact, 0),
+--		InverseFacts: make([]core.Fact, 0),
+--		Applied:      true,
+--		Safety:       core.SafetyExact,
+--	}
+--
+--	// 转换正向事实
+--	for _, rec := range legacyTx.Records {
+--		f := convertLegacyFactToCore(rec.Fact)
+--		coreTx.Facts = append(coreTx.Facts, f)
+--	}
+--
+--	// 转换反向事实 (通常 Inverse 用于 Undo。Legacy Undo 执行 Inverse。
+--	// Weaver Undo 执行 InverseFacts。顺序：Record1, Record2. Undo: Inv2, Inv1。
+--	// 所以我们需要倒序遍历 Records)
+--	for i := len(legacyTx.Records) - 1; i >= 0; i-- {
+--		rec := legacyTx.Records[i]
+--		inv := convertLegacyFactToCore(rec.Inverse)
+--		coreTx.InverseFacts = append(coreTx.InverseFacts, inv)
+--	}
+--
+--	if len(coreTx.Facts) > 0 {
+--		se.GetHistory().Push(coreTx)
+--		logWeaver("Injected Legacy Transaction %d -> %s", legacyTx.ID, coreTx.ID)
+--	}
+--}
+--
+--func convertLegacyFactToCore(lf Fact) core.Fact {
+--	// Construct Semantic Anchor with Legacy Physical Info for Resolver to unpack
+--	ref := map[string]int{
+--		"line":  lf.Target.Anchor.LineHint,
+--		"start": lf.Target.StartOffset,
+--		"end":   lf.Target.EndOffset,
+--	}
+--
+--	cf := core.Fact{
+--		Anchor: core.Anchor{
+--			PaneID: lf.Target.Anchor.PaneID,
+--			Kind:   core.AnchorLegacyRange,
+--			Ref:    ref,
+--		},
+--		SideEffects: lf.SideEffects,
+--	}
+--	// Note: Hash is currently ignored in legacy conversion
+--
+--	switch lf.Kind {
+--	case "delete":
+--		cf.Kind = core.FactDelete
+--		cf.Payload.OldText = lf.Target.Text
+--	case "insert":
+--		cf.Kind = core.FactInsert
+--		cf.Payload.Text = lf.Target.Text
+--	case "replace":
+--		cf.Kind = core.FactReplace
+--		cf.Payload.OldText = lf.Target.Text
+--		if s, ok := lf.Meta["new_text"].(string); ok {
+--			cf.Payload.NewText = s
+--		}
+--	default:
+--		cf.Kind = core.FactNone
+--	}
+--	return cf
+--}
+--
+--// intentAdapter 适配 main.Intent 到 core.Intent
+--type intentAdapter struct {
+--	intent Intent
+--}
+--
+--func (a *intentAdapter) GetKind() core.IntentKind {
+--	return core.IntentKind(a.intent.Kind)
+--}
+--
+--func (a *intentAdapter) GetTarget() core.SemanticTarget {
+--	return core.SemanticTarget{
+--		Kind:      int(a.intent.Target.Kind),
+--		Direction: a.intent.Target.Direction,
+--		Scope:     a.intent.Target.Scope,
+--		Value:     a.intent.Target.Value,
+--	}
+--}
+--
+--func (a *intentAdapter) GetCount() int {
+--	return a.intent.Count
+--}
+--
+--func (a *intentAdapter) GetMeta() map[string]interface{} {
+--	return a.intent.Meta
+--}
+--
+--func (a *intentAdapter) GetPaneID() string {
+--	return a.intent.GetPaneID()
+--}
+--
+--func (a *intentAdapter) GetSnapshotHash() string {
+--	return a.intent.GetSnapshotHash()
+--}
+--
+--func (a *intentAdapter) IsPartialAllowed() bool {
+--	return a.intent.IsPartialAllowed()
+--}
+--
+--// logWeaver ...
+--func logWeaver(format string, args ...interface{}) {
+--	if !globalConfig.LogFacts {
+--		return
+--	}
+--	f, _ := os.OpenFile(os.Getenv("HOME")+"/tmux-fsm.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+--	if f != nil {
+--		fmt.Fprintf(f, "[%s] [WEAVER] %s\n", time.Now().Format("15:04:05"), fmt.Sprintf(format, args...))
+--		f.Close()
+--	}
+--}
+--
+--// modeString 返回模式的字符串表示
+--func modeString(mode ExecutionMode) string {
+--	switch mode {
+--	case ModeLegacy:
+--		return "legacy"
+--	case ModeShadow:
+--		return "shadow"
+--	case ModeWeaver:
+--		return "weaver"
+--	default:
+--		return "unknown"
+--	}
+--}
+diff --git a/fsm/engine.go b/fsm/engine.go
+index 8effb1b..c2a5362 100644
+--- a/fsm/engine.go
++++ b/fsm/engine.go
+@@ -3,8 +3,6 @@ package fsm
+ import (
+ 	"fmt"
+ 	"time"
+-	"tmux-fsm/backend"
+-	"tmux-fsm/ui"
+ )
+ 
+ // Engine FSM 引擎结构体
+@@ -12,12 +10,12 @@ type Engine struct {
+ 	Active     string
+ 	Keymap     *Keymap
+ 	layerTimer *time.Timer
+-	UI         ui.UI
+ }
+ 
+ // 全局默认引擎实例
+ var defaultEngine *Engine
+ 
++
+ // NewEngine 创建新的 FSM 引擎实例（显式注入 Keymap）
+ func NewEngine(km *Keymap) *Engine {
+ 	return &Engine{
+@@ -173,9 +171,120 @@ func (e *Engine) RunAction(name string) {
+ 	}
+ }
+ 
++// Produce 从按键产生意图
++func (e *Engine) Produce(key string) (*intent.Intent, bool) {
++	// 特殊处理：直接处理的按键
++	switch key {
++	case "u":
++		return &intent.Intent{
++			Kind: intent.IntentUndo,
++		}, true
++	case "C-r":
++		return &intent.Intent{
++			Kind: intent.IntentRedo,
++		}, true
++	}
++
++	// 其他按键按原有逻辑处理
++	if !e.CanHandle(key) {
++		return nil, false
++	}
++
++	st := e.Keymap.States[e.Active]
++	act := st.Keys[key]
++
++	// 1. 处理层切换（不产生意图）
++	if act.Layer != "" {
++		e.Active = act.Layer
++		e.resetLayerTimeout(act.TimeoutMs)
++		UpdateUI()
++		return nil, true
++	}
++
++	// 2. 处理具体动作，产生意图
++	if act.Action != "" {
++		intentObj := actionToIntent(act.Action)
++
++		// 铁律：产生意图后，除非该层标记为 Sticky，否则立刻 Reset 回 NAV
++		if !st.Sticky {
++			e.Reset()
++		} else {
++			// 如果是 Sticky 层，可能需要刷新 UI（如 hint）
++			UpdateUI()
++		}
++		return &intentObj, true
++	}
++
++	return nil, false
++}
++
++import (
++	"fmt"
++	"time"
++	"tmux-fsm/intent"
++)
++
++// actionToIntent 将动作转换为意图
++func actionToIntent(action string) intent.Intent {
++	intentObj := intent.Intent{
++		Meta: make(map[string]interface{}),
++	}
++
++	switch action {
++	case "pane_left":
++		intentObj.Kind = intent.IntentMove
++		intentObj.Target = intent.SemanticTarget{
++			Kind:      5, // TargetPosition
++			Direction: "left",
++		}
++		intentObj.Meta["motion"] = "left"
++	case "pane_right":
++		intentObj.Kind = intent.IntentMove
++		intentObj.Target = intent.SemanticTarget{
++			Kind:      5, // TargetPosition
++			Direction: "right",
++		}
++		intentObj.Meta["motion"] = "right"
++	case "pane_up":
++		intentObj.Kind = intent.IntentMove
++		intentObj.Target = intent.SemanticTarget{
++			Kind:      5, // TargetPosition
++			Direction: "up",
++		}
++		intentObj.Meta["motion"] = "up"
++	case "pane_down":
++		intentObj.Kind = intent.IntentMove
++		intentObj.Target = intent.SemanticTarget{
++			Kind:      5, // TargetPosition
++			Direction: "down",
++		}
++		intentObj.Meta["motion"] = "down"
++	case "exit":
++		intentObj.Kind = intent.IntentExit
++	case "next_pane":
++		intentObj.Kind = intent.IntentMove
++		intentObj.Target = intent.SemanticTarget{
++			Kind:      5, // TargetPosition
++			Direction: "next",
++		}
++	case "prev_pane":
++		intentObj.Kind = intent.IntentMove
++		intentObj.Target = intent.SemanticTarget{
++			Kind:      5, // TargetPosition
++			Direction: "prev",
++		}
++	default:
++		// 对于未知动作，返回空意图
++		intentObj.Kind = intent.IntentNone
++	}
++
++	return intentObj
++}
++
+ func tmux(cmd string) {
+ 	// Use GlobalBackend to execute the command
+-	backend.GlobalBackend.ExecRaw(cmd)
++	// 由于循环导入问题，这里暂时使用占位符
++	// 实际执行应该由上层处理
+ }
+ 
+ // 全局函数，支持在其他包调用
+diff --git a/globals.go b/globals.go
+index 4aaa9b9..5163fa1 100644
+--- a/globals.go
++++ b/globals.go
+@@ -8,7 +8,6 @@ import (
+ 	"sync"
+ 	"time"
+ 	"tmux-fsm/backend"
+-	"tmux-fsm/fsm"
+ )
+ 
+ type FSMState struct {
+@@ -58,10 +57,10 @@ func updateStatusBar(state FSMState, clientName string) {
+ 	}
+ 
+ 	// 融合显示逻辑
+-	activeLayer := fsm.GetActiveLayer()
+-	if activeLayer != "NAV" && activeLayer != "" {
+-		modeMsg = activeLayer // Override with FSM layer if active
+-	} else {
++	// activeLayer := fsm.GetActiveLayer() // 由于循环导入，暂时注释掉
++	// if activeLayer != "NAV" && activeLayer != "" {
++	// 	modeMsg = activeLayer // Override with FSM layer if active
++	// } else {
+ 		// Translate legacy FSM modes for display
+ 		switch modeMsg {
+ 		case "VISUAL_CHAR":
+@@ -77,7 +76,7 @@ func updateStatusBar(state FSMState, clientName string) {
+ 		case "SEARCH":
+ 			modeMsg = "SEARCH"
+ 		}
+-	}
++	// }
+ 
+ 	if state.Operator != "" {
+ 		modeMsg += fmt.Sprintf(" [%s]", state.Operator)
+diff --git a/kernel/decide.go b/kernel/decide.go
+index 47426d3..e5d552d 100644
+--- a/kernel/decide.go
++++ b/kernel/decide.go
+@@ -1,5 +1,9 @@
+ package kernel
+ 
++import (
++	"tmux-fsm/intent"
++)
++
  type DecisionKind int
  
  const (
-@@ -13,19 +9,19 @@ const (
+@@ -9,23 +13,23 @@ const (
  )
  
  type Decision struct {
--	Kind   DecisionKind
--	Intent *intent.Intent
-+	Kind DecisionKind
-+	// Intent *intent.Intent  // Temporarily disabled
+-	Kind DecisionKind
+-	// Intent *intent.Intent  // Temporarily disabled
++	Kind   DecisionKind
++	Intent *intent.Intent
  }
  
  func (k *Kernel) Decide(key string) *Decision {
  	// ✅ 1. FSM 永远先拿 key
  	if k.FSM != nil {
- 		if k.FSM.InLayer() && k.FSM.CanHandle(key) {
--			intent := k.FSM.Dispatch(key)
--			if intent != nil {
-+			handled := k.FSM.Dispatch(key)
-+			if handled {
- 				return &Decision{
--					Kind:   DecisionFSM,
--					Intent: intent,
-+					Kind: DecisionFSM,
-+					// Intent: intent,  // Temporarily disabled
- 				}
+-		if k.FSM.InLayer() && k.FSM.CanHandle(key) {
+-			handled := k.FSM.Dispatch(key)
+-			if handled {
+-				return &Decision{
+-					Kind: DecisionFSM,
+-					// Intent: intent,  // Temporarily disabled
+-				}
++		intent, ok := k.FSM.Produce(key)
++		if ok && intent != nil {
++			return &Decision{
++				Kind:   DecisionFSM,
++				Intent: intent,
  			}
- 			// FSM 明确吞掉
-@@ -34,13 +30,13 @@ func (k *Kernel) Decide(key string) *Decision {
+-			// FSM 明确吞掉
+-			return nil
++		}
++		// 如果FSM明确处理了但不产生意图，说明是层切换等操作
++		if k.FSM.InLayer() && k.FSM.CanHandle(key) {
++			return nil // FSM吞掉按键，不产生决策
+ 		}
  	}
  
- 	// ✅ 2. Legacy decoder（复用你现有逻辑）
--	legacyIntent := DecodeLegacyKey(key)
--	if legacyIntent != nil {
--		return &Decision{
--			Kind:   DecisionLegacy,
--			Intent: legacyIntent,
--		}
--	}
-+	// legacyIntent := DecodeLegacyKey(key)  // Temporarily disabled
-+	// if legacyIntent != nil {
-+	// 	return &Decision{
-+	// 		Kind:   DecisionLegacy,
-+	// 		Intent: legacyIntent,
-+	// 	}
-+	// }
- 
- 	return nil
- }
 diff --git a/kernel/execute.go b/kernel/execute.go
-index e00a8a1..fb290fb 100644
+index fb290fb..a3f6f46 100644
 --- a/kernel/execute.go
 +++ b/kernel/execute.go
-@@ -1,14 +1,16 @@
+@@ -1,16 +1,40 @@
  package kernel
  
++import (
++	"tmux-fsm"
++	"tmux-fsm/intent"
++)
++
  func (k *Kernel) Execute(decision *Decision) {
--	if decision == nil || decision.Intent == nil {
-+	if decision == nil {
+-	if decision == nil {
++	if decision == nil || decision.Intent == nil {
  		return
  	}
  
--	switch decision.Kind {
--	case DecisionFSM:
--		ExecuteIntent(decision.Intent)
--	case DecisionLegacy:
--		ExecuteIntent(decision.Intent)
--	}
-+	// switch decision.Kind {
-+	// case DecisionFSM:
-+	// 	ExecuteIntent(decision.Intent)
-+	// case DecisionLegacy:
-+	// 	ExecuteIntent(decision.Intent)
-+	// }
-+
-+	// Temporarily disabled until interfaces are properly defined
- }
-diff --git a/kernel/kernel.go b/kernel/kernel.go
-index dd9bc80..6a1a8bc 100644
---- a/kernel/kernel.go
-+++ b/kernel/kernel.go
-@@ -3,15 +3,11 @@ package kernel
- import (
- 	"context"
- 	"tmux-fsm/fsm"
--  "tmux-fsm/weaver/core"
--"tmux-fsm/weaver/adapter"
--)
--
- )
- 
- type Kernel struct {
- 	FSM    *fsm.Engine
--	Weaver *weaver.Manager
-+	// Weaver *WeaverManager  // Temporarily disabled to avoid import issues
- }
- 
- // ✅ Kernel 的唯一上下文入口（现在先很薄，未来可扩展）
-@@ -19,10 +15,10 @@ type HandleContext struct {
- 	Ctx context.Context
- }
- 
--func NewKernel(fsmEngine *fsm.Engine, weaverMgr *weaver.Manager) *Kernel {
-+func NewKernel(fsmEngine *fsm.Engine, weaverMgr interface{}) *Kernel {
- 	return &Kernel{
--		FSM:    fsmEngine,
--		Weaver: weaverMgr,
-+		FSM: fsmEngine,
-+		// Weaver: weaverMgr,  // Temporarily disabled
- 	}
- }
- 
-@@ -35,5 +31,5 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
- 		return
- 	}
- 
--	_ = k.Execute(decision)
-+	k.Execute(decision)
- }
-diff --git a/legacy_logic.go b/legacy_logic.go
-index 51ca302..4d80242 100644
---- a/legacy_logic.go
-+++ b/legacy_logic.go
-@@ -6,7 +6,7 @@ import (
- 	"strings"
- )
- 
--func processKey(state *FSMState, key string) string {
-+func processKeyLegacy(state *FSMState, key string) string {
- 	if key == "Escape" || key == "C-c" {
- 		// Reset FSM state on escape/cancel
- 		state.Count = 0
-diff --git a/server/server.go b/server/server.go
-index 13fa7a9..f614776 100644
---- a/server/server.go
-+++ b/server/server.go
-@@ -7,8 +7,6 @@ import (
- 	"os"
- 	"os/signal"
- 	"syscall"
--	"tmux-fsm/kernel"
--	"tmux-fsm/weaver/adapter"
- )
- 
- type Config struct {
-@@ -17,13 +15,13 @@ type Config struct {
- 
- type Server struct {
- 	cfg    Config
--	kernel *kernel.Kernel
-+	// kernel *kernel.Kernel  // Temporarily disabled
- }
- 
--func New(cfg Config) *Server {
-+func New(cfg Config, fsmEngine interface{}) *Server {
- 	return &Server{
--		cfg:    cfg,
--		kernel: kernel.New(),
-+		cfg: cfg,
-+		// kernel: kernel.New(fsmEngine, nil),  // Temporarily disabled until kernel is fixed
- 	}
- }
- 
-@@ -53,14 +51,14 @@ func (s *Server) Run(ctx context.Context) error {
- func (s *Server) handleClient(conn net.Conn) {
- 	defer conn.Close()
- 
--	key, err := protocol.ReadKey(conn)
--	if err != nil {
--		log.Printf("[server] read error: %v\n", err)
--		return
--	}
-+	// key, err := protocol.ReadKey(conn)  // Temporarily disabled
-+	// if err != nil {
-+	// 	log.Printf("[server] read error: %v\n", err)
-+	// 	return
-+	// }
- 
- 	// ✅ 关键点：Server 不做任何 if / else 判断
--	s.kernel.HandleKey(key)
-+	// s.kernel.HandleKey(kernel.HandleContext{Ctx: context.Background()}, key)  // Temporarily disabled
- }
- 
- func (s *Server) handleSignals(ctx context.Context, ln net.Listener) {
-diff --git a/weaver/adapter/tmux_adapter.go b/weaver/adapter/tmux_adapter.go
-index 552622c..fab734f 100644
---- a/weaver/adapter/tmux_adapter.go
-+++ b/weaver/adapter/tmux_adapter.go
-@@ -50,7 +50,21 @@ func (r *NoopResolver) ResolveFacts(facts []core.Fact, expectedHash string) ([]c
- type NoopProjection struct{}
- 
- // Apply 空实现（不执行任何操作）
--func (p *NoopProjection) Apply(resolved []core.ResolvedAnchor, facts []core.ResolvedFact) error {
-+func (p *NoopProjection) Apply(resolved []core.ResolvedAnchor, facts []core.ResolvedFact) ([]core.UndoEntry, error) {
- 	// Shadow 模式：不执行任何操作
-+	return []core.UndoEntry{}, nil
-+}
-+
-+// Rollback 空实现（不执行任何操作）
-+func (p *NoopProjection) Rollback(log []core.UndoEntry) error {
-+	// No-op
- 	return nil
- }
-+
-+// Verify 空实现（总是成功）
-+func (p *NoopProjection) Verify(pre core.Snapshot, facts []core.ResolvedFact, post core.Snapshot) core.VerificationResult {
-+	return core.VerificationResult{
-+		OK:      true,
-+		Message: "No-op verification always passes",
+-	// switch decision.Kind {
+-	// case DecisionFSM:
+-	// 	ExecuteIntent(decision.Intent)
+-	// case DecisionLegacy:
+-	// 	ExecuteIntent(decision.Intent)
+-	// }
++	switch decision.Kind {
++	case DecisionFSM:
++		// 直接传递Intent，不需要转换
++		tmux_fsm.ProcessIntentGlobal(mainIntentFromKernel(decision.Intent))
++	case DecisionLegacy:
++		// Legacy暂时不处理
 +	}
 +}
-diff --git a/weaver/adapter/tmux_projection.go b/weaver/adapter/tmux_projection.go
-index c812b31..f4bbaff 100644
---- a/weaver/adapter/tmux_projection.go
-+++ b/weaver/adapter/tmux_projection.go
-@@ -136,7 +136,7 @@ func (p *TmuxProjection) Apply(resolved []core.ResolvedAnchor, facts []core.Reso
- func (p *TmuxProjection) Rollback(log []core.UndoEntry) error {
- 	// Apply in reverse order
- 	for i := len(log) - 1; i >= 0; i-- {
--		entry := log[i]
-+		_ = log[i] // Use the entry to avoid "declared and not used" error
- 		// For this implementation, we need to find the line associated with this LineID
- 		// Since we don't have a direct mapping from LineID to pane and line number in this context,
- 		// we'll need to use a different approach.
-diff --git a/weaver/core/shadow_engine.go b/weaver/core/shadow_engine.go
-index 6149064..1de8f6f 100644
---- a/weaver/core/shadow_engine.go
-+++ b/weaver/core/shadow_engine.go
-@@ -142,7 +142,7 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict,
- 	preSnapshot := snapshot
  
- 	// 5. Project: Execute
--	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
-+	if _, err := e.projection.Apply(nil, resolvedFacts); err != nil {
- 		audit = append(audit, AuditEntry{Step: "Project", Result: fmt.Sprintf("Error: %v", err)})
- 		return &Verdict{Kind: VerdictBlocked, Audit: audit}, err
- 	}
-@@ -228,7 +228,7 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
- 	if len(resolvedFacts) > 0 {
- 		log.Printf("[WEAVER] Undo: Applying %d inverse facts. Text length: %d chars.", len(resolvedFacts), len(resolvedFacts[0].Payload.Text))
- 	}
--	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
-+	if _, err := e.projection.Apply(nil, resolvedFacts); err != nil {
- 		e.history.PushBack(tx)
- 		return nil, err
- 	}
-@@ -293,7 +293,7 @@ func (e *ShadowEngine) performRedo() (*Verdict, error) {
- 	}
- 
- 	// Apply
--	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
-+	if _, err := e.projection.Apply(nil, resolvedFacts); err != nil {
- 		e.history.AddRedo(tx)
- 		return nil, err
- 	}
-diff --git a/weaver/core/types.go b/weaver/core/types.go
-index 8e30a8c..eeea8c6 100644
---- a/weaver/core/types.go
-+++ b/weaver/core/types.go
-@@ -4,6 +4,27 @@ import (
- 	"errors"
- )
- 
-+// AnchorKind 锚点类型
-+type AnchorKind int
-+
-+const (
-+	AnchorNone AnchorKind = iota
-+	AnchorAtCursor
-+	AnchorWord
-+	AnchorLine
-+	AnchorAbsolute
-+	AnchorLegacyRange
-+)
-+
-+// SafetyLevel 安全级别
-+type SafetyLevel int
-+
-+const (
-+	SafetyExact SafetyLevel = iota
-+	SafetyFuzzy
-+	SafetyUnsafe
-+)
-+
- // ErrWorldDrift 世界漂移错误（快照不匹配）
- // 表示 Intent 基于的历史与当前现实不一致
- var ErrWorldDrift = errors.New("world drift: snapshot mismatch")
-@@ -73,9 +94,10 @@ type TransactionID string
- 
- // VerificationResult for verifier
- type VerificationResult struct {
--    Safe  bool
--    Level SafetyLevel
--    Err   error
-+    OK      bool
-+    Safety  SafetyLevel
-+    Diffs   []SnapshotDiff
-+    Message string
+-	// Temporarily disabled until interfaces are properly defined
++// mainIntentFromKernel 将kernel的Intent转换为main包的Intent
++func mainIntentFromKernel(kernelIntent *intent.Intent) tmux_fsm.Intent {
++	return tmux_fsm.Intent{
++		Kind:   tmux_fsm.IntentKind(kernelIntent.Kind),
++		Target: tmux_fsm.SemanticTarget{
++			Kind:      tmux_fsm.TargetKind(0), // 简化处理
++			Direction: kernelIntent.Target.Direction,
++			Scope:     kernelIntent.Target.Scope,
++			Value:     kernelIntent.Target.Value,
++		},
++		Count:        kernelIntent.Count,
++		Meta:         kernelIntent.Meta,
++		PaneID:       kernelIntent.PaneID,
++		SnapshotHash: kernelIntent.SnapshotHash,
++		AllowPartial: kernelIntent.AllowPartial,
++		// Anchors字段需要转换，简化处理
++		Anchors:      []tmux_fsm.Anchor{}, // 简化处理
++	}
+ }
+diff --git a/main.go b/main.go
+index 5f239cf..8f01650 100644
+--- a/main.go
++++ b/main.go
+@@ -98,6 +98,25 @@ func (a *intentAdapter) GetAnchors() []core.Anchor {
+ 	return a.intent.GetAnchors()
  }
  
- // Verdict 裁决结果（可审计输出）
-diff --git a/weaver_manager.go b/weaver_manager.go
-deleted file mode 100644
-index 77ed608..0000000
---- a/weaver_manager.go
-+++ /dev/null
-@@ -1,265 +0,0 @@
--package main
--
--import (
--	"fmt"
--	"os"
--	"strings"
--	"time"
--	"tmux-fsm/weaver/adapter"
--	"tmux-fsm/weaver/core"
--	"tmux-fsm/weaver/logic"
--)
--
--// WeaverManager 全局协调器
--type WeaverManager struct {
--	mode             ExecutionMode
--	engine           core.Engine // Interface? No, ShadowEngine struct usually.
--	resolver         core.AnchorResolver
--	projection       core.Projection
--	snapshotProvider adapter.SnapshotProvider // Phase 6.2
--}
--
--// weaverMgr 全局 Weaver 实例
--var weaverMgr *WeaverManager
--
--// InitWeaver 初始化 Weaver 系统
--func InitWeaver(mode ExecutionMode) {
--	if mode == ModeLegacy {
--		return
--	}
--
--	// 初始化组件
--	planner := &logic.ShellFactBuilder{}
--	// Phase 5.1: 使用 PassthroughResolver
--	resolver := &logic.PassthroughResolver{}
--
--	// Phase 6.1: Snapshot Provider
--	snapProvider := &adapter.TmuxSnapshotProvider{}
--
--	// Phase 6.3: Reality Reader for consistency adjudication
--	reality := &adapter.TmuxRealityReader{Provider: snapProvider}
--	resolver.Reality = reality
--
--	var proj core.Projection
--	if mode == ModeWeaver {
--		proj = &adapter.TmuxProjection{}
--	} else {
--		proj = &adapter.NoopProjection{}
--	}
--
--	engine := core.NewShadowEngine(planner, resolver, proj, reality)
--
--	weaverMgr = &WeaverManager{
--		mode:             mode,
--		engine:           engine,
--		resolver:         resolver,
--		projection:       proj,
--		snapshotProvider: snapProvider,
--	}
--	logWeaver("Weaver initialized in %s mode", modeString(mode))
--}
--
--// ProcessIntentGlobal 全局处理入口
--func ProcessIntentGlobal(intent Intent) {
--	if weaverMgr == nil {
--		return
--	}
--	weaverMgr.ProcessIntent(intent)
--}
--
--// ProcessIntent 处理意图 (Gateway)
--func (m *WeaverManager) ProcessIntent(intent Intent) {
--	logWeaver("ProcessIntent: Kind=%v Target=%v", intent.Kind, intent.Target)
--
--	// Phase 6.2: Capture Snapshot (Time Freeze)
--	paneID := intent.GetPaneID()
--	if paneID == "" {
--		// Try to deduce or fail
--		logWeaver("No PaneID in intent, skipping snapshot")
--		return // Or handle non-pane intents
--	}
--
--	snapshot, err := m.snapshotProvider.TakeSnapshot(paneID)
--	if err != nil {
--		logWeaver("Snapshot failed: %v", err)
--		return
--	}
--
--	// Inject Hash into Intent (mutable struct in main)
--	intent.SnapshotHash = string(snapshot.Hash)
--
--	coreIntent := &intentAdapter{intent: intent}
--
--	// 此时如果是 Undo/Redo，它们不需要 Snapshot?
--	// Phase 6.2 定义：Any ApplyIntent needs Snapshot.
--	// Undo/Redo often imply "Previous State", but current implementation calls Planner even for Undo/Redo?
--	// No, `ApplyIntent` handles Undo/Redo specially.
--	// It calls `performUndo`.
--
--	if m.mode == ModeShadow || m.mode == ModeWeaver {
--		verdict, err := m.engine.ApplyIntent(coreIntent, snapshot)
--		if err != nil {
--			logWeaver("Engine Error: %v", err)
--			// Phase 7: Propagate to UI
--			stateMu.Lock()
--			globalState.LastUndoFailure = fmt.Sprintf("Engine: %v", err)
--			stateMu.Unlock()
--		} else {
--			logWeaver("Verdict: %v (Safe=%v)", verdict.Kind, verdict.Safety)
--			if len(verdict.Audit) > 0 {
--				logWeaver("Audit: %v", verdict.Audit)
--			}
--			// If applied successfully, clear failure
--			stateMu.Lock()
--			if globalState.LastUndoFailure != "" && strings.HasPrefix(globalState.LastUndoFailure, "Engine:") {
--				globalState.LastUndoFailure = ""
--			}
--			stateMu.Unlock()
--		}
--	}
--
--	// [Phase 4] Phase 3 的 Weaver -> Legacy 桥接已禁用
--	// 现在 Weaver History 是 Source of Truth，Legacy 操作将通过反向桥接注入 Weaver
--}
--
--// InjectLegacyTransaction 将 Legacy 事务注入到 Weaver History (Reverse Bridge)
--func (m *WeaverManager) InjectLegacyTransaction(legacyTx *Transaction) {
--	if m.engine == nil {
--		return
--	}
--	// 获取 ShadowEngine 的 History
--	se, ok := m.engine.(*core.ShadowEngine)
--	if !ok {
--		return
--	}
--
--	coreTx := &core.Transaction{
--		ID:           core.TransactionID(fmt.Sprintf("legacy-%d", legacyTx.ID)),
--		Timestamp:    legacyTx.CreatedAt.Unix(),
--		Facts:        make([]core.Fact, 0),
--		InverseFacts: make([]core.Fact, 0),
--		Applied:      true,
--		Safety:       core.SafetyExact,
--	}
--
--	// 转换正向事实
--	for _, rec := range legacyTx.Records {
--		f := convertLegacyFactToCore(rec.Fact)
--		coreTx.Facts = append(coreTx.Facts, f)
--	}
--
--	// 转换反向事实 (通常 Inverse 用于 Undo。Legacy Undo 执行 Inverse。
--	// Weaver Undo 执行 InverseFacts。顺序：Record1, Record2. Undo: Inv2, Inv1。
--	// 所以我们需要倒序遍历 Records)
--	for i := len(legacyTx.Records) - 1; i >= 0; i-- {
--		rec := legacyTx.Records[i]
--		inv := convertLegacyFactToCore(rec.Inverse)
--		coreTx.InverseFacts = append(coreTx.InverseFacts, inv)
--	}
--
--	if len(coreTx.Facts) > 0 {
--		se.GetHistory().Push(coreTx)
--		logWeaver("Injected Legacy Transaction %d -> %s", legacyTx.ID, coreTx.ID)
--	}
--}
--
--func convertLegacyFactToCore(lf Fact) core.Fact {
--	// Construct Semantic Anchor with Legacy Physical Info for Resolver to unpack
--	ref := map[string]int{
--		"line":  lf.Target.Anchor.LineHint,
--		"start": lf.Target.StartOffset,
--		"end":   lf.Target.EndOffset,
--	}
--
--	cf := core.Fact{
--		Anchor: core.Anchor{
--			PaneID: lf.Target.Anchor.PaneID,
--			Kind:   core.AnchorLegacyRange,
--			Ref:    ref,
--		},
--		SideEffects: lf.SideEffects,
--	}
--	// Note: Hash is currently ignored in legacy conversion
--
--	switch lf.Kind {
--	case "delete":
--		cf.Kind = core.FactDelete
--		cf.Payload.OldText = lf.Target.Text
--	case "insert":
--		cf.Kind = core.FactInsert
--		cf.Payload.Text = lf.Target.Text
--	case "replace":
--		cf.Kind = core.FactReplace
--		cf.Payload.OldText = lf.Target.Text
--		if s, ok := lf.Meta["new_text"].(string); ok {
--			cf.Payload.NewText = s
--		}
--	default:
--		cf.Kind = core.FactNone
--	}
--	return cf
--}
--
--// intentAdapter 适配 main.Intent 到 core.Intent
--type intentAdapter struct {
--	intent Intent
--}
--
--func (a *intentAdapter) GetKind() core.IntentKind {
--	return core.IntentKind(a.intent.Kind)
--}
--
--func (a *intentAdapter) GetTarget() core.SemanticTarget {
--	return core.SemanticTarget{
--		Kind:      int(a.intent.Target.Kind),
--		Direction: a.intent.Target.Direction,
--		Scope:     a.intent.Target.Scope,
--		Value:     a.intent.Target.Value,
--	}
--}
--
--func (a *intentAdapter) GetCount() int {
--	return a.intent.Count
--}
--
--func (a *intentAdapter) GetMeta() map[string]interface{} {
--	return a.intent.Meta
--}
--
--func (a *intentAdapter) GetPaneID() string {
--	return a.intent.GetPaneID()
--}
--
--func (a *intentAdapter) GetSnapshotHash() string {
--	return a.intent.GetSnapshotHash()
--}
--
--func (a *intentAdapter) IsPartialAllowed() bool {
--	return a.intent.IsPartialAllowed()
--}
--
--// logWeaver ...
--func logWeaver(format string, args ...interface{}) {
--	if !globalConfig.LogFacts {
--		return
--	}
--	f, _ := os.OpenFile(os.Getenv("HOME")+"/tmux-fsm.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
--	if f != nil {
--		fmt.Fprintf(f, "[%s] [WEAVER] %s\n", time.Now().Format("15:04:05"), fmt.Sprintf(format, args...))
--		f.Close()
--	}
--}
--
--// modeString 返回模式的字符串表示
--func modeString(mode ExecutionMode) string {
--	switch mode {
--	case ModeLegacy:
--		return "legacy"
--	case ModeShadow:
--		return "shadow"
--	case ModeWeaver:
--		return "weaver"
--	default:
--		return "unknown"
--	}
--}
++// FSMIntentToMainIntent 将fsm包的Intent转换为main包的Intent
++func FSMIntentToMainIntent(fsmIntent fsm.Intent) Intent {
++	return Intent{
++		Kind:         IntentKind(fsmIntent.Kind),
++		Target:       SemanticTarget{
++			Kind:      TargetKind(fsmIntent.Target.Kind),
++			Direction: fsmIntent.Target.Direction,
++			Scope:     fsmIntent.Target.Scope,
++			Value:     fsmIntent.Target.Value,
++		},
++		Count:        fsmIntent.Count,
++		Meta:         fsmIntent.Meta,
++		PaneID:       fsmIntent.PaneID,
++		SnapshotHash: fsmIntent.SnapshotHash,
++		AllowPartial: fsmIntent.AllowPartial,
++		Anchors:      []Anchor{}, // 简化处理，实际需要转换
++	}
++}
++
+ // ProcessIntentGlobal 全局意图处理入口
+ // RFC-WC-002: Intent ABI - 统一入口，统一审计
+ func ProcessIntentGlobal(intent Intent) error {

@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 	"tmux-fsm/backend"
-	"tmux-fsm/fsm"
 )
 
 type FSMState struct {
@@ -58,10 +57,10 @@ func updateStatusBar(state FSMState, clientName string) {
 	}
 
 	// 融合显示逻辑
-	activeLayer := fsm.GetActiveLayer()
-	if activeLayer != "NAV" && activeLayer != "" {
-		modeMsg = activeLayer // Override with FSM layer if active
-	} else {
+	// activeLayer := fsm.GetActiveLayer() // 由于循环导入，暂时注释掉
+	// if activeLayer != "NAV" && activeLayer != "" {
+	// 	modeMsg = activeLayer // Override with FSM layer if active
+	// } else {
 		// Translate legacy FSM modes for display
 		switch modeMsg {
 		case "VISUAL_CHAR":
@@ -77,7 +76,7 @@ func updateStatusBar(state FSMState, clientName string) {
 		case "SEARCH":
 			modeMsg = "SEARCH"
 		}
-	}
+	// }
 
 	if state.Operator != "" {
 		modeMsg += fmt.Sprintf(" [%s]", state.Operator)

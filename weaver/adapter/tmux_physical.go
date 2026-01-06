@@ -440,3 +440,10 @@ func PerformPhysicalRawInsert(text, targetPane string) {
 	// 确保粘贴到目标
 	exec.Command("tmux", "paste-buffer", "-t", targetPane).Run()
 }
+
+// PerformPhysicalRawInsert 物理插入原始文本
+func PerformPhysicalRawInsert(text, targetPane string) {
+	// 使用 set-buffer + paste-buffer 是最稳健的，避免 shell 转义问题
+	exec.Command("tmux", "set-buffer", "--", text).Run()
+	exec.Command("tmux", "paste-buffer", "-t", targetPane).Run()
+}

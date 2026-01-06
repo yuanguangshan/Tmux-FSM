@@ -1,16 +1,22 @@
 package kernel
 
+import (
+	"tmux-fsm/intent"
+)
+
 func (k *Kernel) Execute(decision *Decision) {
-	if decision == nil {
+	if decision == nil || decision.Intent == nil {
 		return
 	}
 
-	// switch decision.Kind {
-	// case DecisionFSM:
-	// 	ExecuteIntent(decision.Intent)
-	// case DecisionLegacy:
-	// 	ExecuteIntent(decision.Intent)
-	// }
+	if k.Exec == nil {
+		return
+	}
 
-	// Temporarily disabled until interfaces are properly defined
+	switch decision.Kind {
+	case DecisionFSM:
+		_ = k.Exec.Process(decision.Intent)
+	case DecisionLegacy:
+		_ = k.Exec.Process(decision.Intent)
+	}
 }

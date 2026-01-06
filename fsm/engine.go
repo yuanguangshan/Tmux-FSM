@@ -3,8 +3,6 @@ package fsm
 import (
 	"fmt"
 	"time"
-	"tmux-fsm/backend"
-	"tmux-fsm/ui"
 )
 
 // Engine FSM 引擎结构体
@@ -12,11 +10,11 @@ type Engine struct {
 	Active     string
 	Keymap     *Keymap
 	layerTimer *time.Timer
-	UI         ui.UI
 }
 
 // 全局默认引擎实例
 var defaultEngine *Engine
+
 
 // NewEngine 创建新的 FSM 引擎实例（显式注入 Keymap）
 func NewEngine(km *Keymap) *Engine {
@@ -173,9 +171,120 @@ func (e *Engine) RunAction(name string) {
 	}
 }
 
+// Produce 从按键产生意图
+func (e *Engine) Produce(key string) (*intent.Intent, bool) {
+	// 特殊处理：直接处理的按键
+	switch key {
+	case "u":
+		return &intent.Intent{
+			Kind: intent.IntentUndo,
+		}, true
+	case "C-r":
+		return &intent.Intent{
+			Kind: intent.IntentRedo,
+		}, true
+	}
+
+	// 其他按键按原有逻辑处理
+	if !e.CanHandle(key) {
+		return nil, false
+	}
+
+	st := e.Keymap.States[e.Active]
+	act := st.Keys[key]
+
+	// 1. 处理层切换（不产生意图）
+	if act.Layer != "" {
+		e.Active = act.Layer
+		e.resetLayerTimeout(act.TimeoutMs)
+		UpdateUI()
+		return nil, true
+	}
+
+	// 2. 处理具体动作，产生意图
+	if act.Action != "" {
+		intentObj := actionToIntent(act.Action)
+
+		// 铁律：产生意图后，除非该层标记为 Sticky，否则立刻 Reset 回 NAV
+		if !st.Sticky {
+			e.Reset()
+		} else {
+			// 如果是 Sticky 层，可能需要刷新 UI（如 hint）
+			UpdateUI()
+		}
+		return &intentObj, true
+	}
+
+	return nil, false
+}
+
+import (
+	"fmt"
+	"time"
+	"tmux-fsm/intent"
+)
+
+// actionToIntent 将动作转换为意图
+func actionToIntent(action string) intent.Intent {
+	intentObj := intent.Intent{
+		Meta: make(map[string]interface{}),
+	}
+
+	switch action {
+	case "pane_left":
+		intentObj.Kind = intent.IntentMove
+		intentObj.Target = intent.SemanticTarget{
+			Kind:      5, // TargetPosition
+			Direction: "left",
+		}
+		intentObj.Meta["motion"] = "left"
+	case "pane_right":
+		intentObj.Kind = intent.IntentMove
+		intentObj.Target = intent.SemanticTarget{
+			Kind:      5, // TargetPosition
+			Direction: "right",
+		}
+		intentObj.Meta["motion"] = "right"
+	case "pane_up":
+		intentObj.Kind = intent.IntentMove
+		intentObj.Target = intent.SemanticTarget{
+			Kind:      5, // TargetPosition
+			Direction: "up",
+		}
+		intentObj.Meta["motion"] = "up"
+	case "pane_down":
+		intentObj.Kind = intent.IntentMove
+		intentObj.Target = intent.SemanticTarget{
+			Kind:      5, // TargetPosition
+			Direction: "down",
+		}
+		intentObj.Meta["motion"] = "down"
+	case "exit":
+		intentObj.Kind = intent.IntentExit
+	case "next_pane":
+		intentObj.Kind = intent.IntentMove
+		intentObj.Target = intent.SemanticTarget{
+			Kind:      5, // TargetPosition
+			Direction: "next",
+		}
+	case "prev_pane":
+		intentObj.Kind = intent.IntentMove
+		intentObj.Target = intent.SemanticTarget{
+			Kind:      5, // TargetPosition
+			Direction: "prev",
+		}
+	default:
+		// 对于未知动作，返回空意图
+		intentObj.Kind = intent.IntentNone
+	}
+
+	return intentObj
+}
+
 func tmux(cmd string) {
 	// Use GlobalBackend to execute the command
-	backend.GlobalBackend.ExecRaw(cmd)
+	// 由于循环导入问题，这里暂时使用占位符
+	// 实际执行应该由上层处理
 }
 
 // 全局函数，支持在其他包调用

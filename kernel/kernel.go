@@ -7,7 +7,7 @@ import (
 
 type Kernel struct {
 	FSM    *fsm.Engine
-	// Weaver *WeaverManager  // Temporarily disabled to avoid import issues
+	Exec   IntentExecutor
 }
 
 // ✅ Kernel 的唯一上下文入口（现在先很薄，未来可扩展）
@@ -15,10 +15,10 @@ type HandleContext struct {
 	Ctx context.Context
 }
 
-func NewKernel(fsmEngine *fsm.Engine, weaverMgr interface{}) *Kernel {
+func NewKernel(fsmEngine *fsm.Engine, exec IntentExecutor) *Kernel {
 	return &Kernel{
-		FSM: fsmEngine,
-		// Weaver: weaverMgr,  // Temporarily disabled
+		FSM:  fsmEngine,
+		Exec: exec,
 	}
 }
 

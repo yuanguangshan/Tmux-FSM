@@ -1,5 +1,9 @@
 package kernel
 
+import (
+	"tmux-fsm/intent"
+)
+
 type DecisionKind int
 
 const (
@@ -9,23 +13,23 @@ const (
 )
 
 type Decision struct {
-	Kind DecisionKind
-	// Intent *intent.Intent  // Temporarily disabled
+	Kind   DecisionKind
+	Intent *intent.Intent
 }
 
 func (k *Kernel) Decide(key string) *Decision {
 	// ✅ 1. FSM 永远先拿 key
 	if k.FSM != nil {
-		if k.FSM.InLayer() && k.FSM.CanHandle(key) {
-			handled := k.FSM.Dispatch(key)
-			if handled {
-				return &Decision{
-					Kind: DecisionFSM,
-					// Intent: intent,  // Temporarily disabled
-				}
+		intent, ok := k.FSM.Produce(key)
+		if ok && intent != nil {
+			return &Decision{
+				Kind:   DecisionFSM,
+				Intent: intent,
 			}
-			// FSM 明确吞掉
-			return nil
+		}
+		// 如果FSM明确处理了但不产生意图，说明是层切换等操作
+		if k.FSM.InLayer() && k.FSM.CanHandle(key) {
+			return nil // FSM吞掉按键，不产生决策
 		}
 	}
 
