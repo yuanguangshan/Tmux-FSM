@@ -1,8 +1,6 @@
 package kernel
 
-import (
-	"tmux-fsm/intent"
-)
+
 
 func (k *Kernel) Execute(decision *Decision) {
 	if decision == nil || decision.Intent == nil {
