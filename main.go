@@ -2,12 +2,16 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"log"
+	"net"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"tmux-fsm/intent"
-	"tmux-fsm/server"
 	"tmux-fsm/weaver/core"
 	"tmux-fsm/weaver/manager"
 )
@@ -40,13 +44,21 @@ func (tm *TransactionManager) Append(record ActionRecord) {
 func main() {
 	serverMode := flag.Bool("server", false, "run as server")
 	socketPath := flag.String("socket", "/tmp/tmux-fsm.sock", "socket path")
+	debugMode := flag.Bool("debug", false, "enable debug logging")
 	flag.Parse()
 
 	// 初始化 Weaver 系统
 	manager.InitWeaver(manager.ModeWeaver) // 默认启用 Weaver 模式
 
+	if *debugMode {
+		log.SetFlags(log.LstdFlags | log.Lshortfile) // Include file and line info in logs
+	}
+
 	if *serverMode {
-		srv := server.New(server.Config{
+		if *debugMode {
+			log.Printf("[DEBUG] Starting server on %s", *socketPath)
+		}
+		srv := NewServer(ServerConfig{
 			SocketPath: *socketPath,
 		})
 		log.Fatal(srv.Run(context.Background()))
@@ -55,6 +67,87 @@ func main() {
 
 	// client / other modes 保持你原来的逻辑
 	log.Println("no mode specified")
+}
+
+// ServerConfig 服务器配置
+type ServerConfig struct {
+	SocketPath string
+}
+
+// Server 服务器结构
+type Server struct {
+	cfg    ServerConfig
+	// kernel *kernel.Kernel  // Temporarily disabled
+}
+
+// NewServer 创建新服务器实例
+func NewServer(cfg ServerConfig) *Server {
+	return &Server{
+		cfg: cfg,
+	}
+}
+
+// Run 启动服务器
+func (s *Server) Run(ctx context.Context) error {
+	// 清理旧 socket
+	_ = os.Remove(s.cfg.SocketPath)
+
+	ln, err := net.Listen("unix", s.cfg.SocketPath)
+	if err != nil {
+		return err
+	}
+	defer ln.Close()
+
+	log.Printf("[server] listening on %s\n", s.cfg.SocketPath)
+
+	go s.handleSignals(ctx, ln)
+
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			log.Printf("[server] accept error: %v\n", err)
+			return err
+		}
+		log.Printf("[server] accepted connection from %s\n", conn.RemoteAddr())
+		go s.handleClient(conn)
+	}
+}
+
+// handleClient 处理客户端连接
+func (s *Server) handleClient(conn net.Conn) {
+	defer conn.Close()
+
+	log.Printf("[server] client connected: %s", conn.RemoteAddr())
+
+	var in intent.Intent
+	dec := json.NewDecoder(conn)
+
+	if err := dec.Decode(&in); err != nil {
+		log.Printf("[server] decode intent error: %v", err)
+		return
+	}
+
+	log.Printf("[server] intent received: kind=%v count=%d",
+		in.Kind, in.Count,
+	)
+
+	if err := ProcessIntentGlobal(in); err != nil {
+		log.Printf("[server] ProcessIntentGlobal error: %v", err)
+	}
+}
+
+// handleSignals 处理信号
+func (s *Server) handleSignals(ctx context.Context, ln net.Listener) {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case <-ctx.Done():
+	case sig := <-ch:
+		log.Printf("[server] signal received: %v\n", sig)
+	}
+
+	_ = ln.Close()
 }
 
 // intentAdapter 适配 intent.Intent 到 core.Intent
