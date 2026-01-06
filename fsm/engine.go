@@ -3,14 +3,48 @@ package fsm
 import (
 	"fmt"
 	"time"
-	"tmux-fsm/intent"
 )
+
+// RawTokenEmitter 用于发送 RawToken 的接口
+type RawTokenEmitter interface {
+	Emit(RawToken)
+}
 
 // Engine FSM 引擎结构体
 type Engine struct {
 	Active     string
 	Keymap     *Keymap
 	layerTimer *time.Timer
+	count      int              // 用于存储数字计数
+	emitters   []RawTokenEmitter // 用于向外部发送token的多个接收者
+}
+
+// FSMStatus FSM 状态信息，用于UI更新
+type FSMStatus struct {
+	Layer string
+	Count int
+}
+
+// AddEmitter 添加一个 token 发送接收者
+func (e *Engine) AddEmitter(emitter RawTokenEmitter) {
+	e.emitters = append(e.emitters, emitter)
+}
+
+// RemoveEmitter 移除一个 token 发送接收者
+func (e *Engine) RemoveEmitter(emitter RawTokenEmitter) {
+	for i, em := range e.emitters {
+		if em == emitter {
+			e.emitters = append(e.emitters[:i], e.emitters[i+1:]...)
+			break
+		}
+	}
+}
+
+// emitInternal 内部发送 token 给所有订阅者
+func (e *Engine) emitInternal(token RawToken) {
+	for _, emitter := range e.emitters {
+		emitter.Emit(token)
+	}
 }
 
 // 全局默认引擎实例
@@ -20,8 +54,10 @@ var defaultEngine *Engine
 // NewEngine 创建新的 FSM 引擎实例（显式注入 Keymap）
 func NewEngine(km *Keymap) *Engine {
 	return &Engine{
-		Active: "NAV",
-		Keymap: km,
+		Active:   "NAV",
+		Keymap:   km,
+		count:    0,
+		emitters: make([]RawTokenEmitter, 0),
 	}
 }
 
@@ -50,36 +86,43 @@ func (e *Engine) CanHandle(key string) bool {
 
 // Dispatch 处理按键交互
 func (e *Engine) Dispatch(key string) bool {
-	if !e.CanHandle(key) {
-		return false
-	}
-
-	st := e.Keymap.States[e.Active]
-	act := st.Keys[key]
-
-	// 1. 处理层切换
-	if act.Layer != "" {
-		e.Active = act.Layer
-		e.resetLayerTimeout(act.TimeoutMs)
-		UpdateUI()
+	// 检查是否是数字键，即使当前层没有定义
+	if isDigit(key) {
+		e.count = e.count*10 + int(key[0]-'0')
+		e.emitInternal(RawToken{Kind: TokenDigit, Value: key})
 		return true
 	}
 
-	// 2. 处理具体动作
-	if act.Action != "" {
-		e.RunAction(act.Action)
+	// 检查是否是重复键
+	if key == "." {
+		e.emitInternal(RawToken{Kind: TokenRepeat, Value: "."})
+		return true
+	}
 
-		// 铁律：执行完动作后，除非该层标记为 Sticky，否则立刻 Reset 回 NAV
-		if !st.Sticky {
-			e.Reset()
-		} else {
-			// 如果是 Sticky 层，可能需要刷新 UI（如 hint）
-			UpdateUI()
+	// 其他按键按原有逻辑处理（只处理层切换，不处理动作）
+	if e.CanHandle(key) {
+		st := e.Keymap.States[e.Active]
+		act := st.Keys[key]
+
+		// 1. 处理层切换
+		if act.Layer != "" {
+			e.Active = act.Layer
+			e.resetLayerTimeout(act.TimeoutMs)
+			e.emitInternal(RawToken{Kind: TokenKey, Value: key})
+			return true
 		}
+
+		// 2. 发送按键 token
+		e.emitInternal(RawToken{Kind: TokenKey, Value: key})
 		return true
 	}
 
 	return false
+}
+
+// isDigit 检查字符串是否为单个数字字符
+func isDigit(s string) bool {
+	return len(s) == 1 && s[0] >= '0' && s[0] <= '9'
 }
 
 // Reset 重置引擎状态到初始层（Invariant 8: Reload = FSM 重生）
@@ -94,8 +137,10 @@ func (e *Engine) Reset() {
 	} else {
 		e.Active = "NAV"
 	}
-	UpdateUI()
+	e.count = 0
+	e.emitInternal(RawToken{Kind: TokenSystem, Value: "reset"})
 }
+
 
 // Reload 重新加载keymap并重置FSM（Invariant 8: Reload = atomic rebuild）
 func Reload(configPath string) error {
@@ -161,6 +206,9 @@ func (e *Engine) resetLayerTimeout(ms int) {
 	}
 }
 
+
+
+
 // RunAction 执行动作
 func (e *Engine) RunAction(name string) {
 	switch name {
@@ -193,109 +241,6 @@ func (e *Engine) RunAction(name string) {
 	}
 }
 
-// Produce 从按键产生意图
-func (e *Engine) Produce(key string) (*intent.Intent, bool) {
-	// 特殊处理：直接处理的按键
-	switch key {
-	case "u":
-		return &intent.Intent{
-			Kind: intent.IntentUndo,
-		}, true
-	case "C-r":
-		return &intent.Intent{
-			Kind: intent.IntentRedo,
-		}, true
-	}
-
-	// 其他按键按原有逻辑处理
-	if !e.CanHandle(key) {
-		return nil, false
-	}
-
-	st := e.Keymap.States[e.Active]
-	act := st.Keys[key]
-
-	// 1. 处理层切换（不产生意图）
-	if act.Layer != "" {
-		e.Active = act.Layer
-		e.resetLayerTimeout(act.TimeoutMs)
-		UpdateUI()
-		return nil, true
-	}
-
-	// 2. 处理具体动作，产生意图
-	if act.Action != "" {
-		intentObj := actionToIntent(act.Action)
-
-		// 铁律：产生意图后，除非该层标记为 Sticky，否则立刻 Reset 回 NAV
-		if !st.Sticky {
-			e.Reset()
-		} else {
-			// 如果是 Sticky 层，可能需要刷新 UI（如 hint）
-			UpdateUI()
-		}
-		return &intentObj, true
-	}
-
-	return nil, false
-}
-
-// actionToIntent 将动作转换为意图
-func actionToIntent(action string) intent.Intent {
-	intentObj := intent.Intent{
-		Meta: make(map[string]interface{}),
-	}
-
-	switch action {
-	case "pane_left":
-		intentObj.Kind = intent.IntentMove
-		intentObj.Target = intent.SemanticTarget{
-			Kind:      5, // TargetPosition
-			Direction: "left",
-		}
-		intentObj.Meta["motion"] = "left"
-	case "pane_right":
-		intentObj.Kind = intent.IntentMove
-		intentObj.Target = intent.SemanticTarget{
-			Kind:      5, // TargetPosition
-			Direction: "right",
-		}
-		intentObj.Meta["motion"] = "right"
-	case "pane_up":
-		intentObj.Kind = intent.IntentMove
-		intentObj.Target = intent.SemanticTarget{
-			Kind:      5, // TargetPosition
-			Direction: "up",
-		}
-		intentObj.Meta["motion"] = "up"
-	case "pane_down":
-		intentObj.Kind = intent.IntentMove
-		intentObj.Target = intent.SemanticTarget{
-			Kind:      5, // TargetPosition
-			Direction: "down",
-		}
-		intentObj.Meta["motion"] = "down"
-	case "exit":
-		intentObj.Kind = intent.IntentExit
-	case "next_pane":
-		intentObj.Kind = intent.IntentMove
-		intentObj.Target = intent.SemanticTarget{
-			Kind:      5, // TargetPosition
-			Direction: "next",
-		}
-	case "prev_pane":
-		intentObj.Kind = intent.IntentMove
-		intentObj.Target = intent.SemanticTarget{
-			Kind:      5, // TargetPosition
-			Direction: "prev",
-		}
-	default:
-		// 对于未知动作，返回空意图
-		intentObj.Kind = intent.IntentNone
-	}
-
-	return intentObj
-}
 
 func tmux(cmd string) {
 	// Use GlobalBackend to execute the command
@@ -322,6 +267,7 @@ func EnterFSM() {
 	engine.Active = "NAV"
 	// 确保进入时是干净的 NAV
 	engine.Reset()
+	engine.emitInternal(RawToken{Kind: TokenSystem, Value: "enter"})
 	// ShowUI() // Disable initial UI popup to prevent flashing/annoyance
 }
 
@@ -333,6 +279,7 @@ func GetDefaultEngine() *Engine {
 func ExitFSM() {
 	if defaultEngine != nil {
 		defaultEngine.Reset()
+		defaultEngine.emitInternal(RawToken{Kind: TokenSystem, Value: "exit"})
 	}
 	HideUI()
 	// FSM 不应直接依赖 backend

@@ -20,7 +20,52 @@ const (
 	IntentRepeat
 	IntentFind
 	IntentExit
+	IntentCount
+	IntentOperator
+	IntentMotion
 )
+
+// OperatorKind 操作符类型
+type OperatorKind int
+
+const (
+	OpMove OperatorKind = iota
+	OpDelete
+	OpYank
+	OpChange
+)
+
+// MotionKind 动作类型
+type MotionKind int
+
+const (
+	MotionChar MotionKind = iota
+	MotionWord
+	MotionLine
+	MotionGoto
+	MotionFind
+)
+
+// RangeType 范围类型
+type RangeType int
+
+const (
+	Exclusive RangeType = iota
+	Inclusive
+	LineWise
+)
+
+// Intent 意图结构（用于执行层）
+type Intent struct {
+	Kind         IntentKind             `json:"kind"`
+	Target       SemanticTarget         `json:"target"`
+	Count        int                    `json:"count"`
+	Meta         map[string]interface{} `json:"meta,omitempty"`
+	PaneID       string                 `json:"pane_id"`
+	SnapshotHash string                 `json:"snapshot_hash"` // Phase 6.2
+	AllowPartial bool                   `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
+	Anchors      []Anchor               `json:"anchors,omitempty"` // Phase 11.0: Support for multi-cursor / multi-selection
+}
 
 // SemanticTarget 语义目标（而非物理位置）
 type SemanticTarget struct {
@@ -41,17 +86,7 @@ type Anchor struct {
 	End    int         `json:"end,omitempty"`     // Phase 11: End position in line
 }
 
-// Intent 意图结构
-type Intent struct {
-	Kind         IntentKind             `json:"kind"`
-	Target       SemanticTarget         `json:"target"`
-	Count        int                    `json:"count"`
-	Meta         map[string]interface{} `json:"meta,omitempty"`
-	PaneID       string                 `json:"pane_id"`
-	SnapshotHash string                 `json:"snapshot_hash"` // Phase 6.2
-	AllowPartial bool                   `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
-	Anchors      []Anchor               `json:"anchors,omitempty"` // Phase 11.0: Support for multi-cursor / multi-selection
-}
+
 
 // GetPaneID 获取面板ID
 func (i Intent) GetPaneID() string {
@@ -67,3 +102,4 @@ func (i Intent) GetSnapshotHash() string {
 func (i Intent) IsPartialAllowed() bool {
 	return i.AllowPartial
 }
+

@@ -1,7 +1,9 @@
 package kernel
 
 import (
+	"tmux-fsm/fsm"
 	"tmux-fsm/intent"
+	"tmux-fsm/planner"
 )
 
 type DecisionKind int
@@ -17,19 +19,50 @@ type Decision struct {
 	Intent *intent.Intent
 }
 
+// GrammarEmitter 用于将 Grammar 的结果传递给 Kernel
+type GrammarEmitter struct {
+	grammar *planner.Grammar
+	callback func(*intent.Intent)
+}
+
+func (g *GrammarEmitter) Emit(token fsm.RawToken) {
+	intent := g.grammar.Consume(token)
+	if intent != nil && g.callback != nil {
+		g.callback(intent)
+	}
+}
+
 func (k *Kernel) Decide(key string) *Decision {
 	// ✅ 1. FSM 永远先拿 key
 	if k.FSM != nil {
-		intent, ok := k.FSM.Produce(key)
-		if ok && intent != nil {
+		var lastIntent *intent.Intent
+
+		// 创建一个 GrammarEmitter 来处理 token
+		grammarEmitter := &GrammarEmitter{
+			grammar: k.Grammar,
+			callback: func(intent *intent.Intent) {
+				lastIntent = intent
+			},
+		}
+
+		// 添加 GrammarEmitter 到 FSM
+		k.FSM.AddEmitter(grammarEmitter)
+
+		// 让 FSM 处理按键
+		dispatched := k.FSM.Dispatch(key)
+
+		// 移除 GrammarEmitter
+		k.FSM.RemoveEmitter(grammarEmitter)
+
+		if dispatched && lastIntent != nil {
 			return &Decision{
 				Kind:   DecisionFSM,
-				Intent: intent,
+				Intent: lastIntent,
 			}
 		}
-		// 如果FSM明确处理了但不产生意图，说明是层切换等操作
-		if k.FSM.InLayer() && k.FSM.CanHandle(key) {
-			return nil // FSM吞掉按键，不产生决策
+
+		if dispatched {
+			return nil // FSM处理了按键，但没有产生意图
 		}
 	}
 

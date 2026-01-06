@@ -3,11 +3,13 @@ package kernel
 import (
 	"context"
 	"tmux-fsm/fsm"
+	"tmux-fsm/planner"
 )
 
 type Kernel struct {
-	FSM    *fsm.Engine
-	Exec   IntentExecutor
+	FSM     *fsm.Engine
+	Grammar *planner.Grammar
+	Exec    IntentExecutor
 }
 
 // ✅ Kernel 的唯一上下文入口（现在先很薄，未来可扩展）
@@ -17,8 +19,9 @@ type HandleContext struct {
 
 func NewKernel(fsmEngine *fsm.Engine, exec IntentExecutor) *Kernel {
 	return &Kernel{
-		FSM:  fsmEngine,
-		Exec: exec,
+		FSM:     fsmEngine,
+		Grammar: planner.NewGrammar(),
+		Exec:    exec,
 	}
 }
 
