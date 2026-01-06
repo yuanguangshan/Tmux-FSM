@@ -2,6 +2,7 @@ package manager
 
 import (
 	"fmt"
+	"tmux-fsm/intent"
 	"tmux-fsm/weaver/adapter"
 	"tmux-fsm/weaver/core"
 	"tmux-fsm/weaver/logic"
