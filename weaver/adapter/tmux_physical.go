@@ -432,17 +432,6 @@ func findBracketRange(line string, x int, motion string, around bool) (int, int)
 
 // PerformPhysicalRawInsert 物理插入原始文本
 func PerformPhysicalRawInsert(text, targetPane string) {
-	// 使用管道 load-buffer 是最健壮的，彻底避免 '?' 乱码问题
-	cmd := exec.Command("tmux", "load-buffer", "-")
-	cmd.Stdin = strings.NewReader(text)
-	cmd.Run()
-
-	// 确保粘贴到目标
-	exec.Command("tmux", "paste-buffer", "-t", targetPane).Run()
-}
-
-// PerformPhysicalRawInsert 物理插入原始文本
-func PerformPhysicalRawInsert(text, targetPane string) {
 	// 使用 set-buffer + paste-buffer 是最稳健的，避免 shell 转义问题
 	exec.Command("tmux", "set-buffer", "--", text).Run()
 	exec.Command("tmux", "paste-buffer", "-t", targetPane).Run()

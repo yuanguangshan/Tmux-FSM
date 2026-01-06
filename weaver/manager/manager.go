@@ -125,23 +125,51 @@ func (m *WeaverManager) Process(intent *intent.Intent) error {
 
 // convertToCoreIntent 将统一的intent.Intent转换为core.Intent
 func convertToCoreIntent(intent *intent.Intent) core.Intent {
-	return &intentAdapter{
-		intent: Intent{
-			Kind:         IntentKind(intent.Kind),
-			Target:       SemanticTarget{
-				Kind:      TargetKind(0), // 简化处理
-				Direction: intent.Target.Direction,
-				Scope:     intent.Target.Scope,
-				Value:     intent.Target.Value,
-			},
-			Count:        intent.Count,
-			Meta:         intent.Meta,
-			PaneID:       intent.PaneID,
-			SnapshotHash: intent.SnapshotHash,
-			AllowPartial: intent.AllowPartial,
-			Anchors:      []Anchor{}, // 简化处理
-		},
+	// 由于不能直接访问main.Intent，我们需要创建一个适配器
+	return &intentAdapter{intent: intent}
+}
+
+// intentAdapter 适配器
+type intentAdapter struct {
+	intent *intent.Intent
+}
+
+func (a *intentAdapter) GetKind() core.IntentKind {
+	return core.IntentKind(a.intent.Kind)
+}
+
+func (a *intentAdapter) GetTarget() core.SemanticTarget {
+	return core.SemanticTarget{
+		Kind:      int(a.intent.Target.Kind), // 使用intent中的Kind值
+		Direction: a.intent.Target.Direction,
+		Scope:     a.intent.Target.Scope,
+		Value:     a.intent.Target.Value,
 	}
+}
+
+func (a *intentAdapter) GetCount() int {
+	return a.intent.Count
+}
+
+func (a *intentAdapter) GetMeta() map[string]interface{} {
+	return a.intent.Meta
+}
+
+func (a *intentAdapter) GetPaneID() string {
+	return a.intent.PaneID
+}
+
+func (a *intentAdapter) GetSnapshotHash() string {
+	return a.intent.SnapshotHash
+}
+
+func (a *intentAdapter) IsPartialAllowed() bool {
+	return a.intent.AllowPartial
+}
+
+func (a *intentAdapter) GetAnchors() []core.Anchor {
+	// 简化处理，返回空切片
+	return []core.Anchor{}
 }
 
 // GetWeaverManager 获取全局 Weaver 管理器实例

@@ -3,6 +3,7 @@ package fsm
 import (
 	"fmt"
 	"time"
+	"tmux-fsm/intent"
 )
 
 // Engine FSM 引擎结构体
@@ -218,12 +219,6 @@ func (e *Engine) Produce(key string) (*intent.Intent, bool) {
 	return nil, false
 }
 
-import (
-	"fmt"
-	"time"
-	"tmux-fsm/intent"
-)
-
 // actionToIntent 将动作转换为意图
 func actionToIntent(action string) intent.Intent {
 	intentObj := intent.Intent{
@@ -312,5 +307,6 @@ func ExitFSM() {
 		defaultEngine.Reset()
 	}
 	HideUI()
-	backend.GlobalBackend.UnsetUserOption("key-table")
+	// FSM 不应直接依赖 backend
+	// 执行层的退出逻辑应该由上层处理
 }

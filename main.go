@@ -95,7 +95,21 @@ func (a *intentAdapter) IsPartialAllowed() bool {
 }
 
 func (a *intentAdapter) GetAnchors() []core.Anchor {
-	return a.intent.GetAnchors()
+	// 将 main.Anchor 转换为 core.Anchor
+	anchors := a.intent.GetAnchors()
+	coreAnchors := make([]core.Anchor, len(anchors))
+	for i, anchor := range anchors {
+		coreAnchors[i] = core.Anchor{
+			PaneID: anchor.PaneID,
+			Kind:   core.AnchorKind(anchor.Kind), // 假设Kind是int类型
+			Ref:    anchor.Ref,
+			Hash:   anchor.Hash,
+			LineID: core.LineID(anchor.LineID),
+			Start:  anchor.Start,
+			End:    anchor.End,
+		}
+	}
+	return coreAnchors
 }
 
 // ProcessIntentGlobal 全局意图处理入口
