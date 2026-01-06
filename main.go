@@ -107,7 +107,7 @@ type ServerConfig struct {
 
 // Server 服务器结构
 type Server struct {
-	cfg    ServerConfig
+	cfg ServerConfig
 	// kernel *kernel.Kernel  // Temporarily disabled
 }
 
@@ -166,6 +166,12 @@ func (s *Server) handleClient(conn net.Conn) {
 	// Check if this is a key dispatch request first
 	if in.Meta != nil {
 		if key, ok := in.Meta["key"].(string); ok {
+			// ✅ Phase‑4 边界：非键盘事件，直接忽略
+			if key == "" {
+				log.Printf("[server] empty key event ignored")
+				return
+			}
+
 			// Use kernel to handle key dispatch
 			if kernelInstance != nil {
 				hctx := kernel.HandleContext{Ctx: context.Background()}
