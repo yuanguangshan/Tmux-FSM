@@ -82,14 +82,35 @@ func (e *Engine) Dispatch(key string) bool {
 	return false
 }
 
-// Reset 重置引擎状态到 NAV 层
+// Reset 重置引擎状态到初始层（Invariant 8: Reload = FSM 重生）
 func (e *Engine) Reset() {
-	e.Active = "NAV"
 	if e.layerTimer != nil {
 		e.layerTimer.Stop()
+		e.layerTimer = nil
 	}
-	// 执行重置通常意味着退出特定层级的 UI 显示
-	HideUI()
+	// 重置到初始状态
+	if e.Keymap != nil && e.Keymap.Initial != "" {
+		e.Active = e.Keymap.Initial
+	} else {
+		e.Active = "NAV"
+	}
+	UpdateUI()
+}
+
+// Reload 重新加载keymap并重置FSM（Invariant 8: Reload = atomic rebuild）
+func Reload(configPath string) error {
+	// Load + Validate
+	if err := LoadKeymap(configPath); err != nil {
+		return err
+	}
+
+	// NewEngine
+	InitEngine(&KM)
+
+	// Reset + UI refresh
+	Reset()
+
+	return nil
 }
 
 // GetActiveLayer 获取当前层名称

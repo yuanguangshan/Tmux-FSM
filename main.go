@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"tmux-fsm/bridge"
+	"tmux-fsm/fsm"
 	"tmux-fsm/intent"
 	"tmux-fsm/weaver/core"
 	"tmux-fsm/weaver/manager"
@@ -45,10 +47,33 @@ func main() {
 	serverMode := flag.Bool("server", false, "run as server")
 	socketPath := flag.String("socket", "/tmp/tmux-fsm.sock", "socket path")
 	debugMode := flag.Bool("debug", false, "enable debug logging")
+	configPath := flag.String("config", "./keymap.yaml", "path to keymap configuration file")
+	reloadFlag := flag.Bool("reload", false, "reload keymap configuration")
 	flag.Parse()
+
+	// Load keymap configuration
+	if err := fsm.LoadKeymap(*configPath); err != nil {
+		log.Printf("Warning: Failed to load keymap from %s: %v", *configPath, err)
+		// Continue with default keymap if available
+	} else {
+		log.Printf("Successfully loaded keymap from %s", *configPath)
+	}
+
+	// Initialize FSM engine with loaded keymap
+	fsm.InitEngine(&fsm.KM)
 
 	// 初始化 Weaver 系统
 	manager.InitWeaver(manager.ModeWeaver) // 默认启用 Weaver 模式
+
+	if *reloadFlag {
+		// Invariant 8: Reload = atomic rebuild
+		// 使用统一的Reload函数
+		if err := fsm.Reload(*configPath); err != nil {
+			log.Fatalf("reload failed: %v", err) // Invariant 10: error = reject running
+		}
+		log.Println("Keymap reloaded successfully")
+		os.Exit(0)
+	}
 
 	if *debugMode {
 		log.SetFlags(log.LstdFlags | log.Lshortfile) // Include file and line info in logs
@@ -131,6 +156,14 @@ func (s *Server) handleClient(conn net.Conn) {
 		in.Kind, in.Count,
 	)
 
+	// Invariant 1: FSM has absolute priority on key events
+	// Check if this is a key dispatch request first
+	if bridge.HandleIntent(in) {
+		// If FSM consumed the intent, return without processing further
+		return
+	}
+
+	// If FSM didn't consume the key, process as regular intent
 	if err := ProcessIntentGlobal(in); err != nil {
 		log.Printf("[server] ProcessIntentGlobal error: %v", err)
 	}

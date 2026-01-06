@@ -20,7 +20,8 @@ type StateDef struct {
 }
 
 type Keymap struct {
-	States map[string]StateDef `yaml:"states"`
+	Initial string              `yaml:"initial"`
+	States  map[string]StateDef `yaml:"states"`
 }
 
 // Validate 验证 keymap 配置的正确性
