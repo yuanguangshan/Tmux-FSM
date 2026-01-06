@@ -35,7 +35,23 @@ fi
 
 # 停止可能正在运行的旧版本守护进程 (Critical for Daemon update)
 echo "Stopping running daemons..."
-pkill -f "tmux-fsm -server" 2>/dev/null || true
+
+# Try to kill using PID file first (most reliable)
+if [ -f "/tmp/tmux-fsm.pid" ]; then
+    PID=$(cat /tmp/tmux-fsm.pid)
+    if kill -0 "$PID" 2>/dev/null; then
+        echo "Killing daemon with PID: $PID"
+        kill -9 "$PID" 2>/dev/null || true
+    fi
+    rm -f "/tmp/tmux-fsm.pid"
+fi
+
+# Fallback: kill any remaining tmux-fsm processes
+pkill -9 -f "[/]tmux-fsm" 2>/dev/null || true
+
+# Double check that no processes remain
+sleep 0.1
+pkill -9 -f "[/]tmux-fsm" 2>/dev/null || true
 
 echo "Installing to: $TMUX_FSM_DIR"
 mkdir -p "$TMUX_FSM_DIR"

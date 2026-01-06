@@ -248,15 +248,6 @@ func tmux(cmd string) {
 	// 实际执行应该由上层处理
 }
 
-// Invariant: FSM.Dispatch MUST only be called by bridge.HandleIntent
-// This ensures single source of truth for key consumption semantics
-// 全局函数，支持在其他包调用
-func Dispatch(key string) bool {
-	if defaultEngine == nil {
-		return false
-	}
-	return defaultEngine.Dispatch(key)
-}
 
 func EnterFSM() {
 	if defaultEngine == nil {

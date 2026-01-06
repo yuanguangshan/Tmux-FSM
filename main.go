@@ -132,6 +132,15 @@ func main() {
 		if *debugMode {
 			log.Printf("[DEBUG] Starting server on %s", *socketPath)
 		}
+		log.Printf("[server] tmux-fsm daemon starting: %s", time.Now().Format(time.RFC3339))
+
+		// Write PID file for reliable process management
+		pid := os.Getpid()
+		pidPath := "/tmp/tmux-fsm.pid"
+		if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil {
+			log.Printf("[server] warning: could not write PID file: %v", err)
+		}
+
 		srv := NewServer(ServerConfig{
 			SocketPath: *socketPath,
 		})
@@ -262,6 +271,8 @@ func (s *Server) handleSignals(ctx context.Context, ln net.Listener) {
 	case <-ctx.Done():
 	case sig := <-ch:
 		log.Printf("[server] signal received: %v\n", sig)
+		// Clean up PID file
+		os.Remove("/tmp/tmux-fsm.pid")
 	}
 
 	_ = ln.Close()
