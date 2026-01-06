@@ -11,15 +11,18 @@ import (
 	"syscall"
 	"time"
 
-	"tmux-fsm/bridge"
 	"tmux-fsm/fsm"
 	"tmux-fsm/intent"
+	"tmux-fsm/kernel"
 	"tmux-fsm/weaver/core"
 	"tmux-fsm/weaver/manager"
 )
 
 // weaverMgr 全局 Weaver 实例
 var weaverMgr *manager.WeaverManager
+
+// kernelInstance 全局 Kernel 实例
+var kernelInstance *kernel.Kernel
 
 // TransactionManager 事务管理器
 type TransactionManager struct {
@@ -61,6 +64,9 @@ func main() {
 
 	// Initialize FSM engine with loaded keymap
 	fsm.InitEngine(&fsm.KM)
+
+	// Initialize kernel with FSM engine
+	kernelInstance = kernel.NewKernel(fsm.GetDefaultEngine(), nil) // Will set executor later
 
 	// 初始化 Weaver 系统
 	manager.InitWeaver(manager.ModeWeaver) // 默认启用 Weaver 模式
@@ -158,9 +164,38 @@ func (s *Server) handleClient(conn net.Conn) {
 
 	// Invariant 1: FSM has absolute priority on key events
 	// Check if this is a key dispatch request first
-	if bridge.HandleIntent(in) {
-		// If FSM consumed the intent, return without processing further
-		return
+	if in.Meta != nil {
+		if key, ok := in.Meta["key"].(string); ok {
+			// Use kernel to handle key dispatch
+			if kernelInstance != nil {
+				hctx := kernel.HandleContext{Ctx: context.Background()}
+				kernelInstance.HandleKey(hctx, key)
+				// If kernel handled the key, return without processing further
+				return
+			}
+		}
+		// Check for reload command
+		if cmd, ok := in.Meta["command"].(string); ok {
+			if cmd == "reload" {
+				configPath, ok := in.Meta["config_path"].(string)
+				if !ok {
+					configPath = "./keymap.yaml"
+				}
+				// Use unified Reload function
+				if err := fsm.Reload(configPath); err != nil {
+					return
+				}
+				return
+			}
+			if cmd == "nvim-mode" {
+				// Handle Neovim mode changes
+				mode, ok := in.Meta["mode"].(string)
+				if ok {
+					fsm.OnNvimMode(mode)
+				}
+				return
+			}
+		}
 	}
 
 	// If FSM didn't consume the key, process as regular intent

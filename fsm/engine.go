@@ -325,6 +325,11 @@ func EnterFSM() {
 	// ShowUI() // Disable initial UI popup to prevent flashing/annoyance
 }
 
+// GetDefaultEngine 获取默认引擎实例
+func GetDefaultEngine() *Engine {
+	return defaultEngine
+}
+
 func ExitFSM() {
 	if defaultEngine != nil {
 		defaultEngine.Reset()
