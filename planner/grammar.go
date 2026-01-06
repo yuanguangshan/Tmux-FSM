@@ -91,18 +91,27 @@ func (g *Grammar) consumeKey(key string) *intent.Intent {
 
 // ---------- Intent builders ----------
 
-func makeMoveIntent(m intent.MotionKind, count int) *intent.Intent {
-	return &intent.Intent{
+func makeMoveIntent(m intent.MotionKind, count int, key string) *intent.Intent {
+	intentObj := &intent.Intent{
 		Kind:  intent.IntentMove,
 		Count: count,
 		Meta: map[string]interface{}{
 			"motion": m,
 		},
 	}
+
+	// 特殊处理 $ 和 0
+	if key == "$" {
+		intentObj.Meta["motion_special"] = "line_end"
+	} else if key == "0" {
+		intentObj.Meta["motion_special"] = "line_start"
+	}
+
+	return intentObj
 }
 
-func makeOpMotionIntent(op intent.OperatorKind, m intent.MotionKind, count int) *intent.Intent {
-	return &intent.Intent{
+func makeOpMotionIntent(op intent.OperatorKind, m intent.MotionKind, count int, key string) *intent.Intent {
+	intentObj := &intent.Intent{
 		Kind:  intent.IntentOperator,
 		Count: count,
 		Meta: map[string]interface{}{
@@ -110,6 +119,15 @@ func makeOpMotionIntent(op intent.OperatorKind, m intent.MotionKind, count int) 
 			"motion":   m,
 		},
 	}
+
+	// 特殊处理 $ 和 0
+	if key == "$" {
+		intentObj.Meta["motion_special"] = "line_end"
+	} else if key == "0" {
+		intentObj.Meta["motion_special"] = "line_start"
+	}
+
+	return intentObj
 }
 
 func makeLineIntent(op intent.OperatorKind, count int) *intent.Intent {
@@ -175,7 +193,9 @@ func parseMotion(key string) (intent.MotionKind, bool) {
 		return intent.MotionLine, true
 	case "w", "b", "e":
 		return intent.MotionWord, true
-	case "$", "0":
+	case "$":
+		return intent.MotionChar, true
+	case "0":
 		return intent.MotionChar, true
 	case "G":
 		return intent.MotionGoto, true

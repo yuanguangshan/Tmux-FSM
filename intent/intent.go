@@ -25,6 +25,7 @@ const (
 	IntentMotion
 )
 
+
 // OperatorKind 操作符类型
 type OperatorKind int
 
