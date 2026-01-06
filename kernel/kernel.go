@@ -3,15 +3,11 @@ package kernel
 import (
 	"context"
 	"tmux-fsm/fsm"
-  "tmux-fsm/weaver/core"
-"tmux-fsm/weaver/adapter"
-)
-
 )
 
 type Kernel struct {
 	FSM    *fsm.Engine
-	Weaver *weaver.Manager
+	// Weaver *WeaverManager  // Temporarily disabled to avoid import issues
 }
 
 // ✅ Kernel 的唯一上下文入口（现在先很薄，未来可扩展）
@@ -19,10 +15,10 @@ type HandleContext struct {
 	Ctx context.Context
 }
 
-func NewKernel(fsmEngine *fsm.Engine, weaverMgr *weaver.Manager) *Kernel {
+func NewKernel(fsmEngine *fsm.Engine, weaverMgr interface{}) *Kernel {
 	return &Kernel{
-		FSM:    fsmEngine,
-		Weaver: weaverMgr,
+		FSM: fsmEngine,
+		// Weaver: weaverMgr,  // Temporarily disabled
 	}
 }
 
@@ -35,5 +31,5 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 		return
 	}
 
-	_ = k.Execute(decision)
+	k.Execute(decision)
 }

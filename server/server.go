@@ -7,8 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"tmux-fsm/kernel"
-	"tmux-fsm/weaver/adapter"
 )
 
 type Config struct {
@@ -17,13 +15,12 @@ type Config struct {
 
 type Server struct {
 	cfg    Config
-	kernel *kernel.Kernel
+	// kernel *kernel.Kernel  // Temporarily disabled
 }
 
 func New(cfg Config) *Server {
 	return &Server{
-		cfg:    cfg,
-		kernel: kernel.New(),
+		cfg: cfg,
 	}
 }
 
@@ -53,14 +50,14 @@ func (s *Server) Run(ctx context.Context) error {
 func (s *Server) handleClient(conn net.Conn) {
 	defer conn.Close()
 
-	key, err := protocol.ReadKey(conn)
-	if err != nil {
-		log.Printf("[server] read error: %v\n", err)
-		return
-	}
+	// key, err := protocol.ReadKey(conn)  // Temporarily disabled
+	// if err != nil {
+	// 	log.Printf("[server] read error: %v\n", err)
+	// 	return
+	// }
 
 	// ✅ 关键点：Server 不做任何 if / else 判断
-	s.kernel.HandleKey(key)
+	// s.kernel.HandleKey(kernel.HandleContext{Ctx: context.Background()}, key)  // Temporarily disabled
 }
 
 func (s *Server) handleSignals(ctx context.Context, ln net.Listener) {

@@ -4,6 +4,27 @@ import (
 	"errors"
 )
 
+// AnchorKind 锚点类型
+type AnchorKind int
+
+const (
+	AnchorNone AnchorKind = iota
+	AnchorAtCursor
+	AnchorWord
+	AnchorLine
+	AnchorAbsolute
+	AnchorLegacyRange
+)
+
+// SafetyLevel 安全级别
+type SafetyLevel int
+
+const (
+	SafetyExact SafetyLevel = iota
+	SafetyFuzzy
+	SafetyUnsafe
+)
+
 // ErrWorldDrift 世界漂移错误（快照不匹配）
 // 表示 Intent 基于的历史与当前现实不一致
 var ErrWorldDrift = errors.New("world drift: snapshot mismatch")
@@ -73,9 +94,10 @@ type TransactionID string
 
 // VerificationResult for verifier
 type VerificationResult struct {
-    Safe  bool
-    Level SafetyLevel
-    Err   error
+    OK      bool
+    Safety  SafetyLevel
+    Diffs   []SnapshotDiff
+    Message string
 }
 
 // Verdict 裁决结果（可审计输出）

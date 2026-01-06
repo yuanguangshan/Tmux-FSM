@@ -142,7 +142,7 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 	preSnapshot := snapshot
 
 	// 5. Project: Execute
-	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
+	if _, err := e.projection.Apply(nil, resolvedFacts); err != nil {
 		audit = append(audit, AuditEntry{Step: "Project", Result: fmt.Sprintf("Error: %v", err)})
 		return &Verdict{Kind: VerdictBlocked, Audit: audit}, err
 	}
@@ -228,7 +228,7 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 	if len(resolvedFacts) > 0 {
 		log.Printf("[WEAVER] Undo: Applying %d inverse facts. Text length: %d chars.", len(resolvedFacts), len(resolvedFacts[0].Payload.Text))
 	}
-	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
+	if _, err := e.projection.Apply(nil, resolvedFacts); err != nil {
 		e.history.PushBack(tx)
 		return nil, err
 	}
@@ -293,7 +293,7 @@ func (e *ShadowEngine) performRedo() (*Verdict, error) {
 	}
 
 	// Apply
-	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
+	if _, err := e.projection.Apply(nil, resolvedFacts); err != nil {
 		e.history.AddRedo(tx)
 		return nil, err
 	}

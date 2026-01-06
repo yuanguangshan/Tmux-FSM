@@ -50,7 +50,21 @@ func (r *NoopResolver) ResolveFacts(facts []core.Fact, expectedHash string) ([]c
 type NoopProjection struct{}
 
 // Apply 空实现（不执行任何操作）
-func (p *NoopProjection) Apply(resolved []core.ResolvedAnchor, facts []core.ResolvedFact) error {
+func (p *NoopProjection) Apply(resolved []core.ResolvedAnchor, facts []core.ResolvedFact) ([]core.UndoEntry, error) {
 	// Shadow 模式：不执行任何操作
+	return []core.UndoEntry{}, nil
+}
+
+// Rollback 空实现（不执行任何操作）
+func (p *NoopProjection) Rollback(log []core.UndoEntry) error {
+	// No-op
 	return nil
+}
+
+// Verify 空实现（总是成功）
+func (p *NoopProjection) Verify(pre core.Snapshot, facts []core.ResolvedFact, post core.Snapshot) core.VerificationResult {
+	return core.VerificationResult{
+		OK:      true,
+		Message: "No-op verification always passes",
+	}
 }

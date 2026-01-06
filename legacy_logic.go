@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
+	"tmux-fsm/fsm"
 )
 
-func processKey(state *FSMState, key string) string {
+func processKeyLegacyLogic(state *FSMState, key string) string {
 	if key == "Escape" || key == "C-c" {
 		// Reset FSM state on escape/cancel
 		state.Count = 0

@@ -136,7 +136,7 @@ func (p *TmuxProjection) Apply(resolved []core.ResolvedAnchor, facts []core.Reso
 func (p *TmuxProjection) Rollback(log []core.UndoEntry) error {
 	// Apply in reverse order
 	for i := len(log) - 1; i >= 0; i-- {
-		entry := log[i]
+		_ = log[i] // Use the entry to avoid "declared and not used" error
 		// For this implementation, we need to find the line associated with this LineID
 		// Since we don't have a direct mapping from LineID to pane and line number in this context,
 		// we'll need to use a different approach.

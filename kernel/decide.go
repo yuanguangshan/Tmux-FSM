@@ -1,9 +1,5 @@
 package kernel
 
-import (
-	"tmux-fsm/weaver/logic"
-)
-
 type DecisionKind int
 
 const (
@@ -13,19 +9,19 @@ const (
 )
 
 type Decision struct {
-	Kind   DecisionKind
-	Intent *intent.Intent
+	Kind DecisionKind
+	// Intent *intent.Intent  // Temporarily disabled
 }
 
 func (k *Kernel) Decide(key string) *Decision {
 	// ✅ 1. FSM 永远先拿 key
 	if k.FSM != nil {
 		if k.FSM.InLayer() && k.FSM.CanHandle(key) {
-			intent := k.FSM.Dispatch(key)
-			if intent != nil {
+			handled := k.FSM.Dispatch(key)
+			if handled {
 				return &Decision{
-					Kind:   DecisionFSM,
-					Intent: intent,
+					Kind: DecisionFSM,
+					// Intent: intent,  // Temporarily disabled
 				}
 			}
 			// FSM 明确吞掉
@@ -34,13 +30,13 @@ func (k *Kernel) Decide(key string) *Decision {
 	}
 
 	// ✅ 2. Legacy decoder（复用你现有逻辑）
-	legacyIntent := DecodeLegacyKey(key)
-	if legacyIntent != nil {
-		return &Decision{
-			Kind:   DecisionLegacy,
-			Intent: legacyIntent,
-		}
-	}
+	// legacyIntent := DecodeLegacyKey(key)  // Temporarily disabled
+	// if legacyIntent != nil {
+	// 	return &Decision{
+	// 		Kind:   DecisionLegacy,
+	// 		Intent: legacyIntent,
+	// 	}
+	// }
 
 	return nil
 }
