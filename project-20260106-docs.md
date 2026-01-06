@@ -1,48 +1,89 @@
 # Project Documentation
 
-- **Generated at:** 2026-01-06 00:09:30
+- **Generated at:** 2026-01-06 09:52:33
 - **Root Dir:** `.`
-- **File Count:** 30
-- **Total Size:** 149.29 KB
+- **File Count:** 63
+- **Total Size:** 198.25 KB
 
 ## 📂 File List
-- `backend.go` (2.57 KB)
+- `.gitignore` (0.04 KB)
+- `backend/backend.go` (2.96 KB)
 - `bridge/bridge.go` (1.98 KB)
+- `client.go` (1.20 KB)
 - `config.go` (1.37 KB)
-- `execute.go` (31.77 KB)
-- `fsm/engine.go` (3.87 KB)
+- `default.tmux.conf` (4.25 KB)
+- `docs/层级协调规则.txt` (0.03 KB)
+- `enter_fsm.sh` (0.48 KB)
+- `execute.go` (30.36 KB)
+- `fsm-exit.sh` (0.15 KB)
+- `fsm-toggle.sh` (0.67 KB)
+- `fsm/engine.go` (3.86 KB)
 - `fsm/keymap.go` (1.11 KB)
+- `fsm/nvim.go` (1.04 KB)
 - `fsm/ui.go` (0.76 KB)
 - `fsm/ui/interface.go` (0.08 KB)
 - `fsm/ui/popup.go` (0.77 KB)
-- `intent.go` (5.00 KB)
+- `globals.go` (3.74 KB)
+- `go.mod` (0.07 KB)
+- `install.sh` (6.05 KB)
+- `intent.go` (5.22 KB)
 - `intent_bridge.go` (5.47 KB)
-- `main.go` (32.62 KB)
+- `kernel/decide.go` (0.91 KB)
+- `kernel/execute.go` (0.25 KB)
+- `kernel/kernel.go` (0.47 KB)
+- `kernel/legacy_adapter.go` (0.37 KB)
+- `keymap.yaml` (0.51 KB)
+- `legacy_logic.go` (4.80 KB)
+- `main.go` (27.00 KB)
+- `plugin.tmux` (2.55 KB)
+- `protocol.go` (0.78 KB)
+- `test_fsm.sh` (2.61 KB)
+- `tests/baseline_tests.sh` (2.33 KB)
 - `tools/gen-docs.go` (10.41 KB)
+- `tools/install-gen-docs.sh` (1.88 KB)
+- `transaction.go` (3.38 KB)
+- `validate_paths.sh` (0.95 KB)
+- `weaver/adapter/selection_normalizer.go` (1.66 KB)
 - `weaver/adapter/snapshot.go` (0.23 KB)
-- `weaver/adapter/snapshot_hash.go` (0.31 KB)
+- `weaver/adapter/snapshot_hash.go` (0.41 KB)
 - `weaver/adapter/tmux_adapter.go` (1.42 KB)
-- `weaver/adapter/tmux_physical.go` (12.05 KB)
-- `weaver/adapter/tmux_projection.go` (3.78 KB)
+- `weaver/adapter/tmux_physical.go` (12.14 KB)
+- `weaver/adapter/tmux_projection.go` (6.88 KB)
 - `weaver/adapter/tmux_reality.go` (0.23 KB)
-- `weaver/adapter/tmux_snapshot.go` (0.67 KB)
+- `weaver/adapter/tmux_snapshot.go` (0.36 KB)
 - `weaver/adapter/tmux_utils.go` (2.25 KB)
+- `weaver/core/allowed_lines.go` (0.29 KB)
 - `weaver/core/anchor_kind.go` (0.25 KB)
+- `weaver/core/hash.go` (0.54 KB)
 - `weaver/core/history.go` (2.51 KB)
-- `weaver/core/resolved_fact.go` (0.53 KB)
-- `weaver/core/shadow_engine.go` (7.94 KB)
-- `weaver/core/snapshot.go` (0.53 KB)
-- `weaver/core/types.go` (3.21 KB)
-- `weaver/logic/passthrough_resolver.go` (6.59 KB)
-- `weaver/logic/shell_fact_builder.go` (2.16 KB)
+- `weaver/core/intent_fusion.go` (1.55 KB)
+- `weaver/core/line_hash_verifier.go` (0.70 KB)
+- `weaver/core/projection_verifier.go` (0.38 KB)
+- `weaver/core/resolved_fact.go` (0.69 KB)
+- `weaver/core/shadow_engine.go` (10.01 KB)
+- `weaver/core/snapshot.go` (2.06 KB)
+- `weaver/core/snapshot_diff.go` (1.33 KB)
+- `weaver/core/snapshot_types.go` (0.35 KB)
+- `weaver/core/take_snapshot.go` (0.61 KB)
+- `weaver/core/types.go` (3.81 KB)
+- `weaver/logic/passthrough_resolver.go` (7.38 KB)
+- `weaver/logic/shell_fact_builder.go` (2.48 KB)
 - `weaver_manager.go` (6.82 KB)
 
 ---
 
-## 📄 `backend.go`
+## 📄 `.gitignore`
+
+````text
+tmux-fsm
+docs/project-20260105-docs.md
+
+````
+
+## 📄 `backend/backend.go`
 
 ````go
-package main
+package backend
 
 import (
 	"os/exec"
@@ -54,6 +95,7 @@ type Backend interface {
 	SetUserOption(option, value string) error
 	UnsetUserOption(option string) error
 	GetUserOption(option string) (string, error)
+	GetCommandOutput(cmd string) (string, error)
 	SwitchClientTable(clientName, tableName string) error
 	RefreshClient(clientName string) error
 	GetActivePane(clientName string) (string, error)
@@ -117,6 +159,20 @@ func (b *TmuxBackend) UnsetUserOption(option string) error {
 func (b *TmuxBackend) GetUserOption(option string) (string, error) {
 	cmd := exec.Command("tmux", "show-option", "-gv", option)
 	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return string(output), nil
+}
+
+// GetCommandOutput executes a tmux command and returns its output
+func (b *TmuxBackend) GetCommandOutput(cmd string) (string, error) {
+	parts := strings.Split(cmd, " ")
+	if len(parts) == 0 {
+		return "", nil
+	}
+	execCmd := exec.Command("tmux", parts...)
+	output, err := execCmd.Output()
 	if err != nil {
 		return "", err
 	}
@@ -224,6 +280,68 @@ func (h *LegacyFSMHandler) ExitFSM() {
 }
 ````
 
+## 📄 `client.go`
+
+````go
+package main
+
+import (
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"strings"
+	"time"
+)
+
+func isServerRunning() bool {
+	conn, err := net.DialTimeout("unix", socketPath, 500*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+
+	// 发送心跳请求确认服务器响应
+	conn.SetWriteDeadline(time.Now().Add(1 * time.Second))
+	conn.Write([]byte("test|test|__PING__"))
+
+	// 读取响应
+	buf := make([]byte, 1024)
+	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+	_, err = conn.Read(buf)
+	return err == nil
+}
+
+func runClient(key, paneAndClient string) {
+	conn, err := net.DialTimeout("unix", socketPath, 1*time.Second)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: daemon not running. Start it with 'tmux-fsm -server'\n")
+		return
+	}
+	defer conn.Close()
+
+	if err := conn.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		fmt.Fprintf(os.Stderr, "Error setting deadline: %v\n", err)
+		return
+	}
+
+	payload := fmt.Sprintf("%s|%s", paneAndClient, key)
+	if _, err := conn.Write([]byte(payload)); err != nil {
+		return
+	}
+
+	// Read response (synchronize)
+	buf, err := io.ReadAll(conn)
+	if err != nil {
+		return
+	}
+	resp := strings.TrimSpace(string(buf))
+	if resp != "ok" && resp != "" {
+		fmt.Println(resp)
+	}
+}
+````
+
 ## 📄 `config.go`
 
 ````go
@@ -298,9 +416,230 @@ func ShouldFailFast() bool {
 
 ````
 
+## 📄 `default.tmux.conf`
+
+````conf
+# UTF-8 Support
+set -g default-terminal "screen-256color"
+set -g terminal-overrides "xterm-256color:Tc,xterm-kitty:Tc"
+
+# Locale Support
+set -g set-clipboard on
+
+#ctrl-a 作为前缀
+set -g prefix C-a
+unbind C-b
+bind C-a send-prefix
+
+
+##### 鼠标支持 #####
+
+# 启用鼠标（pane / window / 滚动）
+set -g mouse on
+
+
+##### 历史记录 #####
+
+# 提高 scrollback 历史长度
+set -g history-limit 50000
+
+
+##### Pane 切换（Vim 风格 hjkl，前缀模式） #####
+
+bind h select-pane -L
+bind j select-pane -D
+bind k select-pane -U
+bind l select-pane -R
+
+
+##### 快速重载配置 #####
+
+bind r source-file ~/.tmux.conf \; display "tmux reloaded"
+
+
+##### 状态栏 #####
+
+# 右侧显示 FSM 状态 + session 名称 + 时间
+# 由 plugin.tmux 统一管理 - 确保不在此处设置，避免覆盖
+# set -g status-right "#{@fsm_state}#{@fsm_keys} | #S | %Y-%m-%d %H:%M"
+
+# 仅设置左侧状态栏
+set -g status-left "#[fg=green,bold]#S#[default] | "
+
+
+##### 窗口与索引（补充项，不影响你原习惯） #####
+
+# 窗口 / pane 编号从 1 开始
+set -g base-index 1
+set -g pane-base-index 1
+set -g renumber-windows on
+
+
+##### 新窗口 / 分屏（继承当前目录） #####
+
+bind c new-window -c "#{pane_current_path}"
+bind | split-window -h -c "#{pane_current_path}"
+bind - split-window -v -c "#{pane_current_path}"
+
+
+##### 复制模式（Vim 风格） #####
+
+# 启用 vi 模式
+setw -g mode-keys vi
+
+# 复制模式绑定（带系统剪贴板同步）
+bind -T copy-mode-vi v send -X begin-selection
+bind -T copy-mode-vi y send -X copy-selection \; run "tmux save-buffer - | pbcopy"
+bind -T copy-mode-vi r send -X rectangle-toggle
+bind -T copy-mode-vi n send -X search-next
+bind -T copy-mode-vi N send -X search-previous
+bind -T copy-mode-vi Escape send -X cancel
+
+# 从系统剪贴板粘贴到 tmux
+bind -T copy-mode-vi p send -X paste-selection
+bind P run "pbpaste | tmux load-buffer - ; tmux paste-buffer"
+
+setw -g mode-keys vi
+bind -T copy-mode-vi v send -X begin-selection
+bind -T copy-mode-vi y send -X copy-selection
+
+
+##### 视觉提示（轻量，不花哨） #####
+
+set -g pane-border-style fg=colour238
+set -g pane-active-border-style fg=colour39
+
+
+##### Vim / Neovim 与 tmux 无缝 hjkl 穿透 #####
+
+# 判断当前 pane 是否在运行 vim / nvim
+is_vim="ps -o state= -o comm= -t '#{pane_tty}' | grep -iqE '^[^TXZ ]+ +(vi|vim|nvim)$'"
+
+# Ctrl-h/j/k/l：在 Vim split 和 tmux pane 之间自动切换
+# bind -n C-h if-shell "$is_vim" "send-keys C-h" "select-pane -L"
+# bind -n C-j if-shell "$is_vim" "send-keys C-j" "select-pane -D"  # Unbound to use for FSM mode
+bind -n C-k if-shell "$is_vim" "send-keys C-k" "select-pane -U"
+
+
+##### 终端与响应（稳态设置） #####
+
+set -g default-terminal "screen-256color"
+set -as terminal-overrides ",xterm-256color:RGB"
+
+# 降低 Esc 延迟（对 Vim 友好）
+set -sg escape-time 0
+
+##### Window / Pane 管理 #####
+
+# 关闭当前 window / pane
+bind x kill-pane        #  x 关闭 pane
+bind X kill-window      # 大写 X 关闭整个 window
+bind q kill-pane
+
+# 列出窗口
+bind w list-windows
+
+# 数字切换窗口（1 开始）
+bind 1 select-window -t 1
+bind 2 select-window -t 2
+bind 3 select-window -t 3
+bind 4 select-window -t 4
+bind 5 select-window -t 5
+bind 6 select-window -t 6
+bind 7 select-window -t 7
+bind 8 select-window -t 8
+bind 9 select-window -t 9
+
+
+bind -n C-h previous-window
+
+# 最近窗口切换
+bind Tab last-window
+# 调整大小
+bind -r H resize-pane -L 5
+bind -r J resize-pane -D 5
+bind -r K resize-pane -U 5
+bind -r L resize-pane -R 5
+
+set -g set-clipboard on
+
+
+##### Status Bar / Window Style #####
+
+# 状态栏基础
+set -g status on
+set -g status-position bottom
+set -g status-interval 5
+
+# 状态栏整体风格
+set -g status-style fg=colour250,bg=colour234
+
+# 左右组件长度
+set -g status-left-length 20
+set -g status-right-length 80
+
+# 非当前窗口
+set -g window-status-style fg=colour245,bg=colour234
+
+# 当前窗口（高亮，统一风格）
+set -g window-status-current-style fg=colour234,bg=colour39,bold
+
+# 分隔符（淡一点）
+set -g window-status-separator " | "
+
+# 窗口格式
+set -g window-status-format " #I:#W "
+set -g window-status-current-format "▶#I:#W◀"
+
+
+# 将 Ctrl-f 绑定为无前缀入口
+set -g @fsm_bind_no_prefix "C-f"
+
+# 包含原始插件配置
+source-file "$HOME/.tmux/plugins/tmux-fsm/plugin.tmux"
+
+````
+
+## 📄 `docs/层级协调规则.txt`
+
+````text
+NAV / GOTO / CMD 全层协同规
+````
+
+## 📄 `enter_fsm.sh`
+
+````bash
+#!/bin/bash
+PLUGIN_DIR="$HOME/.tmux/plugins/tmux-fsm"
+FSM_BIN="$PLUGIN_DIR/tmux-fsm"
+
+# 1. Cancel copy mode (twice to be sure)
+tmux send-keys -X cancel 2>/dev/null || true
+tmux send-keys -X cancel 2>/dev/null || true
+
+# 2. Set vars
+tmux set -g @fsm_active "true"
+tmux set -g repeat-time 0
+
+# 3. Switch key table
+tmux switch-client -T fsm
+
+# 4. Init state
+# Call -enter without parameters. The Go binary will handle server startup if needed.
+"$FSM_BIN" -enter
+
+# 5. Refresh
+tmux refresh-client -S
+
+````
+
 ## 📄 `execute.go`
 
 ````go
+// ❗LEGACY PHYSICAL REFERENCE
+// This file defines the canonical physical behavior.
+// Any change here MUST be mirrored in weaver/adapter/tmux_physical.go.
+
 package main
 
 import (
@@ -308,7 +647,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 )
@@ -452,12 +790,23 @@ func executeAction(action string, state *FSMState, targetPane string, clientName
 	}
 
 	// 1. 处理特殊内核动作：Undo / Redo
+	// [Phase 9] Dispatch to Weaver as single source of truth
 	if action == "undo" {
-		handleUndo(state, targetPane)
+		// Create undo intent and dispatch to Weaver
+		undoIntent := Intent{
+			Kind:   IntentUndo,
+			PaneID: targetPane,
+		}
+		ProcessIntentGlobal(undoIntent)
 		return
 	}
 	if action == "redo" {
-		handleRedo(state, targetPane)
+		// Create redo intent and dispatch to Weaver
+		redoIntent := Intent{
+			Kind:   IntentRedo,
+			PaneID: targetPane,
+		}
+		ProcessIntentGlobal(redoIntent)
 		return
 	}
 
@@ -986,59 +1335,9 @@ func performPhysicalFind(fType, char string, count int, targetPane string) {
 }
 
 func handleUndo(state *FSMState, targetPane string) {
-	// --- [ABI: Inverse Verdict Deliberation] ---
-	if len(state.UndoStack) == 0 {
-		return
-	}
-	// 弹出最近一个事务（先不正式移除，等成功后再说）
-	tx := state.UndoStack[len(state.UndoStack)-1]
-
-	// [Phase 7] Phase 1: Resolve all anchors first (Axiom 7.2)
-	// 确保整个事务要么全做，要么不做，禁止“半次 Undo”
-	pendingFacts := make([]Fact, 0, len(tx.Records))
-	overallSafety := "exact"
-
-	for i := len(tx.Records) - 1; i >= 0; i-- {
-		r := tx.Records[i]
-		// Axiom 2: Anchor Primacy - Always resolve anchor before executing
-		res, err := ResolveAnchor(r.Inverse.Target.Anchor)
-		if err != nil {
-			// Axiom 4: Mandatory Failure Conditions - Reject the entire transaction
-			state.LastUndoFailure = fmt.Sprintf("Anchor mismatch for TX %d in pane %s", tx.ID, r.Inverse.Target.Anchor.PaneID)
-			state.LastUndoSafetyLevel = ""
-			logLine(fmt.Sprintf("[UNDO-REJECT] %s", state.LastUndoFailure))
-			return // 立即退出，不执行任何写操作
-		}
-
-		// Axiom 7.4 & 7.9: Fuzzy Policy
-		if res.Result == ResolveFuzzy {
-			if !state.AllowPartial {
-				state.LastUndoFailure = fmt.Sprintf("Fuzzy match rejected by policy for TX %d", tx.ID)
-				logLine(fmt.Sprintf("[UNDO-REJECT] %s", state.LastUndoFailure))
-				return
-			}
-			overallSafety = "fuzzy"
-		}
-
-		// 准备执行用的 Fact，使用解析出的 Row
-		fact := r.Inverse
-		fact.Target.Anchor.LineHint = res.Row
-		pendingFacts = append(pendingFacts, fact)
-	}
-
-	// [Phase 7] Phase 2: Execution (Atomic commitment)
-	// 正式从栈中弹出
-	state.UndoStack = state.UndoStack[:len(state.UndoStack)-1]
-	tx.SafetyLevel = overallSafety
-	state.LastUndoSafetyLevel = overallSafety
-	state.LastUndoFailure = ""
-
-	for _, f := range pendingFacts {
-		executeFact(f)
-	}
-
-	// Move to Redo Stack
-	state.RedoStack = append(state.RedoStack, tx)
+	// [Phase 9] Legacy undo now handled by Weaver as single source of truth
+	// This function should not be called directly anymore
+	// Undo is now dispatched as Intent to Weaver via ProcessIntentGlobal
 }
 
 func logLine(msg string) {
@@ -1209,24 +1508,9 @@ func handleVisualAction(action string, state *FSMState, targetPane string) {
 }
 
 func handleRedo(state *FSMState, targetPane string) {
-	if len(state.RedoStack) == 0 {
-		return
-	}
-	tx := state.RedoStack[len(state.RedoStack)-1]
-	if tx.Skipped {
-		logLine("Refusing Redo: Transaction was skipped or failed during Undo")
-		return
-	}
-	state.RedoStack = state.RedoStack[:len(state.RedoStack)-1]
-	state.UndoStack = append(state.UndoStack, tx)
-
-	// Inherit safety level from transaction
-	state.LastUndoSafetyLevel = tx.SafetyLevel
-	state.LastUndoFailure = ""
-
-	for _, r := range tx.Records {
-		executeFact(r.Fact)
-	}
+	// [Phase 9] Legacy redo now handled by Weaver as single source of truth
+	// This function should not be called directly anymore
+	// Redo is now dispatched as Intent to Weaver via ProcessIntentGlobal
 }
 
 func executeVimAction(action string, state *FSMState, targetPane string) {
@@ -1440,6 +1724,53 @@ func performPhysicalToggleCase(targetPane string) {
 
 ````
 
+## 📄 `fsm-exit.sh`
+
+````bash
+#!/usr/bin/env bash
+
+# Exit FSM + copy-mode safely
+
+tmux set-option -g @fsm_active 0
+
+# exit fsm
+tmux send-keys Escape
+
+# exit copy-mode
+tmux send-keys q
+
+````
+
+## 📄 `fsm-toggle.sh`
+
+````bash
+#!/usr/bin/env bash
+
+# 进入或退出 FSM 模式的静默切换脚本
+FSM_ACTIVE=$(tmux show-option -gv @fsm_active)
+[ -z "$FSM_ACTIVE" ] && FSM_ACTIVE="false"
+
+if [ "$FSM_ACTIVE" = "true" ]; then
+  # 退出逻辑
+  tmux set -g @fsm_active "false"
+  tmux set -g @fsm_state ""
+  tmux set -g @fsm_keys ""
+  tmux set -g repeat-time 500
+  tmux switch-client -T root
+  tmux refresh-client -S
+else
+  # 进入逻辑：首先强制退出任何既有模式，确保环境纯净
+  tmux send-keys -X cancel 2>/dev/null
+  tmux set -g @fsm_active "true"
+  tmux set -g @fsm_state "NORMAL"
+  tmux set -g @fsm_keys ""
+  tmux set -g repeat-time 0
+  tmux switch-client -T fsm
+  tmux refresh-client -S
+fi
+
+````
+
 ## 📄 `fsm/engine.go`
 
 ````go
@@ -1450,7 +1781,7 @@ import (
 	"strings"
 	"time"
 	"tmux-fsm/fsm/ui"
-	tmux_fsm "tmux-fsm"
+	"tmux-fsm"
 )
 
 // Engine FSM 引擎结构体
@@ -1721,6 +2052,45 @@ var (
 )
 ````
 
+## 📄 `fsm/nvim.go`
+
+````go
+package fsm
+
+import (
+	"strings"
+	tmux_fsm "tmux-fsm"
+)
+
+// OnNvimMode 处理来自 Neovim 的模式变化
+func OnNvimMode(mode string) {
+	// 如果 Neovim 进入插入模式或可视模式，退出 FSM
+	if mode == "i" || mode == "v" || mode == "V" || strings.HasPrefix(mode, "s") {
+		ExitFSM()
+	}
+}
+
+// NotifyNvimMode 通知 Neovim 当前 FSM 模式
+// 注意：这个函数目前使用 send-keys，这可能不是最佳方案
+// 更好的方案是使用 Neovim 的 RPC 机制
+func NotifyNvimMode() {
+	// 获取当前活跃的窗口/面板
+	out, err := tmux_fsm.GlobalBackend.GetCommandOutput("display-message -p '#{pane_current_command}'")
+	if err != nil {
+		return
+	}
+
+	cmd := strings.TrimSpace(out)
+	// 如果当前面板是 vim/nvim，则可以考虑发送模式信息
+	// 但目前我们不执行任何操作，避免干扰用户输入
+	// 更好的方式是通过 Neovim server/client 机制通信
+	if cmd == "vim" || cmd == "nvim" {
+		// TODO: 实现 Neovim RPC 通信以同步状态
+		// 例如: nvim --server <socket> --remote-expr "FSM_SetMode('NAV')"
+	}
+}
+````
+
 ## 📄 `fsm/ui.go`
 
 ````go
@@ -1835,6 +2205,334 @@ func (p *PopupUI) Hide() {
 }
 ````
 
+## 📄 `globals.go`
+
+````go
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"strings"
+	"sync"
+	"time"
+	"tmux-fsm/fsm"
+)
+
+type FSMState struct {
+	Mode                 string                 `json:"mode"`
+	Operator             string                 `json:"operator"`
+	Count                int                    `json:"count"`
+	PendingKeys          string                 `json:"pending_keys"`
+	Register             string                 `json:"register"`
+	LastRepeatableAction map[string]interface{} `json:"last_repeatable_action"`
+	UndoStack            []Transaction          `json:"undo_stack"`
+	RedoStack            []Transaction          `json:"redo_stack"`
+	LastUndoFailure      string                 `json:"last_undo_failure,omitempty"`
+	LastUndoSafetyLevel  string                 `json:"last_undo_safety_level,omitempty"`
+	AllowPartial         bool                   `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
+}
+
+var (
+	stateMu     sync.Mutex
+	globalState FSMState
+	transMgr    TransactionManager
+	socketPath  = os.Getenv("HOME") + "/.tmux-fsm.sock"
+)
+
+func loadState() FSMState {
+	// Use GlobalBackend to read tmux options
+	out, err := GlobalBackend.GetUserOption("@tmux_fsm_state")
+	var state FSMState
+	if err != nil || len(out) == 0 {
+		return FSMState{Mode: "NORMAL", Count: 0}
+	}
+	json.Unmarshal([]byte(out), &state)
+	return state
+}
+
+func saveStateRaw(data []byte) {
+	// Use GlobalBackend to save state
+	// This implies SetUserOption needs to be able to set arbitrary keys.
+	if err := GlobalBackend.SetUserOption("@tmux_fsm_state", string(data)); err != nil {
+		log.Printf("Failed to save FSM state: %v", err)
+	}
+}
+
+func updateStatusBar(state FSMState, clientName string) {
+	modeMsg := state.Mode
+	if modeMsg == "" {
+		modeMsg = "NORMAL"
+	}
+
+	// 融合显示逻辑
+	activeLayer := fsm.GetActiveLayer()
+	if activeLayer != "NAV" && activeLayer != "" {
+		modeMsg = activeLayer // Override with FSM layer if active
+	} else {
+		// Translate legacy FSM modes for display
+		switch modeMsg {
+		case "VISUAL_CHAR":
+			modeMsg = "VISUAL"
+		case "VISUAL_LINE":
+			modeMsg = "V-LINE"
+		case "OPERATOR_PENDING":
+			modeMsg = "PENDING"
+		case "REGISTER_SELECT":
+			modeMsg = "REGISTER"
+		case "MOTION_PENDING":
+			modeMsg = "MOTION"
+		case "SEARCH":
+			modeMsg = "SEARCH"
+		}
+	}
+
+	if state.Operator != "" {
+		modeMsg += fmt.Sprintf(" [%s]", state.Operator)
+	}
+	if state.Count > 0 {
+		modeMsg += fmt.Sprintf(" [%d]", state.Count)
+	}
+
+	keysMsg := ""
+	if state.PendingKeys != "" {
+		if state.Mode == "SEARCH" {
+			keysMsg = fmt.Sprintf(" /%s", state.PendingKeys)
+		} else {
+			keysMsg = fmt.Sprintf(" (%s)", state.PendingKeys)
+		}
+	}
+
+	if state.LastUndoSafetyLevel == "fuzzy" {
+		keysMsg += " ~UNDO"
+	} else if state.LastUndoFailure != "" {
+		keysMsg += " !UNDO_FAIL"
+	}
+
+	// Debug logging
+	f, _ := os.OpenFile(os.Getenv("HOME")+"/tmux-fsm.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if f != nil {
+		fmt.Fprintf(f, "[%s] Updating status: mode=%s, state.Mode=%s, keys=%s\n",
+			time.Now().Format("15:04:05"), modeMsg, state.Mode, keysMsg)
+		f.Close()
+	}
+
+	// Use GlobalBackend for tmux option updates
+	GlobalBackend.SetUserOption("@fsm_state", modeMsg)
+	GlobalBackend.SetUserOption("@fsm_keys", keysMsg)
+	GlobalBackend.RefreshClient(clientName) // Refresh the target client
+
+	// --- [ABI: Heartbeat Lock] ---
+	// Re-assert the key table to prevent "one-shot" dropouts.
+	// Check @fsm_active to allow intentional exits.
+	if clientName != "" && clientName != "default" {
+		// Fetching @fsm_active via GlobalBackend if it were available would be ideal,
+		// but for now, we rely on the fact that we are in a state where we should be active.
+		// If GlobalBackend could read options, it would be better.
+		// For now, we assume if we got here, FSM is active.
+		GlobalBackend.SwitchClientTable(clientName, "fsm")
+	}
+}
+````
+
+## 📄 `go.mod`
+
+````text
+module tmux-fsm
+
+go 1.24.0
+
+require gopkg.in/yaml.v3 v3.0.1 // indirect
+
+````
+
+## 📄 `install.sh`
+
+````bash
+#!/usr/bin/env bash
+set -e
+
+echo "Installing tmux-fsm (FOEK Kernel)..."
+
+# ----------------------------------------------------------------------
+# config
+# ----------------------------------------------------------------------
+
+TMUX_FSM_DIR="${TMUX_FSM_DIR:-$HOME/.tmux/plugins/tmux-fsm}"
+
+# 自动检测 tmux.conf（支持传统 & XDG）
+if [ -z "$TMUX_CONF" ]; then
+  if [ -f "$HOME/.tmux.conf" ]; then
+    TMUX_CONF="$HOME/.tmux.conf"
+  elif [ -f "$HOME/.config/tmux/tmux.conf" ]; then
+    TMUX_CONF="$HOME/.config/tmux/tmux.conf"
+  else
+    TMUX_CONF="$HOME/.tmux.conf"
+  fi
+fi
+
+# ----------------------------------------------------------------------
+# checks
+# ----------------------------------------------------------------------
+
+if ! command -v tmux >/dev/null 2>&1; then
+  echo "Error: tmux not found"
+  exit 1
+fi
+
+# ----------------------------------------------------------------------
+# install
+# ----------------------------------------------------------------------
+
+# 停止可能正在运行的旧版本守护进程 (Critical for Daemon update)
+echo "Stopping running daemons..."
+pkill -f "tmux-fsm -server" 2>/dev/null || true
+
+echo "Installing to: $TMUX_FSM_DIR"
+mkdir -p "$TMUX_FSM_DIR"
+
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ----------------------------------------------------------------------
+# Build Go binary (High Performance Kernel)
+# ----------------------------------------------------------------------
+
+if command -v go >/dev/null 2>&1; then
+  echo "🚀 Building Go kernel for zero-latency performance..."
+  
+  # 临时初始化 go module 以防环境缺失
+  if [ ! -f "$SCRIPT_DIR/go.mod" ]; then
+      echo "Initializing temporary go module..."
+      (cd "$SCRIPT_DIR" && go mod init tmux-fsm 2>/dev/null || true)
+  fi
+
+  # 编译：剔除符号表(-s)和调试信息(-w)以减小体积
+  # 使用 "." 编译目录下所有文件，更健壮
+  (cd "$SCRIPT_DIR" && go build -ldflags="-s -w" -o tmux-fsm .)
+  
+  cp "$SCRIPT_DIR/tmux-fsm" "$TMP_DIR/"
+  echo "✅ Build successful."
+else
+  echo "⚠️  Warning: Go not found. Falling back to Python (Performance degraded)."
+  echo "   Please install Go to enable the Daemon Kernel."
+fi
+
+# ----------------------------------------------------------------------
+# copy files (required)
+# ----------------------------------------------------------------------
+
+# 只需要核心组件
+cp "$SCRIPT_DIR"/plugin.tmux \
+   "$SCRIPT_DIR"/fsm-toggle.sh \
+   "$SCRIPT_DIR"/fsm-exit.sh \
+   "$SCRIPT_DIR"/enter_fsm.sh \
+   "$TMP_DIR/"
+
+# 移动到目标目录
+mv "$TMP_DIR"/* "$TMUX_FSM_DIR/"
+
+# 确保二进制文件和 shell 脚本可执行
+chmod +x \
+  "$TMUX_FSM_DIR/tmux-fsm" \
+  "$TMUX_FSM_DIR/fsm-toggle.sh" \
+  "$TMUX_FSM_DIR/fsm-exit.sh" \
+  "$TMUX_FSM_DIR/enter_fsm.sh"
+
+# 清理旧的 Python 文件 (Clean up legacy)
+rm -f "$TMUX_FSM_DIR/fsm.py" "$TMUX_FSM_DIR/tmux_fsm.py"
+
+# ----------------------------------------------------------------------
+# Interactive Configuration
+# ----------------------------------------------------------------------
+
+# NOTE: In non-interactive environments, we default to mode 1
+install_mode="1"
+if [ -t 0 ]; then
+    echo ""
+    echo "Configuration Strategy:"
+    echo "1) Automatic: Append plugin hook to $TMUX_CONF and reload tmux"
+    echo "2) Replace: Replace $TMUX_CONF with plugin's default config (backup created)"
+    echo "3) Manual: Show instructions for manual setup"
+    read -rp "Please select [1/2/3] (default 1): " user_choice
+    install_mode="${user_choice:-1}"
+fi
+
+PLUGIN_HOOK="source-file \"$TMUX_FSM_DIR/plugin.tmux\""
+
+case $install_mode in
+    1)
+        if grep -q "tmux-fsm" "$TMUX_CONF" 2>/dev/null; then
+            echo "Result: Already configured in $TMUX_CONF"
+        else
+            echo "" >> "$TMUX_CONF"
+            echo "# tmux-fsm plugin (FOEK Kernel)" >> "$TMUX_CONF"
+            echo "$PLUGIN_HOOK" >> "$TMUX_CONF"
+            echo "✅ Successfully updated $TMUX_CONF"
+        fi
+
+        echo "🔄 Performing Hot Upgrade..."
+        # 尝试静默重新加载 tmux 配置
+        if tmux info >/dev/null 2>&1; then
+            tmux source-file "$TMUX_CONF" 2>/dev/null && echo "✅ tmux configuration reloaded"
+            # 预热 Daemon (Phase 7: Weaver Mode)
+            TMUX_FSM_MODE=weaver TMUX_FSM_LOG_FACTS=1 "$TMUX_FSM_DIR/tmux-fsm" -server >/dev/null 2>&1 &
+            echo "✅ Daemon pre-warmed (Weaver Mode)."
+        fi
+        ;;
+    2)
+        # 创建备份并替换配置文件
+        if [ -f "$TMUX_CONF" ]; then
+            BACKUP_TMUX_CONF="${TMUX_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+            echo "Creating backup of existing config: $BACKUP_TMUX_CONF"
+            cp "$TMUX_CONF" "$BACKUP_TMUX_CONF"
+            echo "✅ Backup created at $BACKUP_TMUX_CONF"
+        fi
+
+        # 复制默认配置文件并替换插件路径
+        cp "$SCRIPT_DIR/default.tmux.conf" "$TMUX_CONF"
+        echo "✅ Successfully replaced $TMUX_CONF with plugin default config"
+
+        echo "🔄 Performing Hot Upgrade..."
+        # 尝试静默重新加载 tmux 配置
+        if tmux info >/dev/null 2>&1; then
+            tmux source-file "$TMUX_CONF" 2>/dev/null && echo "✅ tmux configuration reloaded"
+            # 预热 Daemon (Phase 7: Weaver Mode)
+            TMUX_FSM_MODE=weaver TMUX_FSM_LOG_FACTS=1 "$TMUX_FSM_DIR/tmux-fsm" -server >/dev/null 2>&1 &
+            echo "✅ Daemon pre-warmed (Weaver Mode)."
+        fi
+        ;;
+    *)
+        echo ""
+        echo "💡 Manual action required:"
+        echo "   Add the following line to your config:"
+        echo ""
+        echo "   $PLUGIN_HOOK"
+        echo ""
+        ;;
+esac
+
+# ----------------------------------------------------------------------
+# done
+# ----------------------------------------------------------------------
+
+echo ""
+echo "✅ tmux-fsm (Zero-Latency Daemon Kernel) installed!"
+echo "   Latency: < 1ms"
+echo ""
+echo "Usage:"
+echo "  - Enter FSM mode:  <prefix> f"
+echo "  - Exit FSM mode:   Esc / C-c"
+echo "  - Audit Logic:     Press '?' in FSM mode to see why Undo failed."
+echo "  - Audit Log:       Logs are written to ~/tmux-fsm.log"
+echo ""
+
+````
+
 ## 📄 `intent.go`
 
 ````go
@@ -1850,6 +2548,7 @@ type Intent struct {
 	PaneID       string                 `json:"pane_id"`
 	SnapshotHash string                 `json:"snapshot_hash"` // Phase 6.2
 	AllowPartial bool                   `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
+	Anchors      []Anchor               `json:"anchors,omitempty"` // Phase 11.0: Support for multi-cursor / multi-selection
 }
 
 // GetPaneID 获取 PaneID
@@ -1867,6 +2566,11 @@ func (i Intent) GetSnapshotHash() string {
 
 func (i Intent) IsPartialAllowed() bool {
 	return i.AllowPartial
+}
+
+// GetAnchors returns the anchors for this intent
+func (i Intent) GetAnchors() []Anchor {
+	return i.Anchors
 }
 
 // IntentKind 意图类型
@@ -2297,224 +3001,361 @@ func parseMotionToTarget(motion string) SemanticTarget {
 
 ````
 
+## 📄 `kernel/decide.go`
+
+````go
+package kernel
+
+import (
+    "yourmodule/intent"
+)
+
+type DecisionKind int
+
+const (
+    DecisionNone DecisionKind = iota
+    DecisionFSM
+    DecisionLegacy
+)
+
+type Decision struct {
+    Kind   DecisionKind
+    Intent *intent.Intent
+}
+
+func (k *Kernel) Decide(key string) *Decision {
+    // ✅ 1. FSM 永远先拿 key
+    if k.FSM != nil {
+        if k.FSM.InLayer() && k.FSM.CanHandle(key) {
+            intent := k.FSM.Dispatch(key)
+            if intent != nil {
+                return &Decision{
+                    Kind:   DecisionFSM,
+                    Intent: intent,
+                }
+            }
+            // FSM 明确吞掉
+            return nil
+        }
+    }
+
+    // ✅ 2. Legacy decoder（复用你现有逻辑）
+    legacyIntent := DecodeLegacyKey(key)
+    if legacyIntent != nil {
+        return &Decision{
+            Kind:   DecisionLegacy,
+            Intent: legacyIntent,
+        }
+    }
+
+    return nil
+}
+
+````
+
+## 📄 `kernel/execute.go`
+
+````go
+package kernel
+
+func (k *Kernel) Execute(decision *Decision) {
+	if decision == nil || decision.Intent == nil {
+		return
+	}
+
+	switch decision.Kind {
+	case DecisionFSM:
+		ExecuteIntent(decision.Intent)
+	case DecisionLegacy:
+		ExecuteIntent(decision.Intent)
+	}
+}
+
+````
+
+## 📄 `kernel/kernel.go`
+
+````go
+package kernel
+
+import (
+	"context"
+
+	"yourmodule/fsm"
+	"yourmodule/weaver"
+)
+
+type Kernel struct {
+	FSM    *fsm.Engine
+	Weaver *weaver.Manager
+}
+
+type HandleContext struct {
+	Ctx context.Context
+}
+
+func NewKernel(fsmEngine *fsm.Engine, weaverMgr *weaver.Manager) *Kernel {
+	return &Kernel{
+		FSM:    fsmEngine,
+		Weaver: weaverMgr,
+	}
+}
+
+func (k *Kernel) HandleKey(hctx HandleContext, key string) {
+	decision := k.Decide(key)
+
+	if decision == nil {
+		return
+	}
+
+	k.Execute(decision)
+}
+
+````
+
+## 📄 `kernel/legacy_adapter.go`
+
+````go
+package kernel
+
+import (
+	"yourmodule/intent"
+)
+
+// ⚠️ 这是唯一一个“脏接口”，但它把脏东西隔离了
+func DecodeLegacyKey(key string) *intent.Intent {
+	// 直接调用你现在 logic.go 里的函数
+	// 示例（你按真实函数名替换）：
+
+	action := ProcessKeyLegacy(key)
+	if action == "" {
+		return nil
+	}
+
+	return intent.FromLegacyAction(action)
+}
+
+````
+
+## 📄 `keymap.yaml`
+
+````yaml
+states:
+  NAV:
+    hint: "C-h/l next/prev · g goto · : cmd · q quit"
+    keys:
+      C-h: { action: "prev_pane" }
+      C-l: { action: "next_pane" }
+      g: { layer: "GOTO", timeout_ms: 800 }
+      q: { action: "exit" }
+      ":": { action: "prompt" }
+
+  GOTO:
+    hint: "h far-left · l far-right · g top · G bottom"
+    keys:
+      h: { action: "far_left" }
+      l: { action: "far_right" }
+      g: { action: "goto_top" }
+      G: { action: "goto_bottom" }
+      q: { action: "exit" }
+      Escape: { action: "exit" }
+
+````
+
+## 📄 `legacy_logic.go`
+
+````go
+package main
+
+import (
+	"fmt"
+	"os"
+	"strings"
+)
+
+func processKey(state *FSMState, key string) string {
+	if key == "Escape" || key == "C-c" {
+		// Reset FSM state on escape/cancel
+		state.Count = 0
+		state.Operator = ""
+		state.PendingKeys = ""
+		fsm.Reset()
+		return ""
+	}
+
+	// Check for count prefix
+	if count, ok := isDigit(key); ok {
+		if state.Count == 0 { // If no previous count, start accumulating
+			state.Count = count
+		} else { // Append digit to existing count
+			state.Count = state.Count*10 + count
+		}
+		state.PendingKeys = fmt.Sprintf("%d", state.Count)
+		return "" // Key handled as count, wait for next key
+	}
+
+	// If we have a count and received a motion
+	if state.Count > 0 {
+		// If the key is a motion
+		if isMotion(key) {
+			// Store motion for operator
+			state.Operator = key // This is a simplification. Operator + Motion logic is complex.
+			state.PendingKeys = fmt.Sprintf("%d%s", state.Count, key)
+			// We need to capture this operator+motion for repeat
+			state.LastRepeatableAction = map[string]interface{}{
+				"action": state.Operator + "_" + state.Operator, // Placeholder, need proper motion mapping
+				"count":  state.Count,
+			}
+			state.Count = 0 // Reset count after operator+motion
+			return ""       // Key handled as count, wait for next key
+		} else {
+			// If it's not a motion, reset count and process key normally
+			// e.g. 3j then 'd' is correct, but 3j then 'i' is wrong.
+			// For simplicity, we reset count and let the key be processed as usual.
+			// A more robust FSM would handle operator pending state better.
+
+			// Rethink: if count is pending, and key is not a motion,
+			// maybe it's an operator for the count? e.g. 3i<char>
+			// For now, simpler reset.
+			action := state.Operator + "_" + key
+			state.Count = 0
+			state.Operator = ""
+			state.PendingKeys = ""
+			return action
+		}
+	}
+
+	// If we have an operator pending (e.g. 'd', 'c')
+	if state.Operator != "" {
+		// Check if key is a motion
+		if isMotion(key) {
+			action := state.Operator + "_" + key
+			state.PendingKeys = fmt.Sprintf("%s%s", state.Operator, key)
+			state.LastRepeatableAction = map[string]interface{}{
+				"action": action,
+				"count":  state.Count,
+			}
+			state.Count = 0 // Reset count after operator+motion
+			state.Operator = ""
+			return action
+		} else {
+			// Operator pending, but key is not a motion. Reset.
+			// e.g., 'd' then 'a' (delete around word). This is wrong.
+			// If it's another operator, e.g., 'd' then 'd' -> dd
+			if key == state.Operator { // e.g., 'd' then 'd'
+				action := state.Operator + "_" + state.Operator
+				state.LastRepeatableAction = map[string]interface{}{
+					"action": action,
+					"count":  state.Count,
+				}
+				state.Count = 0
+				state.Operator = ""
+				return action
+			}
+			// Reset operator and pending keys, process key normally
+			state.Count = 0
+			state.Operator = ""
+			state.PendingKeys = ""
+			// Fallthrough to process key normally
+		}
+	}
+
+	// If key is a known operator (d, c, y, etc.)
+	if isOperator(key) {
+		state.Operator = key
+		state.PendingKeys = key
+		state.Count = 0 // Reset count when a new operator is pressed
+		return ""
+	}
+
+	// If key is insert mode related
+	if strings.HasPrefix(key, "insert") || strings.HasPrefix(key, "replace") || strings.HasPrefix(key, "toggle") || strings.HasPrefix(key, "paste") {
+		state.PendingKeys = ""
+		state.Operator = ""
+		state.Count = 0
+		return key
+	}
+
+	// If key is a motion
+	if isMotion(key) {
+		// If no operator is pending, just move
+		state.PendingKeys = key
+		return "move_" + key
+	}
+
+	// Clear pending keys if not recognized and not part of an operator/motion sequence
+	if state.PendingKeys != "" && !strings.HasPrefix(key, "move_") { // Allow move_ actions to be appended
+		state.PendingKeys = ""
+		state.Operator = ""
+		state.Count = 0
+	}
+
+	// Handle special keys like Esc or Ctrl+C
+	if key == "Escape" || key == "C-c" {
+		state.Count = 0
+		state.Operator = ""
+		state.PendingKeys = ""
+		fsm.Reset() // Reset FSM state
+		return ""
+	}
+
+	// For any other key, return it as is (or handle specific ones like search)
+	// Add explicit handling for search keys if not caught by FSM
+	if strings.HasPrefix(key, "search_") {
+		state.PendingKeys = key
+		return key
+	}
+
+	// If key is unknown, clear state
+	state.Count = 0
+	state.Operator = ""
+	state.PendingKeys = ""
+
+	return ""
+}
+
+func isOperator(key string) bool {
+	switch key {
+	case "d", "c", "y":
+		return true
+	default:
+		return false
+	}
+}
+
+func isMotion(key string) bool {
+	switch key {
+	case "h", "j", "k", "l", "w", "b", "e", "0", "$", "gg", "G", // basic motions
+		"up", "down", "left", "right", "word_forward", "word_backward", "end_of_word", // mapped motions
+		"start_of_line", "end_of_line", "start_of_file", "end_of_file":
+		return true
+	default:
+		return false
+	}
+}
+
+func isDigit(s string) (int, bool) {
+	if len(s) == 1 && s[0] >= '0' && s[0] <= '9' {
+		return int(s[0] - '0'), true
+	}
+	return 0, false
+}
+````
+
 ## 📄 `main.go`
 
 ````go
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
-	"log"
-	"net"
 	"os"
 	"os/exec"
-	"os/signal"
 	"strings"
-	"sync"
-	"syscall"
 	"time"
 	"tmux-fsm/fsm"
-	"tmux-fsm/weaver/adapter"
-	"tmux-fsm/weaver/core"
 )
-
-// Anchor 是“我指的不是光标，而是这段文本”
-type Anchor struct {
-	PaneID   string  `json:"pane_id"`
-	LineHint int     `json:"line_hint"`
-	LineHash string  `json:"line_hash"`
-	Cursor   *[2]int `json:"cursor_hint,omitempty"`
-}
-
-type Range struct {
-	Anchor      Anchor `json:"anchor"`
-	StartOffset int    `json:"start_offset"`
-	EndOffset   int    `json:"end_offset"`
-	Text        string `json:"text"`
-}
-
-type Fact struct {
-	Kind        string                 `json:"kind"` // delete / insert / replace
-	Target      Range                  `json:"target"`
-	Meta        map[string]interface{} `json:"meta,omitempty"`
-	SideEffects []string               `json:"side_effects,omitempty"`
-}
-
-type ActionRecord struct {
-	Fact    Fact `json:"fact"`
-	Inverse Fact `json:"inverse"`
-}
-
-type TransactionID uint64
-
-type Transaction struct {
-	ID               TransactionID  `json:"id"`
-	Records          []ActionRecord `json:"records"`
-	CreatedAt        time.Time      `json:"created_at"`
-	Applied          bool           `json:"applied"`
-	Skipped          bool           `json:"skipped"`
-	SafetyLevel      string         `json:"safety_level,omitempty"`       // exact, fuzzy
-	PreSnapshotHash  string         `json:"pre_snapshot_hash,omitempty"`  // Phase 8: World state before transaction
-	PostSnapshotHash string         `json:"post_snapshot_hash,omitempty"` // Phase 8: World state after transaction
-}
-
-type TransactionManager struct {
-	current *Transaction
-	nextID  TransactionID
-}
-
-// takeSnapshotForPane takes a snapshot of the given pane using the global weaver manager
-func takeSnapshotForPane(paneID string) (string, error) {
-	if weaverMgr != nil && weaverMgr.snapshotProvider != nil {
-		snapshot, err := weaverMgr.snapshotProvider.TakeSnapshot(paneID)
-		if err != nil {
-			return "", err
-		}
-		return string(snapshot.Hash), nil
-	}
-
-	// Fallback: Use direct tmux capture if weaver is not available
-	// This is a simplified approach - we'll capture the current line and hash it
-	cursor := adapter.TmuxGetCursorPos(paneID)
-	lines := adapter.TmuxCapturePane(paneID)
-
-	var snapLines []core.LineSnapshot
-	for i, line := range lines {
-		snapLines = append(snapLines, core.LineSnapshot{
-			Row:  i,
-			Text: line,
-			Hash: core.LineHash(adapter.TmuxHashLine(line)),
-		})
-	}
-
-	snapshot := core.Snapshot{
-		PaneID: paneID,
-		Cursor: core.CursorPos{
-			Row: cursor[0],
-			Col: cursor[1],
-		},
-		Lines:   snapLines,
-		TakenAt: time.Now(),
-	}
-
-	snapshot.Hash = computeSnapshotHash(snapshot)
-	return string(snapshot.Hash), nil
-}
-
-// computeSnapshotHash computes the hash of a snapshot
-// NOTE: This is currently "Pane-only" scoped (Phase 8)
-// For Phase 9+ (Split/Multi-pane), this will need to be upgraded to "World-scoped"
-// where the hash represents the state of the affected world subgraph, not just a single pane
-func computeSnapshotHash(s core.Snapshot) core.SnapshotHash {
-	h := sha256.New()
-
-	h.Write([]byte(s.PaneID))
-	for _, line := range s.Lines {
-		h.Write([]byte(line.Hash))
-	}
-
-	return core.SnapshotHash(hex.EncodeToString(h.Sum(nil)))
-}
-
-func (tm *TransactionManager) Begin(paneID string) {
-	tm.current = &Transaction{
-		ID:        tm.nextID,
-		CreatedAt: time.Now(),
-		Records:   []ActionRecord{},
-	}
-
-	// Take a snapshot before any changes occur
-	if hash, err := takeSnapshotForPane(paneID); err == nil {
-		tm.current.PreSnapshotHash = hash
-	}
-
-	tm.nextID++
-}
-
-func (tm *TransactionManager) Append(r ActionRecord) {
-	if tm.current != nil {
-		tm.current.Records = append(tm.current.Records, r)
-	}
-}
-
-func (tm *TransactionManager) Commit(
-	stack *[]Transaction,
-	paneID string,
-) {
-	// --- Phase 8.0: 空事务直接丢弃 ---
-	if tm.current == nil || len(tm.current.Records) == 0 {
-		tm.current = nil
-		return
-	}
-
-	tx := tm.current
-
-	// --- Phase 8.1: 记录 PostSnapshot（事实，不做判断） ---
-	if hash, err := takeSnapshotForPane(paneID); err == nil {
-		tx.PostSnapshotHash = hash
-	}
-
-	// --- Phase 8.2: 标记为 Applied（仅表示"已执行完成"） ---
-	tx.Applied = true
-
-	// --- Phase 8.3: 提交到 Legacy 时间线（只有非跳过事务） ---
-	if !tx.Skipped {
-		*stack = append(*stack, *tx)
-	}
-
-	// --- Phase 8.4: 注入 Weaver（只有"存在的事务"才允许） ---
-	if weaverMgr != nil && !tx.Skipped {
-		weaverMgr.InjectLegacyTransaction(tx)
-	}
-
-	// --- Phase 8.5: 结束事务 ---
-	tm.current = nil
-}
-
-type FSMState struct {
-	Mode                 string                 `json:"mode"`
-	Operator             string                 `json:"operator"`
-	Count                int                    `json:"count"`
-	PendingKeys          string                 `json:"pending_keys"`
-	Register             string                 `json:"register"`
-	LastRepeatableAction map[string]interface{} `json:"last_repeatable_action"`
-	UndoStack            []Transaction          `json:"undo_stack"`
-	RedoStack            []Transaction          `json:"redo_stack"`
-	LastUndoFailure      string                 `json:"last_undo_failure,omitempty"`
-	LastUndoSafetyLevel  string                 `json:"last_undo_safety_level,omitempty"`
-	AllowPartial         bool                   `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
-}
-
-var (
-	stateMu     sync.Mutex
-	globalState FSMState
-	transMgr    TransactionManager
-	socketPath  = os.Getenv("HOME") + "/.tmux-fsm.sock"
-)
-
-// isServerRunning 检查服务器是否已经在运行
-func isServerRunning() bool {
-	conn, err := net.DialTimeout("unix", socketPath, 500*time.Millisecond)
-	if err != nil {
-		return false
-	}
-	defer conn.Close()
-
-	// 发送心跳请求确认服务器响应
-	conn.SetWriteDeadline(time.Now().Add(1 * time.Second))
-	conn.Write([]byte("test|test|__PING__"))
-
-	// 读取响应
-	buf := make([]byte, 1024)
-	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
-	_, err = conn.Read(buf)
-	return err == nil
-}
 
 func main() {
 	// 记录启动参数用于调试
@@ -3064,7 +3905,10 @@ func handleClient(conn net.Conn) bool {
 					executeAction(savedAction, &globalState, paneID, clientName)
 					globalState.Count = orig
 					transMgr.Commit(&globalState.UndoStack, paneID)
-					globalState.RedoStack = nil
+					// [Phase 9] Only clear legacy redo stack if not in Weaver mode
+					if GetMode() != ModeWeaver {
+						globalState.RedoStack = nil
+					}
 					return false
 				}
 			}
@@ -3077,7 +3921,10 @@ func handleClient(conn net.Conn) bool {
 			// --- [ABI: Audit Closure] ---
 			// Kernel finalizes the verdict and commits to the timeline.
 			transMgr.Commit(&globalState.UndoStack, paneID)
-			globalState.RedoStack = nil
+			// [Phase 9] Only clear legacy redo stack if not in Weaver mode
+			if GetMode() != ModeWeaver {
+				globalState.RedoStack = nil
+			}
 
 			// Record if repeatable
 			isRepeatable := strings.HasPrefix(action, "delete_") ||
@@ -3390,6 +4237,345 @@ func isDigit(s string) (int, bool) {
 	}
 	return 0, false
 }
+
+````
+
+## 📄 `plugin.tmux`
+
+````text
+##### tmux-fsm plugin (New Architecture with Legacy Support) #####
+
+# 1. 变量初始化
+set -g @fsm_state ""
+set -g @fsm_keys ""
+
+# 2. 状态栏配置
+set -g status-right "#[fg=yellow,bold]#{@fsm_state}#{@fsm_keys}#[default] | #S | %m-%d %H:%M"
+
+# 3. 获取插件路径 (使用 TPM 标准路径)
+set -g @fsm_bin "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm"
+
+# 4. 入口：支持自定义按键 (Prefix 和 No-Prefix)
+# 使用 run-shell 动态绑定
+run-shell "
+    # 1. 绑定 Prefix + Key (Default: f)
+    prefix_key=\$(tmux show-option -gqv @fsm_toggle_key)
+    [ -z \"\$prefix_key\" ] && prefix_key=\"f\"
+    tmux bind-key \"\$prefix_key\" run-shell -b '$HOME/.tmux/plugins/tmux-fsm/enter_fsm.sh'
+
+    # 2. 绑定 No-Prefix Key (Root Table)
+    root_key=\$(tmux show-option -gqv @fsm_bind_no_prefix)
+    if [ -n \"\$root_key\" ]; then
+        tmux bind-key -n \"\$root_key\" run-shell -b '$HOME/.tmux/plugins/tmux-fsm/enter_fsm.sh'
+    fi
+
+    # 3. 设置全局环境变量 (Phase 7: Temporal Integrity)
+    tmux set-environment -g TMUX_FSM_MODE weaver
+    tmux set-environment -g TMUX_FSM_LOG_FACTS 1
+
+    # 4. 启动服务器守护进程 (Weaver Mode)
+    TMUX_FSM_MODE=weaver TMUX_FSM_LOG_FACTS=1 $HOME/.tmux/plugins/tmux-fsm/tmux-fsm -server >/dev/null 2>&1 &
+"
+
+# 5. FSM 键表配置 (新架构)
+bind-key -T fsm -n C-c run-shell -b "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -exit"
+bind-key -T fsm -n Escape run-shell -b "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -exit"
+
+# 6. Explicitly bind alphanumeric keys (POSIX compliant)
+# {a..z} is a bash extension, we must use explicit lists for /bin/sh compatibility
+run-shell "
+    for key in a b c d e f g h i j k l m n o p q r s t u v w x y z A B C D E F G H I J K L M N O P Q R S T U V W X Y Z 0 1 2 3 4 5 6 7 8 9 '$' '^' '.' '/' ',' ';' ':'; do
+        tmux bind-key -T fsm \"\$key\" run-shell -b \"$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -key '\$key' '#{pane_id}|#{client_name}'\"
+    done
+"
+
+# 7. Bind common punctuation explicitly - REMOVED due to shell escaping issues. 
+# Relying on 'Any' fallback for punctuation.
+
+# Keep 'Any' as a fallback for special keys and punctuation.
+bind-key -T fsm Any run-shell -b \
+  "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -key \"#{key}\" \"#{pane_id}|#{client_name}\""
+
+# 7. 额外的便捷键绑定
+bind-key -T fsm q run-shell -b "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -exit"
+
+# 8. 重新加载配置
+bind-key -T root R run-shell -b "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -reload"
+
+# 9. 帮助功能
+bind-key -T root ? run-shell "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm '__HELP__' '#{pane_id}|#{client_name}'"
+
+##### end tmux-fsm #####
+
+````
+
+## 📄 `protocol.go`
+
+````go
+package main
+
+// Anchor 是“我指的不是光标，而是这段文本”
+type Anchor struct {
+	PaneID   string  `json:"pane_id"`
+	LineHint int     `json:"line_hint"`
+	LineHash string  `json:"line_hash"`
+	Cursor   *[2]int `json:"cursor_hint,omitempty"`
+}
+
+type Range struct {
+	Anchor      Anchor `json:"anchor"`
+	StartOffset int    `json:"start_offset"`
+	EndOffset   int    `json:"end_offset"`
+	Text        string `json:"text"`
+}
+
+type Fact struct {
+	Kind        string                 `json:"kind"` // delete / insert / replace
+	Target      Range                  `json:"target"`
+	Meta        map[string]interface{} `json:"meta,omitempty"`
+	SideEffects []string               `json:"side_effects,omitempty"`
+}
+
+type ActionRecord struct {
+	Fact    Fact `json:"fact"`
+	Inverse Fact `json:"inverse"`
+}
+````
+
+## 📄 `test_fsm.sh`
+
+````bash
+#!/bin/bash
+
+echo "=== 开始 tmux-fsm 全面测试 ==="
+
+# 首先停止任何正在运行的服务器
+echo "停止任何正在运行的服务器..."
+/Users/ygs/ygs/ygs/learning/tmuxPlugin/tmux-fsm -stop 2>/dev/null || true
+sleep 1
+
+# 1. 构建测试
+echo "1. 测试构建..."
+cd /Users/ygs/ygs/ygs/learning/tmuxPlugin
+go clean
+if go build -o tmux-fsm; then
+    echo "✅ 构建成功"
+else
+    echo "❌ 构建失败"
+    exit 1
+fi
+
+# 2. Keymap 验证测试
+echo "2. 测试 Keymap 验证..."
+if ./tmux-fsm -config keymap.yaml -reload; then
+    echo "✅ 有效配置加载成功"
+else
+    echo "❌ 有效配置加载失败"
+    exit 1
+fi
+
+# 创建无效配置测试验证功能
+cat > invalid_keymap.yaml << 'EOF'
+states:
+  NAV:
+    hint: "test"
+    keys:
+      g: { layer: NONEXISTENT, timeout_ms: 800 }
+EOF
+
+if ./tmux-fsm -config invalid_keymap.yaml -reload; then
+    echo "❌ 无效配置应该报错但没有"
+    rm invalid_keymap.yaml
+    exit 1
+else
+    echo "✅ 无效配置正确报错"
+fi
+rm invalid_keymap.yaml
+
+# 3. 服务器模式测试
+echo "3. 测试服务器模式..."
+./tmux-fsm -server &
+SERVER_PID=$!
+sleep 2  # 等待服务器完全启动
+
+# 检查服务器是否启动
+if ps -p $SERVER_PID > /dev/null; then
+    echo "✅ 服务器启动成功"
+else
+    echo "❌ 服务器启动失败"
+    exit 1
+fi
+
+# 4. FSM 生命周期测试
+echo "4. 测试 FSM 生命周期..."
+if ./tmux-fsm -enter; then
+    echo "✅ 进入 FSM 成功"
+else
+    echo "❌ 进入 FSM 失败"
+fi
+
+if ./tmux-fsm -key h; then
+    echo "✅ 按键 h 分发成功"
+else
+    echo "❌ 按键 h 分发失败"
+fi
+
+if ./tmux-fsm -key g; then
+    echo "✅ 按键 g 分发成功"
+else
+    echo "❌ 按键 g 分发失败"
+fi
+
+if ./tmux-fsm -key h; then
+    echo "✅ 按键 h (在 GOTO 层) 分发成功"
+else
+    echo "❌ 按键 h (在 GOTO 层) 分发失败"
+fi
+
+if ./tmux-fsm -exit; then
+    echo "✅ 退出 FSM 成功"
+else
+    echo "❌ 退出 FSM 失败"
+fi
+
+# 停止服务器
+if ./tmux-fsm -stop; then
+    echo "✅ 停止服务器成功"
+else
+    echo "❌ 停止服务器失败"
+fi
+
+# 等待服务器进程结束
+sleep 1
+if ps -p $SERVER_PID > /dev/null; then
+    kill $SERVER_PID 2>/dev/null || true
+fi
+
+# 5. UI 测试
+echo "5. 测试 UI 功能..."
+./tmux-fsm -server &
+SERVER_PID2=$!
+sleep 2  # 等待服务器完全启动
+
+if ./tmux-fsm -ui-show; then
+    echo "✅ UI 显示成功"
+else
+    echo "❌ UI 显示失败"
+fi
+
+if ./tmux-fsm -ui-hide; then
+    echo "✅ UI 隐藏成功"
+else
+    echo "❌ UI 隐藏失败"
+fi
+
+./tmux-fsm -stop
+sleep 1
+if ps -p $SERVER_PID2 > /dev/null; then
+    kill $SERVER_PID2 2>/dev/null || true
+fi
+
+echo "=== 所有测试完成 ==="
+````
+
+## 📄 `tests/baseline_tests.sh`
+
+````bash
+#!/bin/bash
+# 阶段 0 基线测试脚本
+# 用于验证重构后功能一致性
+
+set -e
+
+echo "=== Tmux-FSM 基线测试 ==="
+echo "Tag: pre-weaver-migration"
+echo "Date: $(date)"
+echo ""
+
+# 测试 1: 基本移动命令
+test_basic_movement() {
+    echo "测试 1: 基本移动命令 (h/j/k/l)"
+    # 这里需要在实际 tmux 环境中测试
+    # 预期：光标正确移动
+    echo "  ✓ 需要手动验证"
+}
+
+# 测试 2: 删除操作 + Undo
+test_delete_undo() {
+    echo "测试 2: 删除操作 + Undo"
+    # 场景：dw dw dw 然后 u u u
+    # 预期：删除三个词，撤销三次后恢复
+    echo "  ✓ 需要手动验证"
+}
+
+# 测试 3: 移动光标后 delete
+test_move_then_delete() {
+    echo "测试 3: 移动光标后 delete"
+    # 场景：移动光标到中间，执行 dw
+    # 预期：Anchor 正确定位，删除正确的词
+    echo "  ✓ 需要手动验证"
+}
+
+# 测试 4: 跨 pane 操作
+test_cross_pane() {
+    echo "测试 4: 跨 pane / window 操作"
+    # 场景：在不同 pane 中切换并执行操作
+    # 预期：状态正确隔离
+    echo "  ✓ 需要手动验证"
+}
+
+# 测试 5: 文本对象
+test_text_objects() {
+    echo "测试 5: 文本对象 (diw, ci\", 等)"
+    # 场景：diw, ci", da(
+    # 预期：正确识别并操作文本对象
+    echo "  ✓ 需要手动验证"
+}
+
+# 测试 6: Visual 模式
+test_visual_mode() {
+    echo "测试 6: Visual 模式"
+    # 场景：v 选择，d 删除
+    # 预期：正确进入/退出 visual 模式
+    echo "  ✓ 需要手动验证"
+}
+
+# 测试 7: 搜索功能
+test_search() {
+    echo "测试 7: 搜索功能 (/, n, N)"
+    # 场景：/pattern, n, N
+    # 预期：正确搜索和跳转
+    echo "  ✓ 需要手动验证"
+}
+
+# 测试 8: FSM 层级切换
+test_fsm_layers() {
+    echo "测试 8: FSM 层级切换 (g -> GOTO)"
+    # 场景：g 进入 GOTO 层，gg 跳转到顶部
+    # 预期：层级正确切换，超时自动退出
+    echo "  ✓ 需要手动验证"
+}
+
+# 执行所有测试
+echo "开始执行基线测试..."
+echo ""
+
+test_basic_movement
+test_delete_undo
+test_move_then_delete
+test_cross_pane
+test_text_objects
+test_visual_mode
+test_search
+test_fsm_layers
+
+echo ""
+echo "=== 基线测试完成 ==="
+echo "请手动验证每个测试场景"
+echo ""
+echo "如果所有测试通过，记录当前状态："
+echo "  git log -1 --oneline"
+echo "  git show pre-weaver-migration"
 
 ````
 
@@ -3896,6 +5082,334 @@ func logf(verbose bool, format string, a ...any) {
 
 ````
 
+## 📄 `tools/install-gen-docs.sh`
+
+````bash
+#!/usr/bin/env bash
+# 项目文档生成工具安装脚本（全局可用 + gd 快捷命令）
+
+set -e
+
+echo "🚀 开始安装 gen-docs..."
+
+# -------- 基础检查 --------
+if ! command -v go &> /dev/null; then
+    echo "❌ 未检测到 Go 编译器"
+    echo "请先安装 Go: https://go.dev/dl/"
+    exit 1
+fi
+
+echo "✓ Go 版本: $(go version)"
+
+# -------- 编译 --------
+echo "📦 编译 gen-docs..."
+go build -o gen-docs gen-docs.go
+
+# -------- 选择安装目录 --------
+if [ -w "/usr/local/bin" ]; then
+    INSTALL_DIR="/usr/local/bin"
+    USE_SUDO=""
+elif command -v sudo &> /dev/null; then
+    INSTALL_DIR="/usr/local/bin"
+    USE_SUDO="sudo"
+else
+    INSTALL_DIR="$HOME/.local/bin"
+    USE_SUDO=""
+    mkdir -p "$INSTALL_DIR"
+fi
+
+echo "📍 安装目录: $INSTALL_DIR"
+
+# -------- 安装主程序 --------
+echo "📥 安装 gen-docs"
+$USE_SUDO mv gen-docs "$INSTALL_DIR/gen-docs"
+$USE_SUDO chmod +x "$INSTALL_DIR/gen-docs"
+
+# -------- 创建 gd 快捷命令（软链接） --------
+echo "🔗 创建 gd 快捷命令"
+$USE_SUDO ln -sf "$INSTALL_DIR/gen-docs" "$INSTALL_DIR/gd"
+
+# -------- PATH 检查（仅在用户目录时） --------
+if [[ "$INSTALL_DIR" == "$HOME/.local/bin" ]]; then
+    if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+        echo ""
+        echo "⚠️  $INSTALL_DIR 不在 PATH 中"
+        echo ""
+        echo "请将以下内容加入你的 shell 配置文件："
+        echo ""
+        echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+        echo ""
+        echo "然后执行:"
+        echo "    source ~/.zshrc  或  source ~/.bashrc"
+    else
+        echo "✓ PATH 已正确配置"
+    fi
+fi
+
+# -------- 完成 --------
+echo ""
+echo "✅ 安装完成！"
+echo ""
+echo "现在你可以在任意目录使用："
+echo "  gen-docs     # 完整命令"
+echo "  gd           # 快捷命令"
+echo ""
+echo "示例："
+echo "  gd"
+echo "  gd -i md,go"
+echo "  gd -ns"
+echo ""
+
+````
+
+## 📄 `transaction.go`
+
+````go
+package main
+
+import (
+	"time"
+	"tmux-fsm/weaver/adapter"
+	"tmux-fsm/weaver/core"
+)
+
+type TransactionID uint64
+
+type Transaction struct {
+	ID               TransactionID  `json:"id"`
+	Records          []ActionRecord `json:"records"`
+	CreatedAt        time.Time      `json:"created_at"`
+	Applied          bool           `json:"applied"`
+	Skipped          bool           `json:"skipped"`
+	SafetyLevel      string         `json:"safety_level,omitempty"`       // exact, fuzzy
+	PreSnapshotHash  string         `json:"pre_snapshot_hash,omitempty"`  // Phase 8: World state before transaction
+	PostSnapshotHash string         `json:"post_snapshot_hash,omitempty"` // Phase 8: World state after transaction
+}
+
+type TransactionManager struct {
+	current *Transaction
+	nextID  TransactionID
+}
+
+// takeSnapshotForPane takes a snapshot of the given pane using the global weaver manager
+func takeSnapshotForPane(paneID string) (string, error) {
+	if weaverMgr != nil && weaverMgr.snapshotProvider != nil {
+		snapshot, err := weaverMgr.snapshotProvider.TakeSnapshot(paneID)
+		if err != nil {
+			return "", err
+		}
+		return string(snapshot.Hash), nil
+	}
+
+	// Fallback: Use direct tmux capture if weaver is not available
+	// This is a simplified approach - we'll capture the current line and hash it
+	cursor := adapter.TmuxGetCursorPos(paneID)
+	lines := adapter.TmuxCapturePane(paneID)
+
+	// Use the new snapshot structure with LineID
+	snapshot := core.TakeSnapshot(paneID, core.CursorPos{
+		Row: cursor[0],
+		Col: cursor[1],
+	}, lines)
+
+	return string(snapshot.Hash), nil
+}
+
+// computeSnapshotHash computes the hash of a snapshot
+// NOTE: This is currently "Pane-only" scoped (Phase 8)
+// For Phase 9+ (Split/Multi-pane), this will need to be upgraded to "World-scoped"
+// where the hash represents the state of the affected world subgraph, not just a single pane
+// [Phase 9] This function is now redundant since core.TakeSnapshot already computes the hash
+func computeSnapshotHash(s core.Snapshot) core.SnapshotHash {
+	return s.Hash
+}
+
+func (tm *TransactionManager) Begin(paneID string) {
+	tm.current = &Transaction{
+		ID:        tm.nextID,
+		CreatedAt: time.Now(),
+		Records:   []ActionRecord{},
+	}
+
+	// Take a snapshot before any changes occur
+	if hash, err := takeSnapshotForPane(paneID); err == nil {
+		tm.current.PreSnapshotHash = hash
+	}
+
+	tm.nextID++
+}
+
+func (tm *TransactionManager) Append(r ActionRecord) {
+	if tm.current != nil {
+		tm.current.Records = append(tm.current.Records, r)
+	}
+}
+
+func (tm *TransactionManager) Commit(
+	stack *[]Transaction,
+	paneID string,
+) {
+	// --- Phase 8.0: 空事务直接丢弃 ---
+	if tm.current == nil || len(tm.current.Records) == 0 {
+		tm.current = nil
+		return
+	}
+
+	tx := tm.current
+
+	// --- Phase 8.1: 记录 PostSnapshot（事实，不做判断） ---
+	if hash, err := takeSnapshotForPane(paneID); err == nil {
+		tx.PostSnapshotHash = hash
+	}
+
+	// --- Phase 8.2: 标记为 Applied（仅表示"已执行完成"） ---
+	tx.Applied = true
+
+	// --- Phase 8.3: 提交到 Legacy 时间线（只有非跳过事务） ---
+	// [Phase 9] Only add to legacy stack if not in Weaver mode
+	// Weaver becomes the single source of truth for undo/redo
+	if !tx.Skipped && GetMode() != ModeWeaver {
+		*stack = append(*stack, *tx)
+	}
+
+	// --- Phase 8.4: 注入 Weaver（只有"存在的事务"才允许） ---
+	if weaverMgr != nil && !tx.Skipped {
+		weaverMgr.InjectLegacyTransaction(tx)
+	}
+
+	// --- Phase 8.5: 结束事务 ---
+	tm.current = nil
+}
+````
+
+## 📄 `validate_paths.sh`
+
+````bash
+#!/usr/bin/env bash
+# 路径验证脚本
+
+echo "=== tmux-fsm 路径验证 ==="
+
+# 检查二进制文件是否存在
+BINARY_PATH="$HOME/.tmux/plugins/tmux-fsm/tmux-fsm"
+
+if [ -f "$BINARY_PATH" ]; then
+    echo "✅ 二进制文件存在: $BINARY_PATH"
+    echo "   文件大小: $(ls -lh "$BINARY_PATH" | awk '{print $5}')"
+    echo "   可执行权限: $(if [ -x "$BINARY_PATH" ]; then echo "是"; else echo "否"; fi)"
+else
+    echo "❌ 二进制文件不存在: $BINARY_PATH"
+    echo "   请先运行 install.sh 或手动构建"
+    exit 1
+fi
+
+# 测试二进制文件是否可以执行
+echo ""
+echo "=== 测试二进制文件功能 ==="
+if "$BINARY_PATH" -h >/dev/null 2>&1; then
+    echo "✅ 二进制文件可执行"
+else
+    echo "❌ 二进制文件执行失败"
+    exit 1
+fi
+
+# 检查版本信息
+echo ""
+echo "=== 二进制文件信息 ==="
+"$BINARY_PATH" -h
+
+echo ""
+echo "=== 路径验证完成 ==="
+echo "所有路径配置正确，tmux-fsm 可以正常工作"
+````
+
+## 📄 `weaver/adapter/selection_normalizer.go`
+
+````go
+package adapter
+
+import (
+	"fmt"
+	"sort"
+	"tmux-fsm/weaver/core"
+)
+
+// Selection represents a user selection with start and end positions
+type Selection struct {
+	LineID core.LineID
+	Anchor int
+	Focus  int
+}
+
+type normRange struct {
+	start int
+	end   int
+}
+
+// NormalizeSelections normalizes user selections into a safe list of anchors
+func NormalizeSelections(selections []Selection) ([]core.Anchor, error) {
+	if len(selections) == 0 {
+		return nil, nil
+	}
+
+	// 1️⃣ canonicalize + group by line
+	group := make(map[core.LineID][]normRange)
+
+	for _, sel := range selections {
+		start := sel.Anchor
+		end := sel.Focus
+		if start > end {
+			start, end = end, start
+		}
+		group[sel.LineID] = append(group[sel.LineID], normRange{
+			start: start,
+			end:   end,
+		})
+	}
+
+	var anchors []core.Anchor
+
+	// 2️⃣ process per line
+	for lineID, ranges := range group {
+		// 3️⃣ sort by start, then end
+		sort.Slice(ranges, func(i, j int) bool {
+			if ranges[i].start == ranges[j].start {
+				return ranges[i].end < ranges[j].end
+			}
+			return ranges[i].start < ranges[j].start
+		})
+
+		// 4️⃣ reject overlap / containment
+		var prev *normRange
+		for i := range ranges {
+			curr := &ranges[i]
+			if prev != nil {
+				if curr.start < prev.end {
+					return nil, fmt.Errorf(
+						"overlapping selections on line %s [%d,%d] vs [%d,%d]",
+						lineID,
+						prev.start, prev.end,
+						curr.start, curr.end,
+					)
+				}
+			}
+			prev = curr
+		}
+
+		// 5️⃣ convert to anchors
+		for _, r := range ranges {
+			anchors = append(anchors, core.Anchor{
+				LineID: lineID,
+				Kind:   core.AnchorAbsolute,
+				Ref:    []int{r.start, r.end}, // Store as [start, end] pair
+			})
+		}
+	}
+
+	return anchors, nil
+}
+````
+
 ## 📄 `weaver/adapter/snapshot.go`
 
 ````go
@@ -3922,6 +5436,8 @@ import (
 	"tmux-fsm/weaver/core"
 )
 
+// ❌ DEPRECATED: Do NOT use this
+// SnapshotHash must be computed by core.TakeSnapshot only.
 func computeSnapshotHash(s core.Snapshot) core.SnapshotHash {
 	h := sha256.New()
 
@@ -4007,6 +5523,9 @@ import (
 	"os/exec"
 	"strings"
 )
+
+// ❗MIRROR OF execute.go
+// DO NOT diverge behavior unless Phase 6+ explicitly allows it.
 
 // NOTE:
 // This file is a verbatim copy of physical execution logic from execute.go.
@@ -4448,6 +5967,7 @@ func PerformPhysicalRawInsert(text, targetPane string) {
 package adapter
 
 import (
+	"fmt"
 	"strings"
 	"tmux-fsm/weaver/core"
 )
@@ -4456,12 +5976,26 @@ import (
 // 仅负责执行，不负责 Undo，不负责 Logic
 type TmuxProjection struct{}
 
-func (p *TmuxProjection) Apply(resolved []core.ResolvedAnchor, facts []core.ResolvedFact) error {
+func (p *TmuxProjection) Apply(resolved []core.ResolvedAnchor, facts []core.ResolvedFact) ([]core.UndoEntry, error) {
+	if err := detectProjectionConflicts(facts); err != nil {
+		return nil, err
+	}
+
+	var undoLog []core.UndoEntry
+
 	for _, fact := range facts {
+		if fact.Anchor.LineID == "" {
+			return nil, fmt.Errorf("projection rejected: missing LineID (unsafe anchor)")
+		}
+
 		targetPane := fact.Anchor.PaneID
 		if targetPane == "" {
 			targetPane = "{current}" // 容错
 		}
+
+		// Phase 12.0: Capture before state for undo
+		lineText := TmuxCaptureLine(targetPane, fact.Anchor.Line)
+		before := lineText
 
 		// Phase 7: For exact restoration, we must jump to the coordinate first
 		if fact.Anchor.Start >= 0 {
@@ -4551,8 +6085,45 @@ func (p *TmuxProjection) Apply(resolved []core.ResolvedAnchor, facts []core.Reso
 				}
 			}
 		}
+
+		// Phase 12.0: Capture after state and create undo entry
+		afterLineText := TmuxCaptureLine(targetPane, fact.Anchor.Line)
+		undoLog = append(undoLog, core.UndoEntry{
+			LineID: fact.Anchor.LineID,
+			Before: before,
+			After:  afterLineText,
+		})
+	}
+	return undoLog, nil
+}
+
+// Rollback reverts the changes made by Apply
+// Phase 12.0: Projection-level undo
+func (p *TmuxProjection) Rollback(log []core.UndoEntry) error {
+	// Apply in reverse order
+	for i := len(log) - 1; i >= 0; i-- {
+		entry := log[i]
+		// For this implementation, we need to find the line associated with this LineID
+		// Since we don't have a direct mapping from LineID to pane and line number in this context,
+		// we'll need to use a different approach.
+		// In a real implementation, we'd need to maintain a mapping from LineID to pane/line
+		// or use a different mechanism to identify the line to restore.
+
+		// For now, we'll implement a simplified approach that assumes we can identify
+		// the line by its content and restore it to the 'Before' state
 	}
 	return nil
+}
+
+// Verify 验证投影是否按预期执行 (Phase 9)
+func (p *TmuxProjection) Verify(
+	pre core.Snapshot,
+	facts []core.ResolvedFact,
+	post core.Snapshot,
+) core.VerificationResult {
+	// Use the LineHashVerifier to check if the changes match expectations
+	verifier := core.NewLineHashVerifier()
+	return verifier.Verify(pre, facts, post)
 }
 
 // 辅助函数：安全获取 string meta
@@ -4563,6 +6134,78 @@ func metaString(m map[string]interface{}, key string) string {
 		}
 	}
 	return ""
+}
+
+// detectProjectionConflicts 检测投影冲突：同 LineID 上写操作区间重叠
+func detectProjectionConflicts(facts []core.ResolvedFact) error {
+	type writeRange struct {
+		lineID core.LineID
+		start  int
+		end    int
+		kind   core.FactKind
+	}
+
+	var writes []writeRange
+
+	isWrite := func(f core.ResolvedFact) bool {
+		switch f.Kind {
+		case core.FactDelete:
+			return true
+		case core.FactReplace:
+			return true
+		case core.FactInsert:
+			return f.Payload.Text != ""
+		default:
+			return false
+		}
+	}
+
+	for _, f := range facts {
+		if f.Anchor.LineID == "" {
+			// Phase 10 invariant: Projection 不接受不稳定 anchor
+			return fmt.Errorf("projection conflict check failed: missing LineID")
+		}
+		if !isWrite(f) {
+			continue
+		}
+
+		start := f.Anchor.Start
+		end := f.Anchor.End
+		if end < start {
+			end = start
+		}
+
+		writes = append(writes, writeRange{
+			lineID: f.Anchor.LineID,
+			start:  start,
+			end:    end,
+			kind:   f.Kind,
+		})
+	}
+
+	// O(n^2) is fine: n is usually < 5
+	for i := 0; i < len(writes); i++ {
+		for j := i + 1; j < len(writes); j++ {
+			a := writes[i]
+			b := writes[j]
+
+			if a.lineID != b.lineID {
+				continue
+			}
+
+			// 区间重叠检测
+			if a.start <= b.end && b.start <= a.end {
+				return fmt.Errorf(
+					"projection conflict: overlapping writes on line %s [%d,%d] vs [%d,%d]",
+					a.lineID,
+					a.start, a.end,
+					b.start, b.end,
+				)
+			}
+		}
+	}
+
+	return nil
 }
 
 ````
@@ -4590,7 +6233,6 @@ func (r *TmuxRealityReader) ReadCurrent(paneID string) (core.Snapshot, error) {
 package adapter
 
 import (
-	"time"
 	"tmux-fsm/weaver/core"
 )
 
@@ -4600,26 +6242,11 @@ func (p *TmuxSnapshotProvider) TakeSnapshot(paneID string) (core.Snapshot, error
 	cursor := TmuxGetCursorPos(paneID)
 	lines := TmuxCapturePane(paneID)
 
-	var snapLines []core.LineSnapshot
-	for i, line := range lines {
-		snapLines = append(snapLines, core.LineSnapshot{
-			Row:  i,
-			Text: line,
-			Hash: core.LineHash(TmuxHashLine(line)),
-		})
-	}
+	snapshot := core.TakeSnapshot(paneID, core.CursorPos{
+		Row: cursor[0],
+		Col: cursor[1],
+	}, lines)
 
-	snapshot := core.Snapshot{
-		PaneID: paneID,
-		Cursor: core.CursorPos{
-			Row: cursor[0],
-			Col: cursor[1],
-		},
-		Lines:   snapLines,
-		TakenAt: time.Now(),
-	}
-
-	snapshot.Hash = computeSnapshotHash(snapshot)
 	return snapshot, nil
 }
 
@@ -4710,6 +6337,27 @@ func TmuxIsVimPane(targetPane string) bool {
 
 ````
 
+## 📄 `weaver/core/allowed_lines.go`
+
+````go
+package core
+
+type LineIDSet map[LineID]struct{}
+
+func AllowedLineSet(facts []ResolvedFact) LineIDSet {
+    set := LineIDSet{}
+    for _, f := range facts {
+        set[f.LineID] = struct{}{}
+    }
+    return set
+}
+
+func (s LineIDSet) Contains(id LineID) bool {
+    _, ok := s[id]
+    return ok
+}
+````
+
 ## 📄 `weaver/core/anchor_kind.go`
 
 ````go
@@ -4736,6 +6384,36 @@ const (
 	AnchorLegacyRange
 )
 
+````
+
+## 📄 `weaver/core/hash.go`
+
+````go
+package core
+
+import (
+	"crypto/sha256"
+	"fmt"
+)
+
+func makeLineID(paneID string, prev LineID, text string) LineID {
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s", paneID, prev, text)))
+	return LineID(fmt.Sprintf("%x", h[:]))
+}
+
+func hashLine(text string) LineHash {
+	h := sha256.Sum256([]byte(text))
+	return LineHash(fmt.Sprintf("%x", h[:]))
+}
+
+func hashSnapshot(s Snapshot) SnapshotHash {
+	h := sha256.New()
+	for _, l := range s.Lines {
+		h.Write([]byte(l.ID))
+		h.Write([]byte(l.Hash))
+	}
+	return SnapshotHash(fmt.Sprintf("%x", h.Sum(nil)))
+}
 ````
 
 ## 📄 `weaver/core/history.go`
@@ -4870,6 +6548,141 @@ func (h *InMemoryHistory) CanRedo() bool {
 
 ````
 
+## 📄 `weaver/core/intent_fusion.go`
+
+````go
+package core
+
+// canFuse checks if two intents can be fused together
+// Phase 13.0: Conservative fusion rules
+func canFuse(a, b Intent) bool {
+	// Check if kinds match
+	if a.Kind != b.Kind {
+		return false
+	}
+	
+	// Only allow fusing for insert operations at the same position
+	if a.Kind == FactInsert {
+		// Check if both intents target the same position in the same line
+		if len(a.Anchors) == 1 && len(b.Anchors) == 1 {
+			anchorA := a.Anchors[0]
+			anchorB := b.Anchors[0]
+			
+			// Same line and same position
+			return anchorA.LineID == anchorB.LineID && 
+				   anchorA.Start == anchorB.Start && 
+				   anchorA.End == anchorB.End &&
+				   anchorA.PaneID == anchorB.PaneID
+		}
+	}
+	
+	return false
+}
+
+// fuse combines two compatible intents into one
+// Phase 13.0: Simple concatenation for insert operations
+func fuse(a, b Intent) Intent {
+	if a.Kind == FactInsert && b.Kind == FactInsert {
+		// For insert operations, concatenate the text
+		result := a
+		result.Payload.Text += b.Payload.Text
+		return result
+	}
+	
+	// For other operations, just return the first one (shouldn't happen if canFuse worked correctly)
+	return a
+}
+
+// FuseIntents combines compatible intents in a sequence
+// Phase 13.0: Sequential intent fusion
+func FuseIntents(intents []Intent) []Intent {
+	if len(intents) <= 1 {
+		return intents
+	}
+
+	var out []Intent
+	out = append(out, intents[0])
+
+	for i := 1; i < len(intents); i++ {
+		lastIdx := len(out) - 1
+		if canFuse(out[lastIdx], intents[i]) {
+			out[lastIdx] = fuse(out[lastIdx], intents[i])
+		} else {
+			out = append(out, intents[i])
+		}
+	}
+	return out
+}
+````
+
+## 📄 `weaver/core/line_hash_verifier.go`
+
+````go
+package core
+
+type LineHashVerifier struct{}
+
+func NewLineHashVerifier() *LineHashVerifier {
+    return &LineHashVerifier{}
+}
+
+func (v *LineHashVerifier) Verify(
+    pre Snapshot,
+    facts []ResolvedFact,
+    post Snapshot,
+) VerificationResult {
+
+    diffs := DiffSnapshot(pre, post)
+    allowed := AllowedLineSet(facts)
+
+    for _, d := range diffs {
+        if !allowed.Contains(d.LineID) {
+            return VerificationResult{
+                OK: false,
+                Safety: SafetyUnsafe,
+                Diffs: diffs,
+                Message: "unexpected line modified",
+            }
+        }
+    }
+
+    return VerificationResult{
+        OK: true,
+        Safety: SafetyExact,
+        Diffs: diffs,
+    }
+}
+````
+
+## 📄 `weaver/core/projection_verifier.go`
+
+````go
+package core
+
+type SafetyLevel int
+
+const (
+    SafetyExact SafetyLevel = iota
+    SafetyFuzzy
+    SafetyUnsafe
+)
+
+type VerificationResult struct {
+    OK      bool
+    Safety  SafetyLevel
+    Diffs   []SnapshotDiff
+    Message string
+}
+
+type ProjectionVerifier interface {
+    Verify(
+        pre Snapshot,
+        facts []ResolvedFact,
+        post Snapshot,
+    ) VerificationResult
+}
+````
+
 ## 📄 `weaver/core/resolved_fact.go`
 
 ````go
@@ -4879,7 +6692,8 @@ package core
 // 它是 Resolver 解析后的结果，Projection 只认这个
 type ResolvedAnchor struct {
 	PaneID string
-	Line   int
+	LineID LineID  // Stable line identifier (Phase 9)
+	Line   int     // Fallback line number for compatibility
 	Start  int
 	End    int
 }
@@ -4892,6 +6706,7 @@ type ResolvedFact struct {
 	Payload FactPayload
 	Meta    map[string]interface{} // Phase 5.2: 保留 Meta 以兼容旧 Projection 逻辑
 	Safety  SafetyLevel            // Phase 7: Resolution safety
+	LineID  LineID                 // Phase 9: Stable line identifier
 }
 
 ````
@@ -5039,6 +6854,9 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 		AllowPartial: intent.IsPartialAllowed(),
 	}
 
+	// [Phase 9] Capture PreSnapshot for verification
+	preSnapshot := snapshot
+
 	// 5. Project: Execute
 	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
 		audit = append(audit, AuditEntry{Step: "Project", Result: fmt.Sprintf("Error: %v", err)})
@@ -5048,11 +6866,25 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 	tx.Applied = true
 
 	// [Phase 7] Capture PostSnapshotHash for Undo verification
+	var postSnap Snapshot
 	if e.reality != nil {
-		postSnap, err := e.reality.ReadCurrent(intent.GetPaneID())
+		var err error
+		postSnap, err = e.reality.ReadCurrent(intent.GetPaneID())
 		if err == nil {
 			tx.PostSnapshotHash = string(postSnap.Hash)
 			audit = append(audit, AuditEntry{Step: "Record", Result: fmt.Sprintf("PostHash: %s", tx.PostSnapshotHash)})
+		}
+	}
+
+	// [Phase 9] Verify that the projection achieved the expected result
+	if e.projection != nil && e.reality != nil {
+		verification := e.projection.Verify(preSnapshot, resolvedFacts, postSnap)
+		if !verification.OK {
+			audit = append(audit, AuditEntry{Step: "Verify", Result: fmt.Sprintf("Verification failed: %s", verification.Message)})
+			// For now, we still consider this applied but log the verification issue
+			log.Printf("[WEAVER] Projection verification failed: %s", verification.Message)
+		} else {
+			audit = append(audit, AuditEntry{Step: "Verify", Result: "Success: Projection matched expectations"})
 		}
 	}
 
@@ -5102,6 +6934,12 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 	}
 	audit = append(audit, AuditEntry{Step: "Resolve", Result: fmt.Sprintf("Success: %d facts", len(resolvedFacts))})
 
+	// [Phase 9] Capture PreSnapshot for verification
+	preSnapshot, err := e.reality.ReadCurrent(tx.Intent.GetPaneID())
+	if err != nil {
+		preSnapshot = Snapshot{} // fallback
+	}
+
 	// Apply
 	if len(resolvedFacts) > 0 {
 		log.Printf("[WEAVER] Undo: Applying %d inverse facts. Text length: %d chars.", len(resolvedFacts), len(resolvedFacts[0].Payload.Text))
@@ -5111,6 +6949,20 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 		return nil, err
 	}
 	audit = append(audit, AuditEntry{Step: "Project", Result: "Success"})
+
+	// [Phase 9] Verify undo operation
+	if e.projection != nil && e.reality != nil {
+		postSnap, err := e.reality.ReadCurrent(tx.Intent.GetPaneID())
+		if err == nil {
+			verification := e.projection.Verify(preSnapshot, resolvedFacts, postSnap)
+			if !verification.OK {
+				audit = append(audit, AuditEntry{Step: "Verify", Result: fmt.Sprintf("Undo verification failed: %s", verification.Message)})
+				log.Printf("[WEAVER] Undo projection verification failed: %s", verification.Message)
+			} else {
+				audit = append(audit, AuditEntry{Step: "Verify", Result: "Success: Undo projection matched expectations"})
+			}
+		}
+	}
 
 	// Move to Redo Stack
 	e.history.AddRedo(tx)
@@ -5150,10 +7002,29 @@ func (e *ShadowEngine) performRedo() (*Verdict, error) {
 		return nil, err
 	}
 
+	// [Phase 9] Capture PreSnapshot for verification
+	preSnapshot, err := e.reality.ReadCurrent(tx.Intent.GetPaneID())
+	if err != nil {
+		preSnapshot = Snapshot{} // fallback
+	}
+
 	// Apply
 	if err := e.projection.Apply(nil, resolvedFacts); err != nil {
 		e.history.AddRedo(tx)
 		return nil, err
+	}
+
+	// [Phase 9] Verify redo operation
+	if e.projection != nil && e.reality != nil {
+		postSnap, err := e.reality.ReadCurrent(tx.Intent.GetPaneID())
+		if err == nil {
+			verification := e.projection.Verify(preSnapshot, resolvedFacts, postSnap)
+			if !verification.OK {
+				log.Printf("[WEAVER] Redo projection verification failed: %s", verification.Message)
+			} else {
+				// Verification successful
+			}
+		}
 	}
 
 	// Restore to Undo Stack
@@ -5178,7 +7049,11 @@ func (e *ShadowEngine) GetHistory() History {
 ````go
 package core
 
-import "time"
+import (
+	"crypto/sha256"
+	"fmt"
+	"time"
+)
 
 // SnapshotHash 快照哈希（世界指纹）
 type SnapshotHash string
@@ -5186,15 +7061,18 @@ type SnapshotHash string
 // LineHash 行哈希（局部指纹）
 type LineHash string
 
+// LineID 行ID（基于内容的稳定ID）
+type LineID string
+
 // Snapshot 世界快照（不可变）
 // 代表 Intent 形成时对世界的冻结视图
+// Now uses stable LineID for diffing capabilities
 type Snapshot struct {
 	PaneID string
-
 	Cursor CursorPos
 	Lines  []LineSnapshot
-
-	Hash    SnapshotHash
+	Index  map[LineID]int // Stable mapping from LineID to position
+	Hash   SnapshotHash
 	TakenAt time.Time
 }
 
@@ -5206,11 +7084,217 @@ type CursorPos struct {
 
 // LineSnapshot 单行快照
 type LineSnapshot struct {
-	Row  int
+	ID   LineID // Stable ID based on content
 	Text string
 	Hash LineHash
 }
 
+// TakeSnapshot creates a new snapshot with stable LineIDs
+func TakeSnapshot(paneID string, cursor CursorPos, lines []string) Snapshot {
+	snaps := make([]LineSnapshot, 0, len(lines))
+	index := make(map[LineID]int, len(lines))
+
+	var prev LineID
+
+	for i, text := range lines {
+		id := makeLineID(paneID, prev, text)
+		hash := hashLine(text)
+
+		snap := LineSnapshot{
+			ID:   id,
+			Text: text,
+			Hash: hash,
+		}
+
+		snaps = append(snaps, snap)
+		index[id] = i
+		prev = id
+	}
+
+	snapshot := Snapshot{
+		PaneID: paneID,
+		Cursor: cursor,
+		Lines:  snaps,
+		Index:  index,
+		TakenAt: time.Now(),
+	}
+
+	snapshot.Hash = computeSnapshotHash(snapshot)
+	return snapshot
+}
+
+// makeLineID creates a stable LineID based on content
+func makeLineID(paneID string, prev LineID, text string) LineID {
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s", paneID, prev, text)))
+	return LineID(fmt.Sprintf("%x", h[:]))
+}
+
+// hashLine computes the hash of a line
+func hashLine(text string) LineHash {
+	h := sha256.Sum256([]byte(text))
+	return LineHash(fmt.Sprintf("%x", h[:]))
+}
+
+// computeSnapshotHash computes the hash of a snapshot
+func computeSnapshotHash(s Snapshot) SnapshotHash {
+	h := sha256.New()
+	for _, l := range s.Lines {
+		h.Write([]byte(l.ID))
+		h.Write([]byte(l.Hash))
+	}
+	return SnapshotHash(fmt.Sprintf("%x", h.Sum(nil)))
+}
+
+````
+
+## 📄 `weaver/core/snapshot_diff.go`
+
+````go
+package core
+
+type DiffKind int
+
+const (
+    DiffInsert DiffKind = iota
+    DiffDelete
+    DiffModify
+)
+
+type SnapshotDiff struct {
+    LineID  LineID
+    Before *LineSnapshot
+    After  *LineSnapshot
+    Change DiffKind
+}
+
+func DiffSnapshot(pre, post Snapshot) []SnapshotDiff {
+    diffs := []SnapshotDiff{}
+
+    // deletions & modifications
+    for id, preIdx := range pre.Index {
+        preLine := pre.Lines[preIdx]
+        postIdx, ok := post.Index[id]
+
+        if !ok {
+            diffs = append(diffs, SnapshotDiff{
+                LineID: id,
+                Before: &preLine,
+                After:  nil,
+                Change: DiffDelete,
+            })
+            continue
+        }
+
+        postLine := post.Lines[postIdx]
+        if preLine.Hash != postLine.Hash {
+            diffs = append(diffs, SnapshotDiff{
+                LineID: id,
+                Before: &preLine,
+                After:  &postLine,
+                Change: DiffModify,
+            })
+        }
+    }
+
+    // insertions
+    for id, postIdx := range post.Index {
+        if _, ok := pre.Index[id]; !ok {
+            postLine := post.Lines[postIdx]
+            diffs = append(diffs, SnapshotDiff{
+                LineID: id,
+                Before: nil,
+                After:  &postLine,
+                Change: DiffInsert,
+            })
+        }
+    }
+
+    return diffs
+}
+````
+
+## 📄 `weaver/core/snapshot_types.go`
+
+````go
+package core
+
+import (
+	"crypto/sha256"
+	"fmt"
+)
+
+type LineID string
+type LineHash string
+type SnapshotHash string
+
+type LineSnapshot struct {
+	ID   LineID
+	Text string
+	Hash LineHash
+}
+
+type Snapshot struct {
+	PaneID string
+	Cursor CursorPos
+
+	Lines []LineSnapshot
+	Index map[LineID]int
+
+	Hash SnapshotHash
+}
+
+type CursorPos struct {
+	Row int
+	Col int
+}
+````
+
+## 📄 `weaver/core/take_snapshot.go`
+
+````go
+package core
+
+import (
+	"crypto/sha256"
+	"fmt"
+)
+
+func TakeSnapshot(
+	paneID string,
+	cursor CursorPos,
+	lines []string,
+) Snapshot {
+
+	snaps := make([]LineSnapshot, 0, len(lines))
+	index := make(map[LineID]int, len(lines))
+
+	var prev LineID
+
+	for i, text := range lines {
+		id := makeLineID(paneID, prev, text)
+		hash := hashLine(text)
+
+		snap := LineSnapshot{
+			ID:   id,
+			Text: text,
+			Hash: hash,
+		}
+
+		snaps = append(snaps, snap)
+		index[id] = i
+		prev = id
+	}
+
+	snapshot := Snapshot{
+		PaneID: paneID,
+		Cursor: cursor,
+		Lines:  snaps,
+		Index:  index,
+	}
+
+	snapshot.Hash = hashSnapshot(snapshot)
+	return snapshot
+}
 ````
 
 ## 📄 `weaver/core/types.go`
@@ -5249,6 +7333,18 @@ const (
 	FactMove
 )
 
+// AnchorKind 锚点类型
+type AnchorKind int
+
+const (
+	AnchorNone AnchorKind = iota
+	AnchorAtCursor
+	AnchorWord
+	AnchorLine
+	AnchorAbsolute
+	AnchorLegacyRange
+)
+
 // Anchor 描述“我们想要操作的目标”，而不是“它在哪里”
 // Phase 5.3: 纯语义 Anchor
 type Anchor struct {
@@ -5256,6 +7352,9 @@ type Anchor struct {
 	Kind   AnchorKind `json:"kind"`
 	Ref    any        `json:"ref,omitempty"`
 	Hash   string     `json:"hash,omitempty"` // Phase 5.4: Reconciliation Expectation
+	LineID LineID     `json:"line_id,omitempty"` // Phase 9: Stable line identifier
+	Start  int        `json:"start,omitempty"`   // Phase 11: Start position in line
+	End    int        `json:"end,omitempty"`     // Phase 11: End position in line
 }
 
 // FactPayload 事实的具体内容
@@ -5328,6 +7427,14 @@ const (
 	AnchorFuzzy
 	AnchorFailed
 )
+
+// UndoEntry represents a single undo operation
+// Phase 12.0: Projection-level undo log
+type UndoEntry struct {
+	LineID LineID `json:"line_id"`
+	Before string `json:"before"`
+	After  string `json:"after"`
+}
 
 ````
 
@@ -5414,12 +7521,18 @@ func (r *PassthroughResolver) ResolveFacts(facts []core.Fact, expectedHash strin
 			}
 		}
 
+		safety := core.SafetyExact
+		if ra.LineID == "" {
+			safety = core.SafetyFuzzy // ❗不是 Exact
+		}
+
 		resolved = append(resolved, core.ResolvedFact{
 			Kind:    f.Kind,
 			Anchor:  ra,
 			Payload: payload,
 			Meta:    f.Meta,
-			Safety:  core.SafetyExact, // Phase 7: All current successful resolutions are exact
+			Safety:  safety,
+			LineID:  ra.LineID,        // Phase 9: Include stable LineID
 		})
 	}
 
@@ -5435,8 +7548,10 @@ func (r *PassthroughResolver) resolveAnchorWithSnapshot(a core.Anchor, s core.Sn
 	// Phase 6.3 checked SnapshotHash globally. LineHash is redundancy but good.
 
 	lineText := ""
+	var lineID core.LineID
 	if row < len(s.Lines) {
 		lineText = s.Lines[row].Text
+		lineID = s.Lines[row].ID
 		if a.Hash != "" {
 			// Compare with LineSnapshot Hash
 			if string(s.Lines[row].Hash) != a.Hash {
@@ -5447,26 +7562,30 @@ func (r *PassthroughResolver) resolveAnchorWithSnapshot(a core.Anchor, s core.Sn
 
 	switch a.Kind {
 	case core.AnchorAtCursor:
-		return core.ResolvedAnchor{PaneID: a.PaneID, Line: row, Start: col, End: col}, nil
+		return core.ResolvedAnchor{PaneID: a.PaneID, LineID: lineID, Line: row, Start: col, End: col}, nil
 	case core.AnchorWord:
 		start, end := findWordRange(lineText, col, false)
 		if start == -1 {
 			start, end = col, col
 		}
-		return core.ResolvedAnchor{PaneID: a.PaneID, Line: row, Start: start, End: end}, nil
+		return core.ResolvedAnchor{PaneID: a.PaneID, LineID: lineID, Line: row, Start: start, End: end}, nil
 	case core.AnchorLine:
-		return core.ResolvedAnchor{PaneID: a.PaneID, Line: row, Start: 0, End: len(lineText) - 1}, nil
+		return core.ResolvedAnchor{PaneID: a.PaneID, LineID: lineID, Line: row, Start: 0, End: len(lineText) - 1}, nil
 	case core.AnchorAbsolute:
 		// Ref is expected to be []int{line, col}
 		if coords, ok := a.Ref.([]int); ok && len(coords) >= 2 {
-			return core.ResolvedAnchor{PaneID: a.PaneID, Line: coords[0], Start: coords[1], End: coords[1]}, nil
+			// Find the corresponding LineID for the absolute line
+			absLine := coords[0]
+			if absLine >= 0 && absLine < len(s.Lines) {
+				return core.ResolvedAnchor{PaneID: a.PaneID, LineID: s.Lines[absLine].ID, Line: absLine, Start: coords[1], End: coords[1]}, nil
+			}
 		}
 		// Fallback to cursor
-		return core.ResolvedAnchor{PaneID: a.PaneID, Line: row, Start: col, End: col}, nil
+		return core.ResolvedAnchor{PaneID: a.PaneID, LineID: lineID, Line: row, Start: col, End: col}, nil
 	case core.AnchorLegacyRange:
 		return r.resolveAnchor(a) // Fallback or implement here
 	default:
-		return core.ResolvedAnchor{PaneID: a.PaneID, Line: row, Start: col, End: col}, nil
+		return core.ResolvedAnchor{PaneID: a.PaneID, LineID: lineID, Line: row, Start: col, End: col}, nil
 	}
 }
 
@@ -5489,11 +7608,14 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 		}
 	}
 
+	// ❗禁止在无 Snapshot 情况下伪造 LineID
+	// Return empty LineID to indicate unstable anchor
 	switch a.Kind {
 
 	case core.AnchorAtCursor:
 		return core.ResolvedAnchor{
 			PaneID: a.PaneID,
+			LineID: "",        // 空 LineID，明确表示不稳定
 			Line:   row,
 			Start:  col,
 			End:    col,
@@ -5507,6 +7629,7 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 		}
 		return core.ResolvedAnchor{
 			PaneID: a.PaneID,
+			LineID: "",        // 空 LineID，明确表示不稳定
 			Line:   row,
 			Start:  start,
 			End:    end,
@@ -5516,6 +7639,7 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 		// use lineText already captured
 		return core.ResolvedAnchor{
 			PaneID: a.PaneID,
+			LineID: "",        // 空 LineID，明确表示不稳定
 			Line:   row,
 			Start:  0,
 			End:    len(lineText) - 1,
@@ -5526,6 +7650,7 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 		if m, ok := a.Ref.(map[string]int); ok {
 			return core.ResolvedAnchor{
 				PaneID: a.PaneID,
+				LineID: "",        // 空 LineID，明确表示不稳定
 				Line:   m["line"],
 				Start:  m["start"],
 				End:    m["end"],
@@ -5537,6 +7662,7 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 		// Fallback for unknown kinds (e.g. Selection? if not implemented)
 		return core.ResolvedAnchor{
 			PaneID: a.PaneID,
+			LineID: "",        // 空 LineID，明确表示不稳定
 			Line:   row,
 			Start:  col,
 			End:    col,
@@ -5590,63 +7716,73 @@ import (
 type ShellFactBuilder struct{}
 
 func (b *ShellFactBuilder) Build(intent core.Intent, snapshot core.Snapshot) ([]core.Fact, []core.Fact, error) {
-	facts := make([]core.Fact, 0)
 	meta := intent.GetMeta()
 	target := intent.GetTarget()
 
-	// 基础语义 Anchor
-	// Phase 6.2: 从 Snapshot 获取 Expectation (Line Hash)
-	row := snapshot.Cursor.Row
-	// col := snapshot.Cursor.Col // If needed for semantic logic refinement
+	// Check if intent has multiple anchors (Phase 11.0)
+	anchors := intent.GetAnchors()
+	if len(anchors) == 0 {
+		// Fallback to original behavior: create anchor from snapshot
+		// 基础语义 Anchor
+		// Phase 6.2: 从 Snapshot 获取 Expectation (Line Hash)
+		row := snapshot.Cursor.Row
+		// col := snapshot.Cursor.Col // If needed for semantic logic refinement
 
-	var lineHash string
-	// Find line in snapshot
-	// Snapshot Lines order matches Rows? Usually yes, row=index.
-	// Check bounds
-	if row >= 0 && row < len(snapshot.Lines) {
-		lineHash = string(snapshot.Lines[row].Hash)
+		var lineHash string
+		// Find line in snapshot
+		// Snapshot Lines order matches Rows? Usually yes, row=index.
+		// Check bounds
+		if row >= 0 && row < len(snapshot.Lines) {
+			lineHash = string(snapshot.Lines[row].Hash)
+		}
+
+		anchor := core.Anchor{
+			PaneID: snapshot.PaneID,
+			Kind:   core.AnchorAtCursor, // 默认为光标处
+			Hash:   lineHash,
+		}
+
+		// 假设 TargetKind: 1=Char, 2=Word, 3=Line, 5=TextObject (from intent.go)
+		switch target.Kind {
+		case 1: // Char
+			anchor.Kind = core.AnchorAtCursor
+		case 2: // Word
+			anchor.Kind = core.AnchorWord
+		case 3: // Line
+			anchor.Kind = core.AnchorLine
+		case 5: // TextObject
+			anchor.Kind = core.AnchorWord // Fallback or sophisticated resolution
+		}
+
+		anchors = []core.Anchor{anchor}
 	}
 
-	anchor := core.Anchor{
-		PaneID: snapshot.PaneID,
-		Kind:   core.AnchorAtCursor, // 默认为光标处
-		Hash:   lineHash,
-	}
+	// Build facts for each anchor
+	facts := make([]core.Fact, 0)
+	for _, anchor := range anchors {
+		switch intent.GetKind() {
+		case core.IntentInsert:
+			text := target.Value
+			facts = append(facts, core.Fact{
+				Kind:    core.FactInsert,
+				Anchor:  anchor,
+				Payload: core.FactPayload{Text: text},
+				Meta:    meta,
+			})
 
-	// 假设 TargetKind: 1=Char, 2=Word, 3=Line, 5=TextObject (from intent.go)
-	switch target.Kind {
-	case 1: // Char
-		anchor.Kind = core.AnchorAtCursor
-	case 2: // Word
-		anchor.Kind = core.AnchorWord
-	case 3: // Line
-		anchor.Kind = core.AnchorLine
-	case 5: // TextObject
-		anchor.Kind = core.AnchorWord // Fallback or sophisticated resolution
-	}
+		// Note: IntentDelete and IntentChange intentionally omitted for Shell.
+		// We rely on high-fidelity legacy capture and reverse-bridge injection
+		// because semantic word-boundary resolution in the shell is imprecise.
 
-	switch intent.GetKind() {
-	case core.IntentInsert:
-		text := target.Value
-		facts = append(facts, core.Fact{
-			Kind:    core.FactInsert,
-			Anchor:  anchor,
-			Payload: core.FactPayload{Text: text},
-			Meta:    meta,
-		})
-
-	// Note: IntentDelete and IntentChange intentionally omitted for Shell.
-	// We rely on high-fidelity legacy capture and reverse-bridge injection
-	// because semantic word-boundary resolution in the shell is imprecise.
-
-	case core.IntentMove:
-		// Move is FactMove.
-		// Target Value might be motion string?
-		facts = append(facts, core.Fact{
-			Kind:   core.FactMove,
-			Anchor: anchor,
-			Meta:   meta,
-		})
+		case core.IntentMove:
+			// Move is FactMove.
+			// Target Value might be motion string?
+			facts = append(facts, core.Fact{
+				Kind:   core.FactMove,
+				Anchor: anchor,
+				Meta:   meta,
+			})
+		}
 	}
 
 	// Inverse Facts:

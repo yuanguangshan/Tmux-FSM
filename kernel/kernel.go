@@ -12,6 +12,7 @@ type Kernel struct {
 	Weaver *weaver.Manager
 }
 
+// ✅ Kernel 的唯一上下文入口（现在先很薄，未来可扩展）
 type HandleContext struct {
 	Ctx context.Context
 }
@@ -23,12 +24,14 @@ func NewKernel(fsmEngine *fsm.Engine, weaverMgr *weaver.Manager) *Kernel {
 	}
 }
 
+// ✅ Kernel 的唯一入口
 func (k *Kernel) HandleKey(hctx HandleContext, key string) {
-	decision := k.Decide(key)
+	_ = hctx // ✅ 现在不用，但接口已经锁死
 
+	decision := k.Decide(key)
 	if decision == nil {
 		return
 	}
 
-	k.Execute(decision)
+	_ = k.Execute(decision)
 }
