@@ -44,7 +44,7 @@ Commit: 413fb32
 
 1. **手动验证基线测试**
    ```bash
-   cd /Users/ygs/ygs/Tmux-FSM
+   cd /Users/ygs/ygs/tmux-fsn
    ./tests/baseline_tests.sh
    ```
 

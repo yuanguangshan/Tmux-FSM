@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 	"tmux-fsm/fsm/ui"
-	"tmux-fsm"
 )
 
 // Engine FSM 引擎结构体

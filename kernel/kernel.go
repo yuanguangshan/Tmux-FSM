@@ -2,9 +2,11 @@ package kernel
 
 import (
 	"context"
+	"tmux-fsm/fsm"
+  "tmux-fsm/weaver/core"
+"tmux-fsm/weaver/adapter"
+)
 
-	"yourmodule/fsm"
-	"yourmodule/weaver"
 )
 
 type Kernel struct {

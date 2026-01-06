@@ -4,7 +4,7 @@
 
 set -e
 
-echo "=== Tmux-FSM 基线测试 ==="
+echo "=== tmux-fsn 基线测试 ==="
 echo "Tag: pre-weaver-migration"
 echo "Date: $(date)"
 echo ""

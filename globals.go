@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"sync"
 	"time"
-	"tmux-fsm/fsm"
 )
 
 type FSMState struct {

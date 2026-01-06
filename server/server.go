@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"context"
@@ -7,9 +7,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-
-	"Tmux-FSM/kernel"
-	"Tmux-FSM/protocol"
+	"tmux-fsm/kernel"
+	"tmux-fsm/weaver/adapter"
 )
 
 type Config struct {

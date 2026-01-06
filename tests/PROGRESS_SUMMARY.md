@@ -32,7 +32,7 @@
 
 ### 新增目录
 ```
-Tmux-FSM/
+tmux-fsn/
 ├── tests/                    # 测试和文档
 │   ├── baseline_tests.sh
 │   ├── BASELINE_BEHAVIOR.md

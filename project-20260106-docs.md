@@ -1633,7 +1633,7 @@ func executeVimAction(action string, state *FSMState, targetPane string) {
 func getHelpText(state *FSMState) string {
 	helpText := `
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃                Tmux-FSM (Weaver Core) Cheat Sheet                  ┃
+┃                tmux-fsn (Weaver Core) Cheat Sheet                  ┃
 ┃                   苑广山@yuanguangshan@gmail.com                   ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
@@ -3007,7 +3007,7 @@ func parseMotionToTarget(motion string) SemanticTarget {
 package kernel
 
 import (
-    "yourmodule/intent"
+    "tmux-fsm/intent"
 )
 
 type DecisionKind int
@@ -3081,8 +3081,8 @@ package kernel
 import (
 	"context"
 
-	"yourmodule/fsm"
-	"yourmodule/weaver"
+	"tmux-fsm/fsm"
+	"tmux-fsm/weaver"
 )
 
 type Kernel struct {
@@ -3119,7 +3119,7 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 package kernel
 
 import (
-	"yourmodule/intent"
+	"tmux-fsm/intent"
 )
 
 // ⚠️ 这是唯一一个“脏接口”，但它把脏东西隔离了
@@ -4487,7 +4487,7 @@ echo "=== 所有测试完成 ==="
 
 set -e
 
-echo "=== Tmux-FSM 基线测试 ==="
+echo "=== tmux-fsn 基线测试 ==="
 echo "Tag: pre-weaver-migration"
 echo "Date: $(date)"
 echo ""

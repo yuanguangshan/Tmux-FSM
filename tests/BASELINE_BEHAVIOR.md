@@ -1,4 +1,4 @@
-# Tmux-FSM 基线行为文档
+# tmux-fsn 基线行为文档
 
 **版本**: pre-weaver-migration  
 **日期**: 2026-01-05  

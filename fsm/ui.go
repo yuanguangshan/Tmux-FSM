@@ -1,48 +1,19 @@
-package fsm
+package ui
 
-import "tmux-fsm/fsm/ui"
-
-// UIManager UI 管理器
-type UIManager struct {
-	active ui.UI
+// UI 接口
+type UI interface {
+	Show()
+	Update()
+	Hide()
 }
 
-// NewUIManager 创建新的 UI 管理器
-func NewUIManager() *UIManager {
-	return &UIManager{}
+// StateProvider 由 FSM 实现
+type StateProvider interface {
+	GetActiveState() string
+	GetStateHint(state string) string
 }
 
-// 全局 UI 实例
-var CurrentUI ui.UI
-
-// OnUpdateUI 是当 FSM 状态变化时需要执行的回调（通常由主程序注入以更新状态栏）
-var OnUpdateUI func()
-
-// UI 更新函数
-func ShowUI() {
-	if CurrentUI != nil {
-		CurrentUI.Show()
-	}
-	if OnUpdateUI != nil {
-		OnUpdateUI()
-	}
-}
-
-func UpdateUI() {
-	if CurrentUI != nil {
-		CurrentUI.Update()
-	}
-	if OnUpdateUI != nil {
-		OnUpdateUI()
-	}
-}
-
-func HideUI() {
-	if CurrentUI != nil {
-		CurrentUI.Hide()
-	}
-	// 隐藏后通常也需要刷新一次状态栏以移除文字
-	if OnUpdateUI != nil {
-		OnUpdateUI()
-	}
+// Backend 由 tmux backend 实现
+type Backend interface {
+	ExecRaw(cmd string)
 }

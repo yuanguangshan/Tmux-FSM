@@ -5,7 +5,7 @@ import (
 	"flag"
 	"log"
 
-	"Tmux-FSM/server"
+	"tmux-fsm/server"
 )
 
 func main() {

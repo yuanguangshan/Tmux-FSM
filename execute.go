@@ -995,7 +995,7 @@ func executeVimAction(action string, state *FSMState, targetPane string) {
 func getHelpText(state *FSMState) string {
 	helpText := `
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃                Tmux-FSM (Weaver Core) Cheat Sheet                  ┃
+┃                tmux-fsn (Weaver Core) Cheat Sheet                  ┃
 ┃                   苑广山@yuanguangshan@gmail.com                   ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 

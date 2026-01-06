@@ -2,7 +2,6 @@ package fsm
 
 import (
 	"strings"
-	tmux_fsm "tmux-fsm"
 )
 
 // OnNvimMode 处理来自 Neovim 的模式变化
