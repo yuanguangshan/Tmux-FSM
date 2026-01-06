@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -52,6 +53,10 @@ func main() {
 	debugMode := flag.Bool("debug", false, "enable debug logging")
 	configPath := flag.String("config", "./keymap.yaml", "path to keymap configuration file")
 	reloadFlag := flag.Bool("reload", false, "reload keymap configuration")
+	keyFlag := flag.String("key", "", "dispatch key to FSM")
+	enterFlag := flag.Bool("enter", false, "enter FSM mode")
+	exitFlag := flag.Bool("exit", false, "exit FSM mode")
+	helpFlag := flag.Bool("help", false, "show help")
 	flag.Parse()
 
 	// Load keymap configuration
@@ -83,6 +88,44 @@ func main() {
 
 	if *debugMode {
 		log.SetFlags(log.LstdFlags | log.Lshortfile) // Include file and line info in logs
+	}
+
+	// Handle command line arguments
+	args := flag.Args()
+
+	if *enterFlag {
+		// Enter FSM mode
+		fsm.EnterFSM()
+		os.Exit(0)
+	}
+
+	if *exitFlag {
+		// Exit FSM mode
+		fsm.ExitFSM()
+		os.Exit(0)
+	}
+
+	if *helpFlag {
+		fmt.Println("tmux-fsm - A Tmux plugin providing Vim-like modal editing")
+		fmt.Println("Usage:")
+		fmt.Println("  tmux-fsm -server          # Run as server daemon")
+		fmt.Println("  tmux-fsm -enter           # Enter FSM mode")
+		fmt.Println("  tmux-fsm -exit            # Exit FSM mode")
+		fmt.Println("  tmux-fsm -reload          # Reload keymap configuration")
+		fmt.Println("  tmux-fsm -key <key> <pane_client>  # Process a key event")
+		fmt.Println("  tmux-fsm -debug           # Enable debug logging")
+		os.Exit(0)
+	}
+
+	if *keyFlag != "" {
+		// Process key event
+		paneAndClient := ""
+		if len(args) > 0 {
+			paneAndClient = args[0]
+		}
+		// Call runClient function to dispatch the key
+		runClient(*keyFlag, paneAndClient)
+		os.Exit(0)
 	}
 
 	if *serverMode {

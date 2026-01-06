@@ -28,6 +28,24 @@ func isServerRunning() bool {
 }
 
 func runClient(key, paneAndClient string) {
+	// 添加参数验证和修复
+	if paneAndClient == "" || paneAndClient == "|" {
+		// 尝试获取当前pane和client
+		// 注意：这里不能直接调用 tmux 命令，因为这可能导致循环依赖
+		// 我们需要确保参数格式正确
+		paneAndClient = "default|default"
+	} else {
+		// 检查参数格式是否正确 (pane|client)，如果 client 部分为空，尝试修复
+		parts := strings.Split(paneAndClient, "|")
+		if len(parts) == 2 && parts[1] == "" {
+			// client 部分为空，使用默认值
+			paneAndClient = parts[0] + "|default"
+		} else if len(parts) == 1 {
+			// 只有 pane 部分，添加默认 client
+			paneAndClient = parts[0] + "|default"
+		}
+	}
+
 	conn, err := net.DialTimeout("unix", socketPath, 1*time.Second)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: daemon not running. Start it with 'tmux-fsm -server'\n")
