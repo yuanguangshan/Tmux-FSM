@@ -353,16 +353,34 @@ func createDefaultKeymap() {
 }
 
 // 以下是原有的服务器模式代码
-func runClient(key, paneID string) {
-	// 添加参数验证
-	if paneID == "" || paneID == "|" {
+func runClient(key, paneAndClient string) {
+	// 添加参数验证和修复
+	if paneAndClient == "" || paneAndClient == "|" {
 		// 尝试获取当前pane和client
 		paneIDBytes, err1 := exec.Command("tmux", "display-message", "-p", "#{pane_id}").Output()
 		clientNameBytes, err2 := exec.Command("tmux", "display-message", "-p", "#{client_name}").Output()
 		if err1 == nil && err2 == nil {
-			paneID = strings.TrimSpace(string(paneIDBytes)) + "|" + strings.TrimSpace(string(clientNameBytes))
+			paneAndClient = strings.TrimSpace(string(paneIDBytes)) + "|" + strings.TrimSpace(string(clientNameBytes))
 		} else {
-			paneID = "default|default"
+			paneAndClient = "default|default"
+		}
+	} else {
+		// 检查参数格式是否正确 (pane|client)，如果 client 部分为空，尝试获取真实 client
+		parts := strings.Split(paneAndClient, "|")
+		if len(parts) == 2 && parts[1] == "" {
+			// client 部分为空，获取当前 client
+			clientNameBytes, err := exec.Command("tmux", "display-message", "-p", "#{client_name}").Output()
+			if err == nil {
+				clientName := strings.TrimSpace(string(clientNameBytes))
+				if clientName != "" {
+					paneAndClient = parts[0] + "|" + clientName
+				} else {
+					// 如果仍然无法获取 client，使用默认值
+					paneAndClient = parts[0] + "|default"
+				}
+			} else {
+				paneAndClient = parts[0] + "|default"
+			}
 		}
 	}
 
@@ -378,7 +396,7 @@ func runClient(key, paneID string) {
 		return
 	}
 
-	payload := fmt.Sprintf("%s|%s", paneID, key)
+	payload := fmt.Sprintf("%s|%s", paneAndClient, key)
 	if _, err := conn.Write([]byte(payload)); err != nil {
 		return
 	}
