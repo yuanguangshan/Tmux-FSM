@@ -1,10 +1,5 @@
 package core
 
-import (
-	"crypto/sha256"
-	"fmt"
-)
-
 func TakeSnapshot(
 	paneID string,
 	cursor CursorPos,

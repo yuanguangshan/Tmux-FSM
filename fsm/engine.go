@@ -2,9 +2,8 @@ package fsm
 
 import (
 	"fmt"
-	"strings"
 	"time"
-	"tmux-fsm/fsm/ui"
+	"tmux-fsm/ui"
 )
 
 // Engine FSM 引擎结构体

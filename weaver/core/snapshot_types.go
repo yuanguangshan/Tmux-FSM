@@ -1,10 +1,5 @@
 package core
 
-import (
-	"crypto/sha256"
-	"fmt"
-)
-
 type LineID string
 type LineHash string
 type SnapshotHash string
