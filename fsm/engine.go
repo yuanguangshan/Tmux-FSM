@@ -3,6 +3,7 @@ package fsm
 import (
 	"fmt"
 	"time"
+	"tmux-fsm/backend"
 	"tmux-fsm/ui"
 )
 
@@ -174,7 +175,7 @@ func (e *Engine) RunAction(name string) {
 
 func tmux(cmd string) {
 	// Use GlobalBackend to execute the command
-	tmux_fsm.GlobalBackend.ExecRaw(cmd)
+	backend.GlobalBackend.ExecRaw(cmd)
 }
 
 // 全局函数，支持在其他包调用
@@ -202,5 +203,5 @@ func ExitFSM() {
 		defaultEngine.Reset()
 	}
 	HideUI()
-	tmux_fsm.GlobalBackend.UnsetUserOption("key-table")
+	backend.GlobalBackend.UnsetUserOption("key-table")
 }

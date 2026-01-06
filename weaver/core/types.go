@@ -31,17 +31,6 @@ const (
 	FactMove
 )
 
-// AnchorKind 锚点类型
-type AnchorKind int
-
-const (
-	AnchorNone AnchorKind = iota
-	AnchorAtCursor
-	AnchorWord
-	AnchorLine
-	AnchorAbsolute
-	AnchorLegacyRange
-)
 
 // Anchor 描述“我们想要操作的目标”，而不是“它在哪里”
 // Phase 5.3: 纯语义 Anchor
@@ -82,14 +71,12 @@ type Transaction struct {
 // TransactionID 事务 ID
 type TransactionID string
 
-// SafetyLevel 安全级别
-type SafetyLevel int
-
-const (
-	SafetyExact SafetyLevel = iota
-	SafetyFuzzy
-	SafetyUnsafe
-)
+// VerificationResult for verifier
+type VerificationResult struct {
+    Safe  bool
+    Level SafetyLevel
+    Err   error
+}
 
 // Verdict 裁决结果（可审计输出）
 type Verdict struct {

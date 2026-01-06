@@ -7,6 +7,8 @@ import (
 	"os"
 	"sync"
 	"time"
+	"tmux-fsm/backend"
+	"tmux-fsm/fsm"
 )
 
 type FSMState struct {
@@ -32,7 +34,7 @@ var (
 
 func loadState() FSMState {
 	// Use GlobalBackend to read tmux options
-	out, err := GlobalBackend.GetUserOption("@tmux_fsm_state")
+	out, err := backend.GlobalBackend.GetUserOption("@tmux_fsm_state")
 	var state FSMState
 	if err != nil || len(out) == 0 {
 		return FSMState{Mode: "NORMAL", Count: 0}
@@ -44,7 +46,7 @@ func loadState() FSMState {
 func saveStateRaw(data []byte) {
 	// Use GlobalBackend to save state
 	// This implies SetUserOption needs to be able to set arbitrary keys.
-	if err := GlobalBackend.SetUserOption("@tmux_fsm_state", string(data)); err != nil {
+	if err := backend.GlobalBackend.SetUserOption("@tmux_fsm_state", string(data)); err != nil {
 		log.Printf("Failed to save FSM state: %v", err)
 	}
 }
@@ -108,9 +110,9 @@ func updateStatusBar(state FSMState, clientName string) {
 	}
 
 	// Use GlobalBackend for tmux option updates
-	GlobalBackend.SetUserOption("@fsm_state", modeMsg)
-	GlobalBackend.SetUserOption("@fsm_keys", keysMsg)
-	GlobalBackend.RefreshClient(clientName) // Refresh the target client
+	backend.GlobalBackend.SetUserOption("@fsm_state", modeMsg)
+	backend.GlobalBackend.SetUserOption("@fsm_keys", keysMsg)
+	backend.GlobalBackend.RefreshClient(clientName) // Refresh the target client
 
 	// --- [ABI: Heartbeat Lock] ---
 	// Re-assert the key table to prevent "one-shot" dropouts.
@@ -120,6 +122,6 @@ func updateStatusBar(state FSMState, clientName string) {
 		// but for now, we rely on the fact that we are in a state where we should be active.
 		// If GlobalBackend could read options, it would be better.
 		// For now, we assume if we got here, FSM is active.
-		GlobalBackend.SwitchClientTable(clientName, "fsm")
+		backend.GlobalBackend.SwitchClientTable(clientName, "fsm")
 	}
 }

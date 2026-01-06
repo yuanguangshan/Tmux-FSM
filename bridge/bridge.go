@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"time"
+	"tmux-fsm/backend"
 	"tmux-fsm/fsm"
 )
 
@@ -64,8 +65,8 @@ func (h *LegacyFSMHandler) EnterFSM() {
 		fsm.EnterFSM()
 	} else {
 		// 保留旧的进入逻辑
-		tmux_fsm.GlobalBackend.SetUserOption("@fsm_active", "true")
-		tmux_fsm.GlobalBackend.SwitchClientTable("", "fsm")
+		backend.GlobalBackend.SetUserOption("@fsm_active", "true")
+		backend.GlobalBackend.SwitchClientTable("", "fsm")
 	}
 }
 
@@ -75,10 +76,10 @@ func (h *LegacyFSMHandler) ExitFSM() {
 		fsm.ExitFSM()
 	} else {
 		// 保留旧的退出逻辑
-		tmux_fsm.GlobalBackend.SetUserOption("@fsm_active", "false")
-		tmux_fsm.GlobalBackend.SetUserOption("@fsm_state", "")
-		tmux_fsm.GlobalBackend.SetUserOption("@fsm_keys", "")
-		tmux_fsm.GlobalBackend.SwitchClientTable("", "root")
-		tmux_fsm.GlobalBackend.RefreshClient("")
+		backend.GlobalBackend.SetUserOption("@fsm_active", "false")
+		backend.GlobalBackend.SetUserOption("@fsm_state", "")
+		backend.GlobalBackend.SetUserOption("@fsm_keys", "")
+		backend.GlobalBackend.SwitchClientTable("", "root")
+		backend.GlobalBackend.RefreshClient("")
 	}
 }

@@ -2,6 +2,7 @@ package fsm
 
 import (
 	"strings"
+	"tmux-fsm/backend"
 )
 
 // OnNvimMode 处理来自 Neovim 的模式变化
@@ -17,7 +18,7 @@ func OnNvimMode(mode string) {
 // 更好的方案是使用 Neovim 的 RPC 机制
 func NotifyNvimMode() {
 	// 获取当前活跃的窗口/面板
-	out, err := tmux_fsm.GlobalBackend.GetCommandOutput("display-message -p '#{pane_current_command}'")
+	out, err := backend.GlobalBackend.GetCommandOutput("display-message -p '#{pane_current_command}'")
 	if err != nil {
 		return
 	}
