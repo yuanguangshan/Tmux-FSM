@@ -3,7 +3,6 @@ package bridge
 import (
 	"time"
 	"tmux-fsm/fsm"
-	tmux_fsm "tmux-fsm"
 )
 
 // LegacyFSMHandler 处理与旧 FSM 系统的交互
