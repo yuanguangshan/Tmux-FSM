@@ -8,7 +8,7 @@ type NoopEngine struct{}
 func (n *NoopEngine) SendKeys(keys ...string) {}
 
 func (n *NoopEngine) GetVisualMode() intent.VisualMode {
-	return intent.VisualModeNormal
+	return intent.VisualNone
 }
 
 func (n *NoopEngine) EnterVisualMode(mode intent.VisualMode) {}

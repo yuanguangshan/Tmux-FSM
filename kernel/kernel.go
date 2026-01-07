@@ -33,10 +33,6 @@ type HandleContext struct {
 	Ctx context.Context
 }
 
-// IntentExecutor 定义意图执行器接口
-type IntentExecutor interface {
-	Execute(*Decision) error
-}
 
 func NewKernel(fsmEngine *fsm.Engine, exec IntentExecutor) *Kernel {
 	return &Kernel{
@@ -48,24 +44,6 @@ func NewKernel(fsmEngine *fsm.Engine, exec IntentExecutor) *Kernel {
 	}
 }
 
-// Execute 执行决策
-func (k *Kernel) Execute(decision *Decision) {
-	if decision == nil {
-		return
-	}
-
-	if k.Exec != nil {
-		// 使用外部执行器
-		k.Exec.Execute(decision)
-		return
-	}
-
-	// 如果没有外部执行器，尝试通过FSM执行意图
-	if k.FSM != nil && decision.Intent != nil {
-		// 通过FSM的DispatchIntent方法执行意图
-		_ = k.FSM.DispatchIntent(decision.Intent)
-	}
-}
 
 // ✅ Kernel 的唯一入口
 func (k *Kernel) HandleKey(hctx HandleContext, key string) {
@@ -92,5 +70,19 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 		k.ShadowStats.Total++
 		k.ShadowStats.Mismatched++ // 记录为未覆盖
 	}
+}
+
+// ProcessIntent 处理意图
+func (k *Kernel) ProcessIntent(intent *intent.Intent) error {
+	if k.Exec != nil {
+		return k.Exec.Process(intent)
+	}
+
+	// 如果没有外部执行器，尝试通过FSM执行意图
+	if k.FSM != nil && intent != nil {
+		return k.FSM.DispatchIntent(intent)
+	}
+
+	return nil
 }
 

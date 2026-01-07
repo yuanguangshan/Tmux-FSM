@@ -79,7 +79,7 @@ func (g *Grammar) Consume(tok fsm.RawToken) *intentPkg.GrammarIntent {
 // consumeKey 处理普通按键
 func (g *Grammar) consumeKey(key string) *intentPkg.GrammarIntent {
 	// 优先处理 pending motion
-	if g.pendingMotion != MPNone {
+	if g.pendingMotion != nil {
 		return g.consumePendingMotion(key)
 	}
 
@@ -94,7 +94,6 @@ func (g *Grammar) consumeKey(key string) *intentPkg.GrammarIntent {
 		if g.pendingOp != nil && *g.pendingOp == op {
 			intent := makeLineGrammarIntent(op, max(g.count, 1))
 			g.reset()
-			g.rememberGrammar(intent)
 			return intent
 		}
 
@@ -331,7 +330,6 @@ func (g *Grammar) consumePendingMotion(key string) *intentPkg.GrammarIntent {
 			if key == "g" {
 				intent := makeMoveGrammarIntent(intentPkg.MotionGoto, max(g.count, 1), "gg")
 				g.reset()
-				g.rememberGrammar(intent)
 				return intent
 			}
 			g.reset()
@@ -341,7 +339,6 @@ func (g *Grammar) consumePendingMotion(key string) *intentPkg.GrammarIntent {
 			intent := makeFindGrammarIntent(g.pendingMotion, g.pendingOp, rune(key[0]), max(g.count, 1))
 			g.pendingMotion = nil
 			g.reset()
-			g.rememberGrammar(intent)
 			return intent
 		default:
 			g.reset()
@@ -508,20 +505,36 @@ func makeFindGrammarIntent(pending *MotionPendingInfo, op *intentPkg.OperatorKin
 	}
 }
 
-// motionTypeToString 将 MotionPending 转换为字符串
-func motionTypeToString(motionType MotionPending) string {
-	switch motionType {
-	case MPF:
-		return "f"
-	case MPBigF:
-		return "F"
-	case MPT:
-		return "t"
-	case MPBigT:
-		return "T"
-	default:
+// motionTypeToString 将 MotionPendingInfo 转换为字符串
+func motionTypeToString(info *MotionPendingInfo) string {
+	if info == nil {
 		return ""
 	}
+
+	// 根据 Kind 字段判断
+	switch info.Kind {
+	case intentPkg.MotionFind:
+		if info.FindDir == intentPkg.FindForward {
+			if info.FindTill {
+				return "t"
+			} else {
+				return "f"
+			}
+		}
+		// MotionBigFind 用 MotionFind + FindBackward 表示
+		// MotionG 用 MotionGoto 表示
+		if info.Kind == intentPkg.MotionFind && info.FindDir == intentPkg.FindBackward {
+			if info.FindTill {
+				return "T"
+			} else {
+				return "F"
+			}
+		}
+		if info.Kind == intentPkg.MotionGoto {
+			return "g"
+		}
+		}
+	return ""
 }
 
 

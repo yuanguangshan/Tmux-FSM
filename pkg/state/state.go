@@ -5,11 +5,22 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"sync"
 	"time"
 	"tmux-fsm/fsm"
 )
+
+// Transaction 事务结构（简化版）
+type Transaction struct {
+	ID               int                    `json:"id"`
+	Records          []interface{}          `json:"records"`
+	CreatedAt        string                 `json:"created_at"`
+	Applied          bool                   `json:"applied"`
+	Skipped          bool                   `json:"skipped"`
+	SafetyLevel      string                 `json:"safety_level,omitempty"`
+	PreSnapshotHash  string                 `json:"pre_snapshot_hash,omitempty"`
+	PostSnapshotHash string                 `json:"post_snapshot_hash,omitempty"`
+}
 
 // FSMState represents the state of the FSM
 type FSMState struct {

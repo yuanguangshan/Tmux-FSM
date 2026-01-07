@@ -46,11 +46,6 @@ func (r *Resolver) ResolveWithContext(i *intent.Intent, ctx ExecContext) error {
 		r.recordIntentForMacro(i)
 	}
 
-	// 处理视觉模式切换
-	if err := r.handleVisualMode(i); err != nil {
-		return err
-	}
-
 	var err error
 
 	switch i.Kind {
@@ -70,10 +65,12 @@ func (r *Resolver) ResolveWithContext(i *intent.Intent, ctx ExecContext) error {
 		err = r.resolveMacro(i)
 
 	case intent.IntentEnterVisual:
-		err = r.resolveEnterVisual(i)
+		// 暂时忽略视觉模式相关意图
+		return nil
 
 	case intent.IntentExitVisual:
-		err = r.resolveExitVisual(i)
+		// 暂时忽略视觉模式相关意图
+		return nil
 
 	case intent.IntentRepeatFind:
 		err = r.repeatFind(false)

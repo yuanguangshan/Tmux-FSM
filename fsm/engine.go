@@ -48,30 +48,24 @@ func (ea *EngineAdapter) ExitVisualMode() {
 	UpdateUI()
 }
 
-func (ea *EngineAdapter) EnterSelection(mode resolver.SelectionMode) {
-	// 进入 tmux copy-mode
-	ea.SendKeys("Escape", "copy-mode", "Space")
-}
-
-func (ea *EngineAdapter) UpdateSelection(anchor, focus resolver.Cursor) {
-	// 更新选择范围（在 tmux 中）
-	// 这里可能需要根据 anchor 和 focus 的相对位置来决定如何更新选择
-}
-
-func (ea *EngineAdapter) ExitSelection() {
-	// 退出 tmux copy-mode
-	ea.SendKeys("q")
-}
-
-func (ea *EngineAdapter) GetCurrentCursor() resolver.Cursor {
+func (ea *EngineAdapter) GetCurrentCursor() resolver.ResolverCursor {
 	// 获取当前光标位置（通过 tmux 命令）
 	// 这里需要实际从 tmux 获取光标位置
-	return resolver.Cursor{Line: 0, Col: 0} // 简化实现
+	return resolver.ResolverCursor{Line: 0, Col: 0} // 简化实现
 }
 
-func (ea *EngineAdapter) DeleteSelection(selection *resolver.Selection) error {
-	// 删除选择区域的内容
-	ea.SendKeys("d")
+func (ea *EngineAdapter) ComputeMotion(m *intent.Motion) (resolver.ResolverRange, error) {
+	// 计算动作范围
+	return resolver.ResolverRange{}, nil
+}
+
+func (ea *EngineAdapter) MoveCursor(r resolver.ResolverRange) error {
+	// 移动光标
+	return nil
+}
+
+func (ea *EngineAdapter) DeleteRange(r resolver.ResolverRange) error {
+	// 删除范围内容
 	return nil
 }
 
@@ -90,9 +84,8 @@ func (ea *EngineAdapter) DeleteWithMotion(motion intent.MotionKind, count int) e
 	return nil
 }
 
-func (ea *EngineAdapter) YankSelection(selection *resolver.Selection) error {
-	// 复制选择区域的内容
-	ea.SendKeys("y")
+func (ea *EngineAdapter) YankRange(r resolver.ResolverRange) error {
+	// 复制范围内容
 	return nil
 }
 
@@ -111,9 +104,8 @@ func (ea *EngineAdapter) YankWithMotion(motion intent.MotionKind, count int) err
 	return nil
 }
 
-func (ea *EngineAdapter) ChangeSelection(selection *resolver.Selection) error {
-	// 修改选择区域的内容
-	ea.SendKeys("c")
+func (ea *EngineAdapter) ChangeRange(r resolver.ResolverRange) error {
+	// 修改范围内容
 	return nil
 }
 

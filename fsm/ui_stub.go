@@ -13,6 +13,9 @@ type UIDriver interface {
 
 var uiDriver UIDriver
 
+// OnUpdateUI 当UI需要更新时调用的回调函数
+var OnUpdateUI func()
+
 // SetUIDriver 设置UI驱动实现
 func SetUIDriver(driver UIDriver) {
 	uiDriver = driver
@@ -24,6 +27,11 @@ func UpdateUI(_ ...any) {
 	// This is a technical debt - FSM should NOT directly touch tmux
 	// TODO: Move to Kernel → Weaver → Backend pipeline
 	updateTmuxVariables()
+
+	// 调用外部注册的UI更新回调
+	if OnUpdateUI != nil {
+		OnUpdateUI()
+	}
 }
 
 // updateTmuxVariables 更新 tmux 状态变量

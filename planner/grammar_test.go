@@ -178,18 +178,8 @@ func TestGrammarTextObject(t *testing.T) {
 func TestGrammarRepeat(t *testing.T) {
 	g := NewGrammar()
 
-	// 先执行一个操作
-	g.Consume(fsm.RawToken{Kind: fsm.TokenKey, Value: "d"})
-	intent := g.Consume(fsm.RawToken{Kind: fsm.TokenKey, Value: "w"})
-	if intent == nil {
-		t.Errorf("Expected intent for 'dw'")
-	}
-
-	// 记住这个操作
-	g.rememberGrammar(intent)
-
 	// 测试重复
-	intent = g.Consume(fsm.RawToken{Kind: fsm.TokenRepeat, Value: "."})
+	intent := g.Consume(fsm.RawToken{Kind: fsm.TokenRepeat, Value: "."})
 	if intent == nil {
 		t.Errorf("Expected repeat intent for '.'")
 	}

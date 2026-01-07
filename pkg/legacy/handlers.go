@@ -3,6 +3,7 @@ package legacy
 import (
 	"fmt"
 	"strings"
+	"time"
 	"tmux-fsm/pkg/protocol"
 )
 
