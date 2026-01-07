@@ -33,6 +33,11 @@ type HandleContext struct {
 	Ctx context.Context
 }
 
+// IntentExecutor 定义意图执行器接口
+type IntentExecutor interface {
+	Execute(*Decision) error
+}
+
 func NewKernel(fsmEngine *fsm.Engine, exec IntentExecutor) *Kernel {
 	return &Kernel{
 		FSM:           fsmEngine,
@@ -43,84 +48,49 @@ func NewKernel(fsmEngine *fsm.Engine, exec IntentExecutor) *Kernel {
 	}
 }
 
+// Execute 执行决策
+func (k *Kernel) Execute(decision *Decision) {
+	if decision == nil {
+		return
+	}
+
+	if k.Exec != nil {
+		// 使用外部执行器
+		k.Exec.Execute(decision)
+		return
+	}
+
+	// 如果没有外部执行器，尝试通过FSM执行意图
+	if k.FSM != nil && decision.Intent != nil {
+		// 通过FSM的DispatchIntent方法执行意图
+		_ = k.FSM.DispatchIntent(decision.Intent)
+	}
+}
+
 // ✅ Kernel 的唯一入口
 func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 	_ = hctx // ✅ 现在不用，但接口已经锁死
 
-	// 通过legacy路径生成intent（权威执行路径）
-	legacyDecision := k.Decide(key)
+	// 通过Grammar路径生成intent（新的权威执行路径）
+	var decision *Decision
 
-	// 如果启用了shadow intent，同时生成native intent进行对比
-	if k.ShadowIntent && k.NativeBuilder != nil {
-		// 从legacy decision中提取上下文信息
-		var legacyIntent *intent.Intent
-		if legacyDecision != nil {
-			legacyIntent = legacyDecision.Intent
-		}
+	// 先尝试通过FSM + Grammar生成intent
+	if k.FSM != nil && k.Grammar != nil {
+		decision = k.Decide(key)
 
-		k.ShadowStats.Total++
-
-		if legacyIntent != nil {
-			ctx := builder.BuildContext{
-				Action:       key,
-				Count:        legacyIntent.Count,
-				PaneID:       legacyIntent.PaneID,
-				SnapshotHash: legacyIntent.SnapshotHash,
-			}
-
-			nativeIntent, ok := k.NativeBuilder.Build(ctx)
-
-			if ok {
-				k.ShadowStats.Built++
-			}
-
-			if ok && nativeIntent != nil {
-				// 比较native和legacy intent的语义
-				if !builder.SemanticEqual(nativeIntent, legacyIntent, builder.CompareMigration) {
-					diffs := builder.DiffIntent(legacyIntent, nativeIntent)
-					log.Printf("[INTENT MISMATCH] action=%s diffs=%+v", key, diffs)
-					k.ShadowStats.Mismatched++
-				} else {
-					k.ShadowStats.Matched++
-				}
-			} else if ok {
-				// native intent生成失败
-				log.Printf(
-					"[INTENT MISSING] native builder did not handle action=%s",
-					key,
-				)
-				k.ShadowStats.Mismatched++
-			}
-		} else {
-			// legacy intent为空，尝试构建native intent
-			ctx := builder.BuildContext{
-				Action: key,
-				Count:  1, // 默认计数
-			}
-
-			nativeIntent, ok := k.NativeBuilder.Build(ctx)
-			if ok && nativeIntent != nil {
-				// native intent生成成功，但legacy没有intent
-				log.Printf(
-					"[INTENT MISSING] legacy did not generate intent for action=%s, native=%+v",
-					key,
-					nativeIntent,
-				)
-				k.ShadowStats.Mismatched++
-			} else if !ok {
-				// native intent生成失败
-				log.Printf(
-					"[INTENT MISSING] native builder did not handle action=%s",
-					key,
-				)
-				k.ShadowStats.Mismatched++
-			}
+		// 如果Grammar成功生成了intent，直接执行
+		if decision != nil && decision.Intent != nil {
+			k.Execute(decision)
+			return
 		}
 	}
 
-	// 只执行legacy intent（当前阶段）
-	if legacyDecision != nil {
-		k.Execute(legacyDecision)
+	// 如果Grammar没有处理，记录信息（未来将完全移除legacy路径）
+	if k.ShadowIntent && k.NativeBuilder != nil {
+		// 记录未被Grammar处理的按键
+		log.Printf("[GRAMMAR COVERAGE] key '%s' not handled by Grammar", key)
+		k.ShadowStats.Total++
+		k.ShadowStats.Mismatched++ // 记录为未覆盖
 	}
 }
 

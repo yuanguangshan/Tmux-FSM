@@ -24,8 +24,13 @@ const (
 	IntentOperator
 	IntentMotion
 	IntentMacro
+	IntentEnterVisual
+	IntentExitVisual
+	IntentExtendSelection
+	IntentOperatorSelection
+	IntentRepeatFind
+	IntentRepeatFindReverse
 )
-
 
 // OperatorKind 操作符类型
 type OperatorKind int
@@ -35,17 +40,6 @@ const (
 	OpDelete
 	OpYank
 	OpChange
-)
-
-// MotionKind 动作类型
-type MotionKind int
-
-const (
-	MotionChar MotionKind = iota
-	MotionWord
-	MotionLine
-	MotionGoto
-	MotionFind
 )
 
 // TargetKind 目标类型
@@ -84,14 +78,16 @@ const (
 // Intent 意图结构（用于执行层）
 type Intent struct {
 	Kind         IntentKind             `json:"kind"`
-	Target       SemanticTarget         `json:"target"`
+	Target       SemanticTarget         `json:"target,omitempty"` // ⚠️ DEPRECATED — migration only
 	Count        int                    `json:"count"`
-	Meta         map[string]interface{} `json:"meta,omitempty"`
+	Meta         map[string]interface{} `json:"meta,omitempty"` // ⚠️ DEPRECATED — migration only
 	PaneID       string                 `json:"pane_id"`
-	SnapshotHash string                 `json:"snapshot_hash"` // Phase 6.2
-	AllowPartial bool                   `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
-	Anchors      []Anchor               `json:"anchors,omitempty"` // Phase 11.0: Support for multi-cursor / multi-selection
-	UseRange     bool                   `json:"use_range"`     // Phase 12: Use range-based operations
+	SnapshotHash string                 `json:"snapshot_hash"`      // Phase 6.2
+	AllowPartial bool                   `json:"allow_partial"`      // Phase 7: Explicit permission for fuzzy resolution
+	Anchors      []Anchor               `json:"anchors,omitempty"`  // Phase 11.0: Support for multi-cursor / multi-selection
+	UseRange     bool                   `json:"use_range"`          // Phase 12: Use range-based operations
+	Motion       *Motion                `json:"motion,omitempty"`   // ✅ 新增：强类型 Motion 结构
+	Operator     *OperatorKind          `json:"operator,omitempty"` // ✅ 新增：强类型 Operator 结构
 }
 
 // SemanticTarget 语义目标（而非物理位置）
@@ -107,13 +103,11 @@ type Anchor struct {
 	PaneID string      `json:"pane_id"`
 	Kind   int         `json:"kind"`
 	Ref    interface{} `json:"ref,omitempty"`
-	Hash   string      `json:"hash,omitempty"` // Phase 5.4: Reconciliation Expectation
+	Hash   string      `json:"hash,omitempty"`    // Phase 5.4: Reconciliation Expectation
 	LineID string      `json:"line_id,omitempty"` // Phase 9: Stable line identifier
 	Start  int         `json:"start,omitempty"`   // Phase 11: Start position in line
 	End    int         `json:"end,omitempty"`     // Phase 11: End position in line
 }
-
-
 
 // GetPaneID 获取面板ID
 func (i Intent) GetPaneID() string {
@@ -129,4 +123,3 @@ func (i Intent) GetSnapshotHash() string {
 func (i Intent) IsPartialAllowed() bool {
 	return i.AllowPartial
 }
-

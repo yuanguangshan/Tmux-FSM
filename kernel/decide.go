@@ -22,59 +22,56 @@ type Decision struct {
 // GrammarEmitter 用于将 Grammar 的结果传递给 Kernel
 type GrammarEmitter struct {
 	grammar *planner.Grammar
-	callback func(*intent.Intent)
+	callback func(*intent.GrammarIntent)
 }
 
 func (g *GrammarEmitter) Emit(token fsm.RawToken) {
-	intent := g.grammar.Consume(token)
-	if intent != nil && g.callback != nil {
-		g.callback(intent)
+	grammarIntent := g.grammar.Consume(token)
+	if grammarIntent != nil && g.callback != nil {
+		g.callback(grammarIntent)
 	}
 }
 
 func (k *Kernel) Decide(key string) *Decision {
-	// ✅ 1. FSM 永远先拿 key
+	// ✅ 1. FSM 必须先看到 key
 	if k.FSM != nil {
-		var lastIntent *intent.Intent
+		var lastGrammarIntent *intent.GrammarIntent
 
 		// 创建一个 GrammarEmitter 来处理 token
 		grammarEmitter := &GrammarEmitter{
 			grammar: k.Grammar,
-			callback: func(intent *intent.Intent) {
-				lastIntent = intent
+			callback: func(grammarIntent *intent.GrammarIntent) {
+				lastGrammarIntent = grammarIntent
 			},
 		}
 
 		// 添加 GrammarEmitter 到 FSM
 		k.FSM.AddEmitter(grammarEmitter)
 
-		// 让 FSM 处理按键
+		// 让 FSM 处理按键，这会生成 token
 		dispatched := k.FSM.Dispatch(key)
 
 		// 移除 GrammarEmitter
 		k.FSM.RemoveEmitter(grammarEmitter)
 
-		if dispatched && lastIntent != nil {
-			// 直接执行意图，而不是返回决策
-			if k.FSM != nil {
-				_ = k.FSM.DispatchIntent(lastIntent)
+		if dispatched && lastGrammarIntent != nil {
+			// 将 GrammarIntent 提升为 Intent
+			finalIntent := intent.Promote(lastGrammarIntent)
+
+			// 返回意图供执行
+			return &Decision{
+				Kind:   DecisionFSM,
+				Intent: finalIntent,
 			}
-			return nil // 意图已直接执行
 		}
 
 		if dispatched {
-			return nil // FSM处理了按键，但没有产生意图
+			// ✅ 合法状态：key 被 FSM 吃了，但 Grammar 没有生成意图
+			// 这是正常情况，例如在等待更多按键时
+			return nil
 		}
 	}
 
-	// ✅ 2. Legacy decoder（复用你现有逻辑）
-	// legacyIntent := DecodeLegacyKey(key)  // Temporarily disabled
-	// if legacyIntent != nil {
-	// 	return &Decision{
-	// 		Kind:   DecisionLegacy,
-	// 		Intent: legacyIntent,
-	// 	}
-	// }
-
+	// 没有 FSM 处理，返回 nil
 	return nil
 }

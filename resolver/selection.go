@@ -1,21 +1,10 @@
 package resolver
 
+// SelectionMode 选择模式
 type SelectionMode int
 
 const (
-	SelectionNone SelectionMode = iota
-	SelectionChar
+	SelectionChar SelectionMode = iota
 	SelectionLine
 	SelectionBlock
 )
-
-type Cursor struct {
-	Line int
-	Col  int
-}
-
-type Selection struct {
-	Mode   SelectionMode
-	Anchor Cursor
-	Focus  Cursor
-}
