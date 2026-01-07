@@ -10,6 +10,11 @@ import (
 	"tmux-fsm/backend"
 )
 
+type Cursor struct {
+	Row int
+	Col int
+}
+
 type FSMState struct {
 	Mode                 string                 `json:"mode"`
 	Operator             string                 `json:"operator"`
