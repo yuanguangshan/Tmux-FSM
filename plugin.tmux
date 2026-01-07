@@ -13,22 +13,28 @@ set -g @fsm_bin "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm"
 # 4. 入口：支持自定义按键 (Prefix 和 No-Prefix)
 # 使用 run-shell 动态绑定
 run-shell "
-    # 1. 绑定 Prefix + Key (Default: f)
+    # 1. 获取当前的 prefix key
+    current_prefix=\$(tmux show-option -gqv prefix)
+
+    # 2. 绑定 Prefix + Key (Default: f) - works for both C-b and C-a
     prefix_key=\$(tmux show-option -gqv @fsm_toggle_key)
     [ -z \"\$prefix_key\" ] && prefix_key=\"f\"
     tmux bind-key \"\$prefix_key\" run-shell -b '$HOME/.tmux/plugins/tmux-fsm/enter_fsm.sh'
 
-    # 2. 绑定 No-Prefix Key (Root Table)
+    # 3. 绑定 No-Prefix Key (Root Table)
     root_key=\$(tmux show-option -gqv @fsm_bind_no_prefix)
     if [ -n \"\$root_key\" ]; then
         tmux bind-key -n \"\$root_key\" run-shell -b '$HOME/.tmux/plugins/tmux-fsm/enter_fsm.sh'
     fi
 
-    # 3. 设置全局环境变量 (Phase 7: Temporal Integrity)
+    # 4. 添加 Ctrl+F 绑定作为额外选项（无论当前prefix是什么）
+    tmux bind-key -n C-f run-shell -b '$HOME/.tmux/plugins/tmux-fsm/enter_fsm.sh'
+
+    # 5. 设置全局环境变量 (Phase 7: Temporal Integrity)
     tmux set-environment -g TMUX_FSM_MODE weaver
     tmux set-environment -g TMUX_FSM_LOG_FACTS 1
 
-    # 4. 启动服务器守护进程 (Weaver Mode)
+    # 6. 启动服务器守护进程 (Weaver Mode)
     TMUX_FSM_MODE=weaver TMUX_FSM_LOG_FACTS=1 $HOME/.tmux/plugins/tmux-fsm/tmux-fsm -server >/dev/null 2>&1 &
 "
 

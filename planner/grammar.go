@@ -2,14 +2,14 @@ package planner
 
 import (
 	"tmux-fsm/fsm"
-	"tmux-fsm/intent"
+	intentPkg "tmux-fsm/intent"
 )
 
 // Grammar 是 Stage‑4 Vim Grammar
 type Grammar struct {
 	count      int
-	pendingOp  *intent.OperatorKind
-	lastIntent *intent.Intent
+	pendingOp  *intentPkg.OperatorKind
+	lastIntent *intentPkg.Intent
 }
 
 // NewGrammar 创建 Grammar 实例
@@ -18,7 +18,7 @@ func NewGrammar() *Grammar {
 }
 
 // Consume 消费一个 FSM RawToken，必要时产生 Intent
-func (g *Grammar) Consume(tok fsm.RawToken) *intent.Intent {
+func (g *Grammar) Consume(tok fsm.RawToken) *intentPkg.Intent {
 	switch tok.Kind {
 
 	case fsm.TokenDigit:
@@ -46,7 +46,7 @@ func (g *Grammar) Consume(tok fsm.RawToken) *intent.Intent {
 }
 
 // consumeKey 处理普通按键
-func (g *Grammar) consumeKey(key string) *intent.Intent {
+func (g *Grammar) consumeKey(key string) *intentPkg.Intent {
 
 	// 1️⃣ operator
 	if op, ok := parseOperator(key); ok {
@@ -92,28 +92,57 @@ func (g *Grammar) consumeKey(key string) *intent.Intent {
 
 // ---------- Intent builders ----------
 
-func makeMoveIntent(m intent.MotionKind, count int, key string) *intent.Intent {
-	intentObj := &intent.Intent{
-		Kind:  intent.IntentMove,
+func makeMoveIntent(m intentPkg.MotionKind, count int, key string) *intentPkg.Intent {
+	intentObj := &intentPkg.Intent{
+		Kind:  intentPkg.IntentMove,
 		Count: count,
 		Meta: map[string]interface{}{
 			"motion": m,
 		},
 	}
 
+	// 设置Target
+	intentObj.Target = intentPkg.SemanticTarget{
+		Kind: intentPkg.TargetChar,
+	}
+
 	// 特殊处理 $ 和 0
 	if key == "$" {
 		intentObj.Meta["motion_special"] = "line_end"
+		intentObj.Target.Kind = intentPkg.TargetLine
+		intentObj.Target.Scope = "end"
 	} else if key == "0" {
 		intentObj.Meta["motion_special"] = "line_start"
+		intentObj.Target.Kind = intentPkg.TargetLine
+		intentObj.Target.Scope = "start"
+	} else {
+		// 根据MotionKind设置Target
+		switch m {
+		case intentPkg.MotionChar:
+			intentObj.Target.Kind = intentPkg.TargetChar
+			// 根据具体按键设置方向
+			if key == "h" {
+				intentObj.Target.Direction = "left"
+			} else if key == "l" {
+				intentObj.Target.Direction = "right"
+			} else if key == "j" {
+				intentObj.Target.Direction = "down"
+			} else if key == "k" {
+				intentObj.Target.Direction = "up"
+			}
+		case intentPkg.MotionLine:
+			intentObj.Target.Kind = intentPkg.TargetLine
+		case intentPkg.MotionWord:
+			intentObj.Target.Kind = intentPkg.TargetWord
+		}
 	}
 
 	return intentObj
 }
 
-func makeOpMotionIntent(op intent.OperatorKind, m intent.MotionKind, count int, key string) *intent.Intent {
-	intentObj := &intent.Intent{
-		Kind:  intent.IntentOperator,
+func makeOpMotionIntent(op intentPkg.OperatorKind, m intentPkg.MotionKind, count int, key string) *intentPkg.Intent {
+	intentObj := &intentPkg.Intent{
+		Kind:  intentPkg.IntentOperator,
 		Count: count,
 		Meta: map[string]interface{}{
 			"operator": op,
@@ -121,23 +150,32 @@ func makeOpMotionIntent(op intent.OperatorKind, m intent.MotionKind, count int, 
 		},
 	}
 
+	// 设置Target
+	intentObj.Target = intentPkg.SemanticTarget{
+		Kind: intentPkg.TargetChar, // 默认为字符级移动
+	}
+
 	// 特殊处理 $ 和 0
 	if key == "$" {
 		intentObj.Meta["motion_special"] = "line_end"
+		intentObj.Target.Kind = intentPkg.TargetLine
+		intentObj.Target.Scope = "end"
 	} else if key == "0" {
 		intentObj.Meta["motion_special"] = "line_start"
+		intentObj.Target.Kind = intentPkg.TargetLine
+		intentObj.Target.Scope = "start"
 	}
 
 	return intentObj
 }
 
-func makeLineIntent(op intent.OperatorKind, count int) *intent.Intent {
-	return &intent.Intent{
-		Kind:  intent.IntentOperator,
+func makeLineIntent(op intentPkg.OperatorKind, count int) *intentPkg.Intent {
+	return &intentPkg.Intent{
+		Kind:  intentPkg.IntentOperator,
 		Count: count,
 		Meta: map[string]interface{}{
 			"operator": op,
-			"motion":   intent.MotionLine,
+			"motion":   intentPkg.MotionLine,
 		},
 	}
 }
@@ -149,11 +187,11 @@ func (g *Grammar) reset() {
 	g.pendingOp = nil
 }
 
-func (g *Grammar) remember(i *intent.Intent) {
+func (g *Grammar) remember(i *intentPkg.Intent) {
 	g.lastIntent = cloneIntent(i)
 }
 
-func cloneIntent(i *intent.Intent) *intent.Intent {
+func cloneIntent(i *intentPkg.Intent) *intentPkg.Intent {
 	c := *i
 	if i.Meta != nil {
 		c.Meta = make(map[string]interface{})
@@ -173,33 +211,33 @@ func max(a, b int) int {
 
 // ---------- key parsing (Grammar owns Vim) ----------
 
-func parseOperator(key string) (intent.OperatorKind, bool) {
+func parseOperator(key string) (intentPkg.OperatorKind, bool) {
 	switch key {
 	case "d":
-		return intent.OpDelete, true
+		return intentPkg.OpDelete, true
 	case "y":
-		return intent.OpYank, true
+		return intentPkg.OpYank, true
 	case "c":
-		return intent.OpChange, true
+		return intentPkg.OpChange, true
 	default:
 		return 0, false
 	}
 }
 
-func parseMotion(key string) (intent.MotionKind, bool) {
+func parseMotion(key string) (intentPkg.MotionKind, bool) {
 	switch key {
 	case "h", "l":
-		return intent.MotionChar, true
+		return intentPkg.MotionChar, true
 	case "j", "k":
-		return intent.MotionLine, true
+		return intentPkg.MotionLine, true
 	case "w", "b", "e":
-		return intent.MotionWord, true
+		return intentPkg.MotionWord, true
 	case "$":
-		return intent.MotionChar, true
+		return intentPkg.MotionChar, true
 	case "0":
-		return intent.MotionChar, true
+		return intentPkg.MotionChar, true
 	case "G":
-		return intent.MotionGoto, true
+		return intentPkg.MotionGoto, true
 	// "g" 不作为 motion，因为它是前缀键
 	default:
 		return 0, false

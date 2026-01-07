@@ -47,6 +47,20 @@ const (
 	MotionFind
 )
 
+// TargetKind 目标类型
+type TargetKind int
+
+const (
+	TargetUnknown TargetKind = iota
+	TargetChar
+	TargetWord
+	TargetLine
+	TargetFile
+	TargetTextObject
+	TargetPosition
+	TargetSearch
+)
+
 // RangeType 范围类型
 type RangeType int
 
@@ -70,10 +84,10 @@ type Intent struct {
 
 // SemanticTarget 语义目标（而非物理位置）
 type SemanticTarget struct {
-	Kind      int    `json:"kind"`
-	Direction string `json:"direction,omitempty"` // forward, backward
-	Scope     string `json:"scope,omitempty"`     // char, line, word, etc.
-	Value     string `json:"value,omitempty"`     // 用于搜索、替换等
+	Kind      TargetKind `json:"kind"`
+	Direction string     `json:"direction,omitempty"` // forward, backward
+	Scope     string     `json:"scope,omitempty"`     // char, line, word, etc.
+	Value     string     `json:"value,omitempty"`     // 用于搜索、替换等
 }
 
 // Anchor 锚点结构

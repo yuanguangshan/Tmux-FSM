@@ -232,6 +232,24 @@ func (e *Engine) RunAction(name string) {
 		tmux("select-pane -t :.0")
 	case "goto_bottom":
 		tmux("select-pane -t :.$")
+	case "goto_line_start":
+		// 发送 Home 键到当前窗格，这通常会将光标移到行首
+		tmux("send-keys -t . Home")
+	case "goto_line_end":
+		// 发送 End 键到当前窗格，这通常会将光标移到行尾
+		tmux("send-keys -t . End")
+	case "move_left":
+		// 发送左箭头键
+		tmux("send-keys -t . Left")
+	case "move_right":
+		// 发送右箭头键
+		tmux("send-keys -t . Right")
+	case "move_up":
+		// 发送上箭头键
+		tmux("send-keys -t . Up")
+	case "move_down":
+		// 发送下箭头键
+		tmux("send-keys -t . Down")
 	case "exit":
 		ExitFSM()
 	case "prompt":
@@ -259,6 +277,7 @@ func EnterFSM() {
 	// 确保进入时是干净的 NAV
 	engine.Reset()
 	engine.emitInternal(RawToken{Kind: TokenSystem, Value: "enter"})
+	UpdateUI() // 确保进入时更新UI
 	// ShowUI() // Disable initial UI popup to prevent flashing/annoyance
 }
 
@@ -273,6 +292,7 @@ func ExitFSM() {
 		defaultEngine.emitInternal(RawToken{Kind: TokenSystem, Value: "exit"})
 	}
 	HideUI()
+	UpdateUI() // 确保退出时更新UI
 	// FSM 不应直接依赖 backend
 	// 执行层的退出逻辑应该由上层处理
 }

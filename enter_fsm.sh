@@ -6,8 +6,10 @@ FSM_BIN="$PLUGIN_DIR/tmux-fsm"
 tmux send-keys -X cancel 2>/dev/null || true
 tmux send-keys -X cancel 2>/dev/null || true
 
-# 2. Set vars
+# 2. Set vars - 初始化状态变量
 tmux set -g @fsm_active "true"
+tmux set -g @fsm_state "FSM"  # 设置初始状态显示
+tmux set -g @fsm_keys ""
 tmux set -g repeat-time 0
 
 # 3. Switch key table
