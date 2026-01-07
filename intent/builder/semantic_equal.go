@@ -9,6 +9,8 @@ const (
 	CompareStrict
 )
 
+// SemanticEqual compares two intents for semantic equality.
+// Nil intents are only semantically equal if both are nil.
 func SemanticEqual(a, b *intent.Intent, mode SemanticCompareMode) bool {
 	if a == nil || b == nil {
 		return a == b
@@ -23,8 +25,8 @@ func SemanticEqual(a, b *intent.Intent, mode SemanticCompareMode) bool {
 		return false
 	}
 
-	if mode == CompareStrict {
-		return a.PaneID == b.PaneID
+	if mode == CompareStrict && a.PaneID != b.PaneID {
+		return false
 	}
 
 	// Migration mode intentionally ignores routing

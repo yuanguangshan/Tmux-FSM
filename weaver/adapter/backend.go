@@ -54,7 +54,7 @@ func (b *TmuxBackend) RefreshClient(clientName string) error {
 
 // GetActivePane gets the active pane ID
 func (b *TmuxBackend) GetActivePane(clientName string) (string, error) {
-	var cmd *exec.Command
+	var cmd *exec.Cmd
 	if clientName != "" && clientName != "default" {
 		cmd = exec.Command("tmux", "display-message", "-p", "-t", clientName, "#{pane_id}")
 	} else {

@@ -9,6 +9,9 @@ import (
 	"tmux-fsm/planner"
 )
 
+// ShadowStats records statistics for shadow intent comparison.
+// NOTE: ShadowStats is not concurrency-safe.
+// Kernel.HandleKey must be serialized.
 type ShadowStats struct {
 	Total      int
 	Built      int

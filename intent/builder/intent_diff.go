@@ -8,35 +8,39 @@ type IntentDiff struct {
 	Native interface{}
 }
 
-func DiffIntent(a, b *intent.Intent) []IntentDiff {
+func DiffIntent(legacy, native *intent.Intent) []IntentDiff {
 	var diffs []IntentDiff
 
-	if a.Kind != b.Kind {
-		diffs = append(diffs, IntentDiff{"Kind", a.Kind, b.Kind})
+	if legacy == nil || native == nil {
+		return diffs
 	}
 
-	if a.Count != b.Count {
-		diffs = append(diffs, IntentDiff{"Count", a.Count, b.Count})
+	if legacy.Kind != native.Kind {
+		diffs = append(diffs, IntentDiff{"Kind", legacy.Kind, native.Kind})
 	}
 
-	if a.Target.Kind != b.Target.Kind {
-		diffs = append(diffs, IntentDiff{"Target.Kind", a.Target.Kind, b.Target.Kind})
+	if legacy.Count != native.Count {
+		diffs = append(diffs, IntentDiff{"Count", legacy.Count, native.Count})
 	}
 
-	if a.Target.Direction != b.Target.Direction {
-		diffs = append(diffs, IntentDiff{"Target.Direction", a.Target.Direction, b.Target.Direction})
+	if legacy.Target.Kind != native.Target.Kind {
+		diffs = append(diffs, IntentDiff{"Target.Kind", legacy.Target.Kind, native.Target.Kind})
 	}
 
-	if a.Target.Scope != b.Target.Scope {
-		diffs = append(diffs, IntentDiff{"Target.Scope", a.Target.Scope, b.Target.Scope})
+	if legacy.Target.Direction != native.Target.Direction {
+		diffs = append(diffs, IntentDiff{"Target.Direction", legacy.Target.Direction, native.Target.Direction})
 	}
 
-	if a.Target.Value != b.Target.Value {
-		diffs = append(diffs, IntentDiff{"Target.Value", a.Target.Value, b.Target.Value})
+	if legacy.Target.Scope != native.Target.Scope {
+		diffs = append(diffs, IntentDiff{"Target.Scope", legacy.Target.Scope, native.Target.Scope})
 	}
 
-	if a.PaneID != b.PaneID {
-		diffs = append(diffs, IntentDiff{"PaneID", a.PaneID, b.PaneID})
+	if legacy.Target.Value != native.Target.Value {
+		diffs = append(diffs, IntentDiff{"Target.Value", legacy.Target.Value, native.Target.Value})
+	}
+
+	if legacy.PaneID != native.PaneID {
+		diffs = append(diffs, IntentDiff{"PaneID", legacy.PaneID, native.PaneID})
 	}
 
 	return diffs
