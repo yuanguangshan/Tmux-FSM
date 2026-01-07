@@ -4,9 +4,17 @@ import (
 	"context"
 	"log"
 	"tmux-fsm/fsm"
+	"tmux-fsm/intent"
 	"tmux-fsm/intent/builder"
 	"tmux-fsm/planner"
 )
+
+type ShadowStats struct {
+	Total      int
+	Built      int
+	Matched    int
+	Mismatched int
+}
 
 type Kernel struct {
 	FSM           *fsm.Engine
@@ -14,6 +22,7 @@ type Kernel struct {
 	Exec          IntentExecutor
 	NativeBuilder *builder.CompositeBuilder
 	ShadowIntent  bool
+	ShadowStats   ShadowStats
 }
 
 // ✅ Kernel 的唯一上下文入口（现在先很薄，未来可扩展）
@@ -40,33 +49,69 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 
 	// 如果启用了shadow intent，同时生成native intent进行对比
 	if k.ShadowIntent && k.NativeBuilder != nil {
-		nativeIntent, ok := k.NativeBuilder.Build(builder.BuildContext{
-			Action: key,
-			Count:  1, // 默认计数
-		})
+		// 从legacy decision中提取上下文信息
+		var legacyIntent *intent.Intent
+		if legacyDecision != nil {
+			legacyIntent = legacyDecision.Intent
+		}
 
-		if ok && nativeIntent != nil && legacyDecision != nil && legacyDecision.Intent != nil {
-			// 比较native和legacy intent的语义
-			if !builder.SemanticEqual(nativeIntent, legacyDecision.Intent) {
+		k.ShadowStats.Total++
+
+		if legacyIntent != nil {
+			ctx := builder.BuildContext{
+				Action:       key,
+				Count:        legacyIntent.Count,
+				PaneID:       legacyIntent.PaneID,
+				SnapshotHash: legacyIntent.SnapshotHash,
+			}
+
+			nativeIntent, ok := k.NativeBuilder.Build(ctx)
+
+			if ok {
+				k.ShadowStats.Built++
+			}
+
+			if ok && nativeIntent != nil {
+				// 比较native和legacy intent的语义
+				if !builder.SemanticEqual(nativeIntent, legacyIntent, builder.CompareMigration) {
+					diffs := builder.DiffIntent(legacyIntent, nativeIntent)
+					log.Printf("[INTENT MISMATCH] action=%s diffs=%+v", key, diffs)
+					k.ShadowStats.Mismatched++
+				} else {
+					k.ShadowStats.Matched++
+				}
+			} else if ok {
+				// native intent生成失败
 				log.Printf(
-					"[INTENT MISMATCH]\nlegacy=%+v\nnative=%+v\n",
-					legacyDecision.Intent,
+					"[INTENT MISSING] native builder did not handle action=%s",
+					key,
+				)
+				k.ShadowStats.Mismatched++
+			}
+		} else {
+			// legacy intent为空，尝试构建native intent
+			ctx := builder.BuildContext{
+				Action: key,
+				Count:  1, // 默认计数
+			}
+
+			nativeIntent, ok := k.NativeBuilder.Build(ctx)
+			if ok && nativeIntent != nil {
+				// native intent生成成功，但legacy没有intent
+				log.Printf(
+					"[INTENT MISSING] legacy did not generate intent for action=%s, native=%+v",
+					key,
 					nativeIntent,
 				)
+				k.ShadowStats.Mismatched++
+			} else if !ok {
+				// native intent生成失败
+				log.Printf(
+					"[INTENT MISSING] native builder did not handle action=%s",
+					key,
+				)
+				k.ShadowStats.Mismatched++
 			}
-		} else if ok && nativeIntent != nil && legacyDecision == nil {
-			// native intent生成成功，但legacy没有intent
-			log.Printf(
-				"[INTENT MISSING] legacy did not generate intent for action=%s, native=%+v",
-				key,
-				nativeIntent,
-			)
-		} else if !ok {
-			// native intent生成失败
-			log.Printf(
-				"[INTENT MISSING] native builder did not handle action=%s",
-				key,
-			)
 		}
 	}
 
