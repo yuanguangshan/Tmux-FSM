@@ -1,3 +1,6 @@
+// LEGACY — DO NOT EXTEND
+// This path exists ONLY for backward compatibility.
+// Any new behavior MUST be implemented via native Intent builders.
 package main
 
 import (
