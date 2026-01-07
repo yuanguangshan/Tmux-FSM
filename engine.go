@@ -223,6 +223,60 @@ func (e *CursorEngine) DeleteRange(r *MotionRange) error {
 	return nil
 }
 
+// GetTextInRange 获取指定范围的文本
+func (e *CursorEngine) GetTextInRange(r *MotionRange) string {
+	if e.Buffer == nil {
+		return ""
+	}
+
+	concreteBuffer, ok := e.Buffer.(*ConcreteBuffer)
+	if !ok {
+		return ""
+	}
+
+	start := r.Start
+	end := r.End
+
+	if start.Row == end.Row {
+		if start.Row < len(concreteBuffer.Content) {
+			content := concreteBuffer.Content[start.Row]
+			if start.Col >= 0 && end.Col <= len(content) {
+				subRunes := content[start.Col:end.Col]
+				return string(subRunes)
+			}
+		}
+		return ""
+	}
+
+	// 多行文本获取
+	var result []rune
+
+	// 第一行
+	if start.Row < len(concreteBuffer.Content) {
+		content := concreteBuffer.Content[start.Row]
+		if start.Col < len(content) {
+			result = append(result, content[start.Col:]...)
+		}
+		result = append(result, '\n')
+	}
+
+	// 中间行
+	for i := start.Row + 1; i < end.Row && i < len(concreteBuffer.Content); i++ {
+		result = append(result, concreteBuffer.Content[i]...)
+		result = append(result, '\n')
+	}
+
+	// 最后一行
+	if end.Row < len(concreteBuffer.Content) {
+		content := concreteBuffer.Content[end.Row]
+		if end.Col <= len(content) {
+			result = append(result, content[:end.Col]...)
+		}
+	}
+
+	return string(result)
+}
+
 // ErrInvalidMotion 表示无效的移动动作
 var ErrInvalidMotion = errors.New("invalid motion")
 

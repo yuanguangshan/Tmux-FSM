@@ -32,7 +32,7 @@ type FSMState struct {
 var (
 	stateMu     sync.Mutex
 	globalState FSMState
-	transMgr    TransactionManager
+	transMgr    *TransactionManager
 	socketPath  = os.Getenv("HOME") + "/.tmux-fsm.sock"
 )
 
@@ -53,6 +53,20 @@ func saveStateRaw(data []byte) {
 	if err := backend.GlobalBackend.SetUserOption("@tmux_fsm_state", string(data)); err != nil {
 		log.Printf("Failed to save FSM state: %v", err)
 	}
+}
+
+// saveFSMState 保存 FSM 状态
+func saveFSMState() {
+	stateMu.Lock()
+	defer stateMu.Unlock()
+
+	data, err := json.Marshal(globalState)
+	if err != nil {
+		log.Printf("Failed to marshal FSM state: %v", err)
+		return
+	}
+
+	saveStateRaw(data)
 }
 
 func updateStatusBar(state FSMState, clientName string) {

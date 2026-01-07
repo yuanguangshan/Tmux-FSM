@@ -47,6 +47,13 @@ func (tm *TransactionManager) Append(record ActionRecord) {
 	}
 }
 
+// 初始化全局事务管理器
+func init() {
+	transMgr = &TransactionManager{
+		nextID: 0,
+	}
+}
+
 func main() {
 	serverMode := flag.Bool("server", false, "run as server")
 	socketPath := flag.String("socket", "/tmp/tmux-fsm.sock", "socket path")

@@ -221,6 +221,33 @@ func parseMotionToTarget(motion string) SemanticTarget {
 		return SemanticTarget{Kind: TargetTextObject, Value: motion}
 	}
 
+	// 检查是否是文本对象简写 (iw, aw, ip, ap, etc.)
+	if isTextObject(motion) {
+		return SemanticTarget{Kind: TargetTextObject, Value: motion}
+	}
+
 	// 默认返回
 	return SemanticTarget{Kind: TargetNone}
+}
+
+// isTextObject 检查是否是文本对象简写
+func isTextObject(motion string) bool {
+	if len(motion) != 2 {
+		return false
+	}
+
+	// 检查第一个字符是否是 i 或 a (inside/around)
+	modifier := motion[0:1]
+	if modifier != "i" && modifier != "a" {
+		return false
+	}
+
+	// 检查第二个字符是否是支持的文本对象类型
+	objType := motion[1:2]
+	switch objType {
+	case "w", "p", "s", "b", "B", "(", ")", "[", "]", "{", "}", "\"", "'", "`":
+		return true
+	default:
+		return false
+	}
 }

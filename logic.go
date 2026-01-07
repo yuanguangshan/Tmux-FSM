@@ -373,9 +373,11 @@ func handleTextObjectPending(state *FSMState, key string) string {
 	op := state.Operator
 	state.Operator = ""
 
-	// 目前支持的对象类型
+	// 支持的对象类型
 	objTypes := map[string]string{
 		"w": "word",
+		"p": "paragraph",
+		"s": "sentence",
 		"(": "paren", ")": "paren", "b": "paren",
 		"[": "bracket", "]": "bracket",
 		"{": "brace", "}": "brace", "B": "brace",
@@ -392,7 +394,10 @@ func handleTextObjectPending(state *FSMState, key string) string {
 		return fmt.Sprintf("%s_%s", op, suffix)
 	}
 
-	return ""
+	// 如果不是标准文本对象，直接返回组合
+	// 例如 "iw", "aw", "ip", "ap" 等
+	textObjectStr := objModifier + key
+	return fmt.Sprintf("%s_%s", op, textObjectStr)
 }
 
 func handleFindChar(state *FSMState, key string) string {
