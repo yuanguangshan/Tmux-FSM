@@ -23,6 +23,7 @@ const (
 	IntentCount
 	IntentOperator
 	IntentMotion
+	IntentMacro
 )
 
 
@@ -70,6 +71,16 @@ const (
 	LineWise
 )
 
+// VisualMode 视觉模式类型
+type VisualMode int
+
+const (
+	VisualNone VisualMode = iota
+	VisualChar
+	VisualLine
+	VisualBlock
+)
+
 // Intent 意图结构（用于执行层）
 type Intent struct {
 	Kind         IntentKind             `json:"kind"`
@@ -80,6 +91,7 @@ type Intent struct {
 	SnapshotHash string                 `json:"snapshot_hash"` // Phase 6.2
 	AllowPartial bool                   `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
 	Anchors      []Anchor               `json:"anchors,omitempty"` // Phase 11.0: Support for multi-cursor / multi-selection
+	UseRange     bool                   `json:"use_range"`     // Phase 12: Use range-based operations
 }
 
 // SemanticTarget 语义目标（而非物理位置）

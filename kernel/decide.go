@@ -55,10 +55,11 @@ func (k *Kernel) Decide(key string) *Decision {
 		k.FSM.RemoveEmitter(grammarEmitter)
 
 		if dispatched && lastIntent != nil {
-			return &Decision{
-				Kind:   DecisionFSM,
-				Intent: lastIntent,
+			// 直接执行意图，而不是返回决策
+			if k.FSM != nil {
+				_ = k.FSM.DispatchIntent(lastIntent)
 			}
+			return nil // 意图已直接执行
 		}
 
 		if dispatched {

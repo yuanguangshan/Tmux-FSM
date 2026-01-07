@@ -2,7 +2,10 @@ package fsm
 
 import (
 	"fmt"
+	"strings"
 	"time"
+	"tmux-fsm/intent"
+	"tmux-fsm/resolver"
 )
 
 // RawTokenEmitter 用于发送 RawToken 的接口
@@ -10,13 +13,134 @@ type RawTokenEmitter interface {
 	Emit(RawToken)
 }
 
+// EngineAdapter 实现resolver.EngineAdapter接口
+type EngineAdapter struct {
+	engine *Engine
+}
+
+func (ea *EngineAdapter) SendKeys(keys ...string) {
+	// 将键发送到tmux
+	args := append([]string{"send-keys", "-t", "."}, keys...)
+	tmux(strings.Join(args, " "))
+}
+
+func (ea *EngineAdapter) RunAction(name string) {
+	ea.engine.RunAction(name)
+}
+
+func (ea *EngineAdapter) GetVisualMode() intent.VisualMode {
+	return ea.engine.visualMode
+}
+
+func (ea *EngineAdapter) SetVisualMode(mode intent.VisualMode) {
+	ea.engine.visualMode = mode
+}
+
+func (ea *EngineAdapter) EnterVisualMode(mode intent.VisualMode) {
+	ea.engine.visualMode = mode
+	// 可能需要更新UI显示
+	UpdateUI()
+}
+
+func (ea *EngineAdapter) ExitVisualMode() {
+	ea.engine.visualMode = intent.VisualNone
+	// 可能需要更新UI显示
+	UpdateUI()
+}
+
+func (ea *EngineAdapter) EnterSelection(mode resolver.SelectionMode) {
+	// 进入 tmux copy-mode
+	ea.SendKeys("Escape", "copy-mode", "Space")
+}
+
+func (ea *EngineAdapter) UpdateSelection(anchor, focus resolver.Cursor) {
+	// 更新选择范围（在 tmux 中）
+	// 这里可能需要根据 anchor 和 focus 的相对位置来决定如何更新选择
+}
+
+func (ea *EngineAdapter) ExitSelection() {
+	// 退出 tmux copy-mode
+	ea.SendKeys("q")
+}
+
+func (ea *EngineAdapter) GetCurrentCursor() resolver.Cursor {
+	// 获取当前光标位置（通过 tmux 命令）
+	// 这里需要实际从 tmux 获取光标位置
+	return resolver.Cursor{Line: 0, Col: 0} // 简化实现
+}
+
+func (ea *EngineAdapter) DeleteSelection(selection *resolver.Selection) error {
+	// 删除选择区域的内容
+	ea.SendKeys("d")
+	return nil
+}
+
+func (ea *EngineAdapter) DeleteWithMotion(motion intent.MotionKind, count int) error {
+	// 根据动作类型执行删除
+	switch motion {
+	case intent.MotionWord:
+		ea.SendKeys("Escape", "d", "w")
+	case intent.MotionLine:
+		ea.SendKeys("Escape", "d", "d")
+	case intent.MotionChar:
+		ea.SendKeys("Delete")
+	default:
+		ea.SendKeys("Delete")
+	}
+	return nil
+}
+
+func (ea *EngineAdapter) YankSelection(selection *resolver.Selection) error {
+	// 复制选择区域的内容
+	ea.SendKeys("y")
+	return nil
+}
+
+func (ea *EngineAdapter) YankWithMotion(motion intent.MotionKind, count int) error {
+	// 根据动作类型执行复制
+	switch motion {
+	case intent.MotionWord:
+		ea.SendKeys("Escape", "y", "w")
+	case intent.MotionLine:
+		ea.SendKeys("Escape", "y", "y")
+	case intent.MotionChar:
+		ea.SendKeys("Escape", "y", "l")
+	default:
+		ea.SendKeys("Escape", "y", "y")
+	}
+	return nil
+}
+
+func (ea *EngineAdapter) ChangeSelection(selection *resolver.Selection) error {
+	// 修改选择区域的内容
+	ea.SendKeys("c")
+	return nil
+}
+
+func (ea *EngineAdapter) ChangeWithMotion(motion intent.MotionKind, count int) error {
+	// 根据动作类型执行修改
+	switch motion {
+	case intent.MotionWord:
+		ea.SendKeys("Escape", "c", "w")
+	case intent.MotionLine:
+		ea.SendKeys("Escape", "c", "c")
+	case intent.MotionChar:
+		ea.SendKeys("Escape", "c", "l")
+	default:
+		ea.SendKeys("Escape", "c", "c")
+	}
+	return nil
+}
+
 // Engine FSM 引擎结构体
 type Engine struct {
-	Active     string
-	Keymap     *Keymap
-	layerTimer *time.Timer
-	count      int              // 用于存储数字计数
-	emitters   []RawTokenEmitter // 用于向外部发送token的多个接收者
+	Active       string
+	Keymap       *Keymap
+	layerTimer   *time.Timer
+	count        int              // 用于存储数字计数
+	emitters     []RawTokenEmitter // 用于向外部发送token的多个接收者
+	visualMode   intent.VisualMode // 视觉模式状态
+	resolver     *resolver.Resolver // 解析器
 }
 
 // FSMStatus FSM 状态信息，用于UI更新
@@ -53,12 +177,21 @@ var defaultEngine *Engine
 
 // NewEngine 创建新的 FSM 引擎实例（显式注入 Keymap）
 func NewEngine(km *Keymap) *Engine {
-	return &Engine{
-		Active:   "NAV",
-		Keymap:   km,
-		count:    0,
-		emitters: make([]RawTokenEmitter, 0),
+	engine := &Engine{
+		Active:     "NAV",
+		Keymap:     km,
+		count:      0,
+		emitters:   make([]RawTokenEmitter, 0),
+		visualMode: intent.VisualNone,
 	}
+
+	// 创建引擎适配器
+	adapter := &EngineAdapter{engine: engine}
+
+	// 初始化解析器
+	engine.resolver = resolver.New(adapter)
+
+	return engine
 }
 
 // InitEngine 初始化全局唯一 Engine
@@ -266,6 +399,14 @@ func tmux(cmd string) {
 	// 实际执行应该由上层处理
 }
 
+
+// DispatchIntent 分发意图给解析器
+func (e *Engine) DispatchIntent(i *intent.Intent) error {
+	if e.resolver != nil {
+		return e.resolver.Resolve(i)
+	}
+	return nil
+}
 
 func EnterFSM() {
 	if defaultEngine == nil {
