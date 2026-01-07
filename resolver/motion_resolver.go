@@ -49,7 +49,7 @@ func (r *MotionResolver) ResolveOpMotion(
 		return nil, nil
 	}
 
-	operator, ok := meta.(intent.OperatorKind)
+	_, ok = meta.(intent.OperatorKind)
 	if !ok {
 		return nil, nil
 	}
@@ -92,13 +92,19 @@ func (r *MotionResolver) resolveMotion(
 	cursor Pos,
 	count int,
 ) (Pos, error) {
-	
+
 	if count <= 0 {
 		count = 1
 	}
 
 	switch motion {
 	case intent.MotionChar:
+		// 特殊处理行首和行尾
+		if count == -1 { // 行尾
+			return r.resolveLineEndMotion(cursor)
+		} else if count == -2 { // 行首
+			return r.resolveLineStartMotion(cursor)
+		}
 		return r.resolveCharMotion(cursor, count)
 	case intent.MotionWord:
 		return r.resolveWordMotion(cursor, count)
@@ -137,36 +143,7 @@ func (r *MotionResolver) resolveLineStartMotion(cursor Pos) (Pos, error) {
 	return Pos{Line: cursor.Line, Col: 0}, nil
 }
 
-// resolveMotion 需要根据具体的 motion 类型进行处理
-func (r *MotionResolver) resolveMotion(
-	motion intent.MotionKind,
-	cursor Pos,
-	count int,
-) (Pos, error) {
 
-	if count <= 0 {
-		count = 1
-	}
-
-	switch motion {
-	case intent.MotionChar:
-		// 特殊处理行首和行尾
-		if count == -1 { // 行尾
-			return r.resolveLineEndMotion(cursor)
-		} else if count == -2 { // 行首
-			return r.resolveLineStartMotion(cursor)
-		}
-		return r.resolveCharMotion(cursor, count)
-	case intent.MotionWord:
-		return r.resolveWordMotion(cursor, count)
-	case intent.MotionLine:
-		return r.resolveLineMotion(cursor, count)
-	case intent.MotionGoto:
-		return r.resolveGotoMotion(cursor, count)
-	default:
-		return cursor, nil
-	}
-}
 
 // resolveWordMotion 解析单词 motion
 func (r *MotionResolver) resolveWordMotion(cursor Pos, count int) (Pos, error) {

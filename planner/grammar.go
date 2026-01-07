@@ -71,6 +71,7 @@ func (g *Grammar) consumeKey(key string) *intent.Intent {
 				*g.pendingOp,
 				motion,
 				max(g.count, 1),
+				key,
 			)
 			g.reset()
 			g.remember(intent)
@@ -78,7 +79,7 @@ func (g *Grammar) consumeKey(key string) *intent.Intent {
 		}
 
 		// standalone motion (move)
-		intent := makeMoveIntent(motion, max(g.count, 1))
+		intent := makeMoveIntent(motion, max(g.count, 1), key)
 		g.reset()
 		g.remember(intent)
 		return intent
