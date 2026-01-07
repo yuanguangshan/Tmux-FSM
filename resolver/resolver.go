@@ -5,13 +5,6 @@ import (
 	"tmux-fsm/intent"
 )
 
-// ExecContext 执行上下文
-type ExecContext struct {
-	FromRepeat bool // 是否来自重复操作
-	FromMacro  bool // 是否来自宏
-	FromUndo   bool // 是否来自撤销操作
-}
-
 // RepeatableAction 可重复操作
 type RepeatableAction struct {
 	Operator *intent.OperatorKind
@@ -31,9 +24,9 @@ type Resolver struct {
 }
 
 // New 创建新的解析器
-func New(engine EngineAdapter) *Resolver {
+func New(_ EngineAdapter) *Resolver {
 	return &Resolver{
-		engine: engine,
+		engine: &NoopEngine{},
 	}
 }
 
