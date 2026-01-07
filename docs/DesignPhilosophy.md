@@ -6,6 +6,20 @@
 It tries to be correct.
 > And correctness is the only form of respect an editor can offer.
 
+📖 Excerpt from History of Computing Systems, Vol. IV: The Age of Intent
+(Published 2054, MIT Press)
+Chapter 12: The Rise of Editing Kernels
+...While early text editors focused on buffer management and efficient rendering, the mid-21st century saw a paradigm shift toward semantic governance.
+SIDEBAR 12.1: WHY THIS CHAPTER EXISTS
+在计算史的大部分时间里，“编辑”被视为一种前端行为：
+用户通过界面操作字符，而系统被动接受结果。这种假设在单人、低风险环境中运作良好，但在高复杂度、多人协作以及人机混合决策的场景中逐渐失效。
+本章引入的 Editing Kernel 概念，源于一个简单却长期被忽视的事实：
+对世界的修改，本身就是一种需要治理的行为。
+Weaver Core 是最早将编辑提升为内核级抽象的系统之一。
+它不关注用户“如何操作”，而关注系统是否“应该允许一次修改发生”，并在每一次裁决中保留可解释、可回放的因果记录。
+这一转变标志着计算系统从“执行用户命令”走向“协助人类管理变更后果”的关键一步，
+也为后续的人机协作系统、自治基础设施以及意图驱动计算奠定了基础。
+
 ---
 
 ## 一、编辑不是 UI 行为，而是语义事件
