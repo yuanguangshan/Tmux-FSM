@@ -2,6 +2,7 @@
 // This file defines the canonical physical behavior.
 // Any change here MUST be mirrored in weaver/adapter/tmux_physical.go.
 
+// DEPRECATED: executor logic must be migrated to Transaction
 package main
 
 import (
@@ -145,11 +146,10 @@ func executeFact(f Fact) error {
 	return fmt.Errorf("no executor for fact")
 }
 
-func executeAction(action string, state *FSMState, targetPane string, clientName string) {
-	// --- [ABI: Verdict Deliberation Starts] ---
-	// The kernel evaluates the intent against the current world state.
+// buildActionTransactions 将动作转换为事务列表
+func buildActionTransactions(action string, state *FSMState, targetPane string, clientName string) []Transaction {
 	if action == "" {
-		return
+		return nil
 	}
 	// Default to current if empty (though should be provided)
 	if targetPane == "" {
@@ -159,74 +159,135 @@ func executeAction(action string, state *FSMState, targetPane string, clientName
 	// 1. 处理特殊内核动作：Undo / Redo
 	// [Phase 9] Dispatch to Weaver as single source of truth
 	if action == "undo" {
-		// Create undo intent and dispatch to Weaver
-		undoIntent := intent.Intent{
-			Kind:   intent.IntentUndo,
-			PaneID: targetPane,
+		// 使用新的事务日志系统执行撤销
+		if txJournal != nil {
+			_ = txJournal.Undo()
+		} else {
+			// 后备方案：创建 undo intent 并分派给 Weaver
+			undoIntent := intent.Intent{
+				Kind:   intent.IntentUndo,
+				PaneID: targetPane,
+			}
+			ProcessIntentGlobal(undoIntent)
 		}
-		ProcessIntentGlobal(undoIntent)
-		return
+		return nil
 	}
 	if action == "redo" {
-		// Create redo intent and dispatch to Weaver
-		redoIntent := intent.Intent{
-			Kind:   intent.IntentRedo,
-			PaneID: targetPane,
+		// 使用新的事务日志系统执行重做
+		if txJournal != nil {
+			_ = txJournal.Redo()
+		} else {
+			// 后备方案：创建 redo intent 并分派给 Weaver
+			redoIntent := intent.Intent{
+				Kind:   intent.IntentRedo,
+				PaneID: targetPane,
+			}
+			ProcessIntentGlobal(redoIntent)
 		}
-		ProcessIntentGlobal(redoIntent)
-		return
+		return nil
 	}
 
 	if action == "search_next" {
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "search-again").Run()
-		return
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-X", "search-again"},
+			},
+		}
 	}
 	if action == "search_prev" {
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "search-reverse").Run()
-		return
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-X", "search-reverse"},
+			},
+		}
 	}
 	if strings.HasPrefix(action, "search_forward_") {
 		query := strings.TrimPrefix(action, "search_forward_")
-		executeSearch(query, targetPane)
-		return
+		return buildSearchTransactions(query, targetPane)
 	}
 
 	// 2. 处理VISUAL模式相关动作
 	if action == "start_visual_char" {
 		if isVimPane(targetPane) {
-			exec.Command("tmux", "send-keys", "-t", targetPane, "v").Run()
+			return []Transaction{
+				VimSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"v"},
+				},
+			}
 		} else {
-			exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "begin-selection").Run()
+			return []Transaction{
+				TmuxSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"-X", "begin-selection"},
+				},
+			}
 		}
-		return
 	}
 	if action == "start_visual_line" {
 		if isVimPane(targetPane) {
-			exec.Command("tmux", "send-keys", "-t", targetPane, "V").Run()
+			return []Transaction{
+				VimSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"V"},
+				},
+			}
 		} else {
-			exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "select-line").Run()
+			return []Transaction{
+				TmuxSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"-X", "select-line"},
+				},
+			}
 		}
-		return
 	}
 	if action == "cancel_selection" {
 		if isVimPane(targetPane) {
-			exec.Command("tmux", "send-keys", "-t", targetPane, "Escape").Run()
+			return []Transaction{
+				VimSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"Escape"},
+				},
+			}
 		} else {
-			exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "clear-selection").Run()
+			return []Transaction{
+				TmuxSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"-X", "clear-selection"},
+				},
+			}
 		}
-		return
 	}
 	if strings.HasPrefix(action, "visual_") {
 		// 处理视觉模式下的操作 (如 visual_delete, visual_yank, visual_change)
-		handleVisualAction(action, state, targetPane)
-		return
+		return buildVisualTransactions(action, state, targetPane)
 	}
 
 	// 3. 环境探测：Vim vs Shell
 	if isVimPane(targetPane) {
-		executeVimAction(action, state, targetPane)
+		return buildVimTransactions(action, state, targetPane)
 	} else {
-		executeShellAction(action, state, targetPane)
+		return buildShellTransactions(action, state, targetPane)
+	}
+}
+
+// executeAction 保持原有签名，但现在返回事务并应用
+func executeAction(action string, state *FSMState, targetPane string, clientName string) {
+	txs := buildActionTransactions(action, state, targetPane, clientName)
+	if txs == nil {
+		return
+	}
+
+	// 使用事务日志应用事务
+	if txJournal != nil {
+		_ = txJournal.ApplyTxs(txs)
+	} else {
+		// 后备方案：直接应用事务
+		for _, tx := range txs {
+			_ = tx.Apply()
+		}
 	}
 }
 
@@ -1140,5 +1201,694 @@ func convertFactToCoreFact(mainFact Fact) core.Fact {
 		Meta:        mainFact.Meta,
 		Timestamp:   time.Now().Unix(),
 		SideEffects: mainFact.SideEffects,
+	}
+}
+
+// TmuxSendKeysTx 表示 tmux send-keys 操作的事务
+type TmuxSendKeysTx struct {
+	Pane string
+	Keys []string
+}
+
+func (t TmuxSendKeysTx) Apply() error {
+	args := append([]string{"send-keys", "-t", t.Pane}, t.Keys...)
+	return exec.Command("tmux", args...).Run()
+}
+
+func (t TmuxSendKeysTx) Inverse() Transaction {
+	// 对于 send-keys 操作，逆操作通常是撤销操作
+	// 这里返回一个空操作作为占位符
+	return NoopTx{}
+}
+
+func (t TmuxSendKeysTx) Kind() string {
+	return "tmux_send_keys"
+}
+
+func (t TmuxSendKeysTx) Tags() []string {
+	return []string{"tmux"}
+}
+
+func (t TmuxSendKeysTx) CanMerge(next Transaction) bool {
+	// 检查是否可以合并到下一个事务
+	nextTx, ok := next.(TmuxSendKeysTx)
+	return ok && nextTx.Pane == t.Pane
+}
+
+func (t TmuxSendKeysTx) Merge(next Transaction) Transaction {
+	// 合并两个 TmuxSendKeysTx 事务
+	nextTx := next.(TmuxSendKeysTx)
+	// 简单地将键序列连接
+	mergedKeys := append(t.Keys, nextTx.Keys...)
+	return TmuxSendKeysTx{
+		Pane: t.Pane,
+		Keys: mergedKeys,
+	}
+}
+
+// VimSendKeysTx 表示 Vim 模式下的 send-keys 操作事务
+type VimSendKeysTx struct {
+	Pane string
+	Keys []string
+}
+
+func (v VimSendKeysTx) Apply() error {
+	args := append([]string{"send-keys", "-t", v.Pane}, v.Keys...)
+	return exec.Command("tmux", args...).Run()
+}
+
+func (v VimSendKeysTx) Inverse() Transaction {
+	// Vim 操作的逆操作通常是 'u' (undo)
+	return VimSendKeysTx{
+		Pane: v.Pane,
+		Keys: []string{"u"},
+	}
+}
+
+func (v VimSendKeysTx) Kind() string {
+	return "vim_send_keys"
+}
+
+func (v VimSendKeysTx) Tags() []string {
+	return []string{"vim"}
+}
+
+func (v VimSendKeysTx) CanMerge(next Transaction) bool {
+	nextTx, ok := next.(VimSendKeysTx)
+	return ok && nextTx.Pane == v.Pane
+}
+
+func (v VimSendKeysTx) Merge(next Transaction) Transaction {
+	nextTx := next.(VimSendKeysTx)
+	mergedKeys := append(v.Keys, nextTx.Keys...)
+	return VimSendKeysTx{
+		Pane: v.Pane,
+		Keys: mergedKeys,
+	}
+}
+
+// NoopTx 空操作事务
+type NoopTx struct{}
+
+func (n NoopTx) Apply() error {
+	return nil
+}
+
+func (n NoopTx) Inverse() Transaction {
+	return n
+}
+
+func (n NoopTx) Kind() string {
+	return "noop"
+}
+
+func (n NoopTx) Tags() []string {
+	return []string{"noop"}
+}
+
+func (n NoopTx) CanMerge(next Transaction) bool {
+	return false
+}
+
+func (n NoopTx) Merge(next Transaction) Transaction {
+	return next
+}
+
+// buildSearchTransactions 构建搜索操作的事务
+func buildSearchTransactions(query string, targetPane string) []Transaction {
+	return []Transaction{
+		FuncTx{
+			apply: func() error {
+				exec.Command("tmux", "copy-mode", "-t", targetPane).Run()
+				exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "search-forward", query).Run()
+				return nil
+			},
+			inverse: func() Transaction {
+				return NoopTx{}
+			},
+			kind: "search",
+			tags: []string{"search"},
+		},
+	}
+}
+
+// buildVisualTransactions 构建视觉模式操作的事务
+func buildVisualTransactions(action string, state *FSMState, targetPane string) []Transaction {
+	// 提取操作类型 (delete, yank, change)
+	parts := strings.Split(action, "_")
+	if len(parts) < 2 {
+		return nil
+	}
+
+	op := parts[1] // delete, yank, 或 change
+
+	if isVimPane(targetPane) {
+		// 在Vim中执行视觉模式操作
+		vimOp := ""
+		switch op {
+		case "delete":
+			vimOp = "d"
+		case "yank":
+			vimOp = "y"
+		case "change":
+			vimOp = "c"
+		}
+
+		if vimOp != "" {
+			return []Transaction{
+				VimSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{vimOp},
+				},
+			}
+		}
+	} else {
+		// 在Shell中执行视觉模式操作
+		if op == "yank" {
+			// 复制选中内容
+			return []Transaction{
+				TmuxSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"-X", "copy-pipe-and-cancel", "tmux save-buffer -"},
+				},
+			}
+		} else if op == "delete" || op == "change" {
+			// 删除选中内容
+			actions := []Transaction{
+				TmuxSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"-X", "copy-pipe-and-cancel", "tmux save-buffer -"},
+				},
+			}
+			if op == "change" {
+				// change 操作需要额外输入
+				actions = append(actions, TmuxSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"i"},
+				})
+			}
+			return actions
+		}
+	}
+
+	return nil
+}
+
+// buildVimTransactions 构建 Vim 操作的事务
+func buildVimTransactions(action string, state *FSMState, targetPane string) []Transaction {
+	// Map FSM actions to Vim native keys
+	vimKey := ""
+	isEdit := false
+
+	switch action {
+	case "move_left":
+		vimKey = "h"
+	case "move_down":
+		vimKey = "j"
+	case "move_up":
+		vimKey = "k"
+	case "move_right":
+		vimKey = "l"
+	case "move_word_forward":
+		vimKey = "w"
+	case "move_word_backward":
+		vimKey = "b"
+	case "move_end_of_word":
+		vimKey = "e"
+	case "move_start_of_line":
+		vimKey = "0"
+	case "move_end_of_line":
+		vimKey = "$"
+	case "move_start_of_file":
+		vimKey = "gg"
+	case "move_end_of_file":
+		vimKey = "G"
+	case "delete_line":
+		vimKey = "dd"
+		isEdit = true
+	case "delete_word_forward":
+		vimKey = "dw"
+		isEdit = true
+	case "delete_word_backward":
+		vimKey = "db"
+		isEdit = true
+	case "delete_end_of_word":
+		vimKey = "de"
+		isEdit = true
+	case "delete_right":
+		vimKey = "x"
+		isEdit = true
+	case "delete_left":
+		vimKey = "X"
+		isEdit = true
+	case "delete_end_of_line":
+		vimKey = "D"
+		isEdit = true
+	case "change_end_of_line":
+		vimKey = "C"
+		isEdit = true
+	case "change_line":
+		vimKey = "S"
+		isEdit = true
+	case "insert_start_of_line":
+		vimKey = "I"
+		isEdit = true
+	case "insert_end_of_line":
+		vimKey = "A"
+		isEdit = true
+	case "insert_before":
+		vimKey = "i"
+		isEdit = true
+	case "insert_after":
+		vimKey = "a"
+		isEdit = true
+	case "insert_open_below":
+		vimKey = "o"
+		isEdit = true
+	case "insert_open_above":
+		vimKey = "O"
+		isEdit = true
+	case "paste_after":
+		vimKey = "p"
+		isEdit = true
+	case "paste_before":
+		vimKey = "P"
+		isEdit = true
+	case "toggle_case":
+		vimKey = "~"
+		isEdit = true
+	case "undo":
+		vimKey = "u"
+	case "redo":
+		vimKey = "C-r"
+	}
+
+	if strings.HasPrefix(action, "replace_char_") {
+		char := strings.TrimPrefix(action, "replace_char_")
+		vimKey = "r" + char
+		isEdit = true
+	}
+
+	if vimKey == "" {
+		// Fallback: if not mapped, it might be a direct key or sequence
+		return nil
+	}
+
+	actions := []Transaction{}
+
+	if isEdit {
+		// Record a Fact that delegates undo to Vim
+		anchor := Anchor{PaneID: targetPane}
+		record := ActionRecord{
+			Fact:    Fact{Kind: "insert", Target: Range{Anchor: anchor, Text: vimKey}, Meta: map[string]interface{}{"is_vim_raw": true}}, // Pseudo-fact
+			Inverse: Fact{Kind: "undo", Target: Range{Anchor: anchor}},
+		}
+
+		// 将ActionRecord转换为OperationRecord
+		// 由于Fact类型不匹配，我们创建一个空的ResolvedOperation
+		// 在实际实现中，这里应该是有意义的ResolvedOperation
+		opRecord := types.OperationRecord{
+			ResolvedOp: editor.ResolvedOperation{},
+			Fact:       convertFactToCoreFact(record.Fact),
+		}
+		transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact)
+	}
+
+	// For Vim, we just send the count + key
+	countStr := ""
+	if state.Count > 0 {
+		countStr = fmt.Sprint(state.Count)
+	}
+
+	actions = append(actions, VimSendKeysTx{
+		Pane: targetPane,
+		Keys: []string{countStr + vimKey},
+	})
+
+	return actions
+}
+
+// buildShellTransactions 构建 Shell 操作的事务
+func buildShellTransactions(action string, state *FSMState, targetPane string) []Transaction {
+	parts := strings.Split(action, "_")
+	if len(parts) < 1 {
+		return nil
+	}
+
+	op := parts[0]
+	count := state.Count
+	if count <= 0 {
+		count = 1
+	}
+
+	// 1. 处理特殊单一动词
+	if op == "insert" {
+		motion := strings.Join(parts[1:], "_")
+		return buildShellInsertTransactions(motion, targetPane)
+	}
+	if op == "paste" {
+		motion := strings.Join(parts[1:], "_")
+		actions := []Transaction{}
+		for i := 0; i < count; i++ {
+			actions = append(actions, buildShellPasteTransactions(motion, targetPane)...)
+		}
+		return actions
+	}
+	if op == "toggle" { // toggle_case
+		actions := []Transaction{}
+		for i := 0; i < count; i++ {
+			actions = append(actions, buildShellToggleCaseTransactions(targetPane)...)
+		}
+		return actions
+	}
+	if op == "replace" && len(parts) >= 3 && parts[1] == "char" {
+		char := strings.Join(parts[2:], "_")
+		actions := []Transaction{}
+		for i := 0; i < count; i++ {
+			actions = append(actions, buildShellReplaceTransactions(char, targetPane)...)
+		}
+		return actions
+	}
+
+	// 2. 处理传统 Op+Motion 组合
+	if len(parts) < 2 {
+		return nil
+	}
+	motion := strings.Join(parts[1:], "_")
+
+	if op == "delete" || op == "change" {
+		// FOEK Multi-Range 模拟
+		actions := []Transaction{}
+		for i := 0; i < count; i++ {
+			// Check if it's a text object action (e.g., delete_inside_word)
+			if strings.Contains(motion, "inside_") || strings.Contains(motion, "around_") {
+				actions = append(actions, buildShellTextObjectTransactions(op, motion, targetPane)...)
+				continue
+			}
+
+			// Capture deleted text before it's gone
+			startPos := getCursorPos(targetPane) // [col, row]
+			content := captureText(motion, targetPane)
+
+			if content != "" {
+				// Record semantic Fact in active transaction
+				record := captureShellDelete(targetPane, startPos[0], content)
+
+				// 将ActionRecord转换为OperationRecord
+				// 由于Fact类型不匹配，我们创建一个空的ResolvedOperation
+				// 在实际实现中，这里应该是有意义的ResolvedOperation
+				opRecord := types.OperationRecord{
+					ResolvedOp: editor.ResolvedOperation{},
+					Fact:       convertFactToCoreFact(record.Fact),
+				}
+				transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact)
+
+				// [Phase 7] Robust Deletion:
+				// Since we know EXACTLY what we captured, we delete by character count.
+				// This is much safer than relying on shell M-d bindings.
+				actions = append(actions, TmuxSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"-N", fmt.Sprint(len(content)), "Delete"},
+				})
+			} else {
+				// Fallback if capture failed
+				actions = append(actions, buildShellDeleteTransactions(motion, targetPane)...)
+			}
+		}
+		if op == "change" {
+			actions = append(actions, buildExitFSMTransactions(targetPane)...)
+			state.RedoStack = nil
+		}
+		return actions
+	} else if op == "yank" {
+		if strings.Contains(motion, "inside_") || strings.Contains(motion, "around_") {
+			return buildShellTextObjectTransactions(op, motion, targetPane)
+		} else {
+			// standard yank logic
+			return nil
+		}
+	} else if strings.HasPrefix(action, "find_") {
+		parts := strings.SplitN(action, "_", 3)
+		if len(parts) == 3 {
+			return buildShellFindTransactions(parts[1], parts[2], count, targetPane)
+		}
+	} else if op == "move" {
+		return buildShellMoveTransactions(motion, count, targetPane)
+	}
+
+	return nil
+}
+
+// buildShellInsertTransactions 构建 Shell 插入操作的事务
+func buildShellInsertTransactions(motion, targetPane string) []Transaction {
+	switch motion {
+	case "after":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"Right"},
+			},
+		}
+	case "start_of_line":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"Home"},
+			},
+		}
+	case "end_of_line":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"End"},
+			},
+		}
+	case "open_below":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"End", "Enter"},
+			},
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"Up"}, // Move up after Enter
+			},
+		}
+	case "open_above":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"Home", "Enter", "Up"},
+			},
+		}
+	default:
+		return nil
+	}
+}
+
+// buildShellPasteTransactions 构建 Shell 粘贴操作的事务
+func buildShellPasteTransactions(motion, targetPane string) []Transaction {
+	actions := []Transaction{}
+	if motion == "after" {
+		actions = append(actions, TmuxSendKeysTx{
+			Pane: targetPane,
+			Keys: []string{"Right"},
+		})
+	}
+	actions = append(actions, TmuxSendKeysTx{
+		Pane: targetPane,
+		Keys: []string{"paste-buffer", "-t", targetPane},
+	})
+	return actions
+}
+
+// buildShellToggleCaseTransactions 构建 Shell 切换大小写操作的事务
+func buildShellToggleCaseTransactions(targetPane string) []Transaction {
+	return []Transaction{
+		FuncTx{
+			apply: func() error {
+				performPhysicalToggleCase(targetPane)
+				return nil
+			},
+			inverse: func() Transaction {
+				return NoopTx{}
+			},
+			kind: "toggle_case",
+			tags: []string{"shell"},
+		},
+	}
+}
+
+// buildShellReplaceTransactions 构建 Shell 替换操作的事务
+func buildShellReplaceTransactions(char, targetPane string) []Transaction {
+	return []Transaction{
+		TmuxSendKeysTx{
+			Pane: targetPane,
+			Keys: []string{"Delete", char},
+		},
+	}
+}
+
+// buildShellTextObjectTransactions 构建 Shell 文本对象操作的事务
+func buildShellTextObjectTransactions(op, motion, targetPane string) []Transaction {
+	return []Transaction{
+		FuncTx{
+			apply: func() error {
+				performPhysicalTextObject(op, motion, targetPane)
+				return nil
+			},
+			inverse: func() Transaction {
+				return NoopTx{}
+			},
+			kind: "text_object",
+			tags: []string{"shell"},
+		},
+	}
+}
+
+// buildShellDeleteTransactions 构建 Shell 删除操作的事务
+func buildShellDeleteTransactions(motion, targetPane string) []Transaction {
+	return []Transaction{
+		FuncTx{
+			apply: func() error {
+				performPhysicalDelete(motion, targetPane)
+				return nil
+			},
+			inverse: func() Transaction {
+				return NoopTx{}
+			},
+			kind: "delete",
+			tags: []string{"shell"},
+		},
+	}
+}
+
+// buildShellFindTransactions 构建 Shell 查找操作的事务
+func buildShellFindTransactions(fType, char string, count int, targetPane string) []Transaction {
+	return []Transaction{
+		FuncTx{
+			apply: func() error {
+				performPhysicalFind(fType, char, count, targetPane)
+				return nil
+			},
+			inverse: func() Transaction {
+				return NoopTx{}
+			},
+			kind: "find",
+			tags: []string{"shell"},
+		},
+	}
+}
+
+// buildShellMoveTransactions 构建 Shell 移动操作的事务
+func buildShellMoveTransactions(motion string, count int, targetPane string) []Transaction {
+	cStr := fmt.Sprint(count)
+
+	switch motion {
+	case "up":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-N", cStr, "Up"},
+			},
+		}
+	case "down":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-N", cStr, "Down"},
+			},
+		}
+	case "left":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-N", cStr, "Left"},
+			},
+		}
+	case "right":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-N", cStr, "Right"},
+			},
+		}
+	case "start_of_line": // 0
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"Home"},
+			},
+		}
+	case "end_of_line": // $
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"End"},
+			},
+		}
+	case "word_forward": // w
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-N", cStr, "M-f"},
+			},
+		}
+	case "word_backward": // b
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-N", cStr, "M-b"},
+			},
+		}
+	case "end_of_word": // e
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-N", cStr, "M-f"},
+			},
+		}
+	case "start_of_file": // gg
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"Home"},
+			},
+		}
+	case "end_of_file": // G
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"End"},
+			},
+		}
+	default:
+		return nil
+	}
+}
+
+// buildExitFSMTransactions 构建退出 FSM 的事务
+func buildExitFSMTransactions(targetPane string) []Transaction {
+	return []Transaction{
+		TmuxSendKeysTx{
+			Pane: targetPane,
+			Keys: []string{"set", "-g", "@fsm_active", "false"},
+		},
+		TmuxSendKeysTx{
+			Pane: targetPane,
+			Keys: []string{"set", "-g", "@fsm_state", ""},
+		},
+		TmuxSendKeysTx{
+			Pane: targetPane,
+			Keys: []string{"set", "-g", "@fsm_keys", ""},
+		},
+		TmuxSendKeysTx{
+			Pane: targetPane,
+			Keys: []string{"switch-client", "-T", "root"},
+		},
+		TmuxSendKeysTx{
+			Pane: targetPane,
+			Keys: []string{"refresh-client", "-S"},
+		},
 	}
 }

@@ -628,3 +628,19 @@ func ProcessIntentGlobal(intent intent.Intent) error {
 
 	return err
 }
+
+// ProcessUndo 执行撤销操作
+func ProcessUndo(paneID string) error {
+	if txJournal != nil {
+		return txJournal.Undo()
+	}
+	return nil
+}
+
+// ProcessRedo 执行重做操作
+func ProcessRedo(paneID string) error {
+	if txJournal != nil {
+		return txJournal.Redo()
+	}
+	return nil
+}
