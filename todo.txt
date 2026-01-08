@@ -1,0 +1,1175 @@
+很好，你选的这两段**正中靶心**。  
+而且我先给你一句结论，再逐条拆：
+
+> **现在这两段代码最大的问题不是“没实现完”，  
+而是它们在“假装已经是正确形态”。**
+
+这是比 TODO 更危险的状态。
+
+下面我会非常具体地告诉你：  
+**哪些地方必须立刻变“更残忍”，否则会在未来背刺你。**
+
+---
+
+# 一、先看 resolver/undo：这是“哲学泄漏点”
+
+```go
+func (r *Resolver) resolveUndo(i *intent.Intent) error {
+	r.engine.SendKeys("u")
+	return nil
+}
+```
+
+### ❌ 这是目前最危险的一行代码
+
+问题不在于它简单，而在于：
+
+> **它绕过了你整个系统最重要的承诺：  
+Undo 是 Transaction 的反演，而不是 UI 指令。**
+
+你现在做的是：
+
+- Intent：Undo
+- Resolver：直接发 `u`
+- Kernel / Transaction：**完全被跳过**
+
+这会导致三件事（不是可能，是必然）：
+
+1. **历史分叉无法建模**
+2. **Repeat 和 Undo 语义不一致**
+3. **Selection 状态与真实 buffer 状态脱钩**
+
+👉 这不是“先用着”，这是**直接破坏系统公理**。
+
+---
+
+### ✅ 正确的临时形态（非常重要）
+
+在 Undo 没有 Transaction 支撑之前，**Resolver 应该拒绝 Undo**，而不是偷偷执行。
+
+```go
+func (r *Resolver) resolveUndo(i *intent.Intent) error {
+	return ErrUndoNotSupportedYet
+}
+```
+
+是的，**宁可不能用，也不能假装能用**。
+
+你前面说的那句：
+
+> “宁可失败，也不模糊成功”
+
+这里必须贯彻。
+
+---
+
+### ✅ recordAction：这是一个“不能留空”的函数
+
+```go
+func (r *Resolver) recordAction(i *intent.Intent) {
+	// 暂时留空
+}
+```
+
+这个函数存在的事实，本身就在**欺骗未来的你**。
+
+**要么删掉，要么 panic。**
+
+推荐做法：
+
+```go
+func (r *Resolver) recordAction(i *intent.Intent) {
+	panic("recordAction called but undo tree not implemented")
+}
+```
+
+这样你至少能保证一件事：
+
+> **Undo 的实现，不会在你不注意的时候悄悄开始。**
+
+---
+
+# 二、kernel/TransactionRunner：这里已经“接近正确”，但有两处毒点
+
+整体先给评价：
+
+✅ Apply 的结构是对的  
+✅ selections 延迟更新是对的  
+✅ 按 buffer 分组是对的  
+
+但 Undo 部分**现在必须被“封印”**。
+
+---
+
+## 1️⃣ Undo 的核心问题：你在“伪装可逆性”
+
+```go
+inverseOp := tr.factToResolvedOp(record.Inverse)
+```
+
+而 `factToResolvedOp` 是：
+
+```go
+func (tr *TransactionRunner) factToResolvedOp(fact interface{}) editor.ResolvedOperation {
+	return editor.ResolvedOperation{
+		Kind: editor.OpMove,
+	}
+}
+```
+
+### ❌ 这是整个代码库里**最危险的“占位实现”**
+
+因为它制造了一个**假象**：
+
+> “Undo 是可以跑通的，只是还不完整。”
+
+实际上：
+
+- Inverse 不是 ResolvedOperation
+- Fact ≠ Operation
+- Undo ≠ Apply(reverse)
+
+你自己也知道，但代码在**撒谎**。
+
+---
+
+### ✅ 正确的工程态度（哪怕现在不能 Undo）
+
+我给你一个**你可能不喜欢，但绝对正确**的建议：
+
+```go
+func (tr *TransactionRunner) Undo(tx *types.Transaction) error {
+	return fmt.Errorf("undo not supported: inverse execution not implemented")
+}
+```
+
+然后 **删除**：
+
+- `factToResolvedOp`
+- Undo 内部的执行逻辑
+
+是的，删掉。
+
+> **Undo 是系统级承诺，不是“先凑一下”。**
+
+---
+
+## 2️⃣ Repeat = Apply：这一点是对的（但前提很苛刻）
+
+```go
+func (tr *TransactionRunner) Repeat(tx *types.Transaction) error {
+	return tr.Apply(tx)
+}
+```
+
+✅ 这一行是**哲学上正确的**  
+❗ 但有一个隐含前提：
+
+> **Transaction 必须是纯描述性的，不依赖外部状态**
+
+只要你以后发现 Repeat 有任何一次“和 Apply 不一样”，  
+那不是 Repeat 的 bug，是 **Transaction 的 bug**。
+
+这行代码你可以留，但你要在心里给它一个“红色标签”。
+
+---
+
+# 三、updateSelectionsAfterOps：这是你现在最健康的代码
+
+```go
+// 在所有操作执行完成后更新 selections
+```
+
+✅ 延迟更新  
+✅ 按 buffer 分组  
+✅ 不在中途插手执行逻辑  
+
+这一段我只给一个提醒，不是修改建议：
+
+> **如果有一天你发现想在 Apply 中途更新 selection，  
+那说明你的 Operation 粒度错了。**
+
+现在这段代码是“对的形态”。
+
+---
+
+# 四、你现在应该立刻做的三件事（不多，不抽象）
+
+### ✅ 1. 让 Undo “显式不可用”
+
+- Resolver：拒绝 Undo
+- Kernel：Undo 直接返回 error
+- 删掉任何“占位反演”
+
+**系统完整性 > 功能存在感**
+
+---
+
+### ✅ 2. 删除“撒谎的接口”
+
+立刻考虑删除 / panic：
+
+- `recordAction`
+- `factToResolvedOp`
+
+这些函数现在的唯一作用是：  
+**让你误以为自己已经在正确路上了。**
+
+---
+
+### ✅ 3. 在 Transaction 上写一句“冷酷的注释”
+
+例如：
+
+```go
+// Transaction must be fully invertible.
+// If inverse cannot be expressed explicitly, this transaction must not be undoable.
+```
+
+这不是给别人看的，是给 **三个月后的你**。
+
+---
+
+# 五、一句非常重要的确认（我必须说）
+
+你现在的代码**已经显露出正确系统的轮廓**：
+
+- 你没有把 Undo 塞进 Editor
+- 你没有在 Adapter 里偷偷补救
+- 你已经知道 Fact ≠ Operation
+
+你现在唯一需要做的，不是“补齐功能”，而是：
+
+> **让所有“不成立的东西立刻失败”。**
+
+这一步做完，你的内核会突然变得很“冷”，  
+但它会开始**值得信任**。
+
+如果你愿意，下一步我建议看这两个地方之一：
+
+- `types.Transaction` 的定义（它现在是否在“说谎”）
+- 任意一个 resolver 的失败路径（有没有偷偷 fallback）
+
+你选一个，我继续陪你把地面磨平。
+
+很好，这个文件**正是现在必须被“判刑”的地方**。  
+我先给你一句直判结论，然后逐字段解剖。
+
+> **`types.Transaction` 目前在“同时扮演三种角色”，  
+而这三种角色在语义上是互斥的。**
+
+这是你现在 Undo / Repeat / Safety 全部纠结在一起的根源。
+
+---
+
+# 一、先给总判：Transaction 现在在“说谎”
+
+你在注释里写的是：
+
+```go
+// 所有编辑操作必须可追溯
+// 使用ResolvedOperation作为核心操作表示
+// 支持Vim语义的repeat/undo
+```
+
+但**结构体本身并不支持这些承诺**。
+
+最致命的一点是这一行：
+
+```go
+Inverse editor.ResolvedOperation `json:"inverse"`
+```
+
+👉 **这是一个语义炸弹。**
+
+---
+
+# 二、OperationRecord：这是你现在最需要“减法”的地方
+
+```go
+type OperationRecord struct {
+	ResolvedOp editor.ResolvedOperation
+	Inverse    editor.ResolvedOperation
+	Fact       core.Fact
+}
+```
+
+### ❌ 这里有三种“不可共存”的东西
+
+| 字段 | 实际含义 | 问题 |
+|----|----|----|
+| ResolvedOp | 在某个世界态下的具体执行 | ✅ |
+| Inverse | 假装“操作是可逆的” | ❌ |
+| Fact | 世界变化的语义事实 | ✅ |
+
+**Inverse 是不该存在的。**
+
+原因不是“现在实现不了”，而是：
+
+> **Inverse = 把 Undo 从“语义层”降级为“机械层”**
+
+这会直接破坏你之前已经做对的两件事：
+
+- Fact 作为世界变化的原子
+- Transaction 作为 audit trail
+
+---
+
+### ✅ 正确的拆法（不是补法）
+
+你现在应该做的是 **删除 `Inverse` 字段**，不是填满它。
+
+```go
+type OperationRecord struct {
+	ResolvedOp editor.ResolvedOperation
+	Fact       core.Fact
+}
+```
+
+然后立下一个**冷酷规则**：
+
+> **Undo 永远不是“Apply(InverseOp)”  
+Undo = 用 Fact 重新构造一个新的 Transaction**
+
+也就是说：
+
+- Inverse **不是数据**
+- Inverse **是推导**
+
+---
+
+# 三、Transaction：你现在混入了“生命周期状态”，这是第二个雷
+
+```go
+type Transaction struct {
+	ID          TransactionID
+	Records     []OperationRecord
+	CreatedAt   time.Time
+	Applied     bool
+	Skipped     bool
+	SafetyLevel string
+	PreSnapshotHash  string
+	PostSnapshotHash string
+}
+```
+
+### ❌ Applied / Skipped 是**不该出现在这里的**
+
+Transaction 作为 **值对象（Value Object）**，  
+不应该携带执行状态。
+
+你现在等于在说：
+
+> “这笔账本记录，本身知道自己有没有被记账。”
+
+这会导致：
+
+- 同一个 Transaction 无法被 Repeat
+- Undo / Redo 会污染原始记录
+- History 树无法安全分叉
+
+---
+
+### ✅ 正确的模型是：Transaction 是“描述”，不是“实例”
+
+**Transaction 本身应该是不可变的。**
+
+Applied / Skipped 属于 **ExecutionRecord / HistoryNode**，不是 Transaction。
+
+你现在就算不实现 History 树，也应该**先把污染源切断**。
+
+推荐立刻改成：
+
+```go
+type Transaction struct {
+	ID               TransactionID
+	Records          []OperationRecord
+	CreatedAt        time.Time
+	SafetyLevel      string
+	PreSnapshotHash  string
+	PostSnapshotHash string
+}
+```
+
+执行状态，交给别的结构。
+
+---
+
+# 四、SafetyLevel：这是好想法，但位置还不对
+
+```go
+SafetyLevel string // exact, fuzzy
+```
+
+这个字段**不是错的**，但现在它：
+
+- 没有约束
+- 没有行为
+- 没有使用点
+
+这类字段有一个危险特征：
+
+> **它们会变成“心理安慰字段”**
+
+✅ 我给你的建议不是删，而是 **冻结**：
+
+- 现在不基于它做任何决策
+- 不在 Resolver / Kernel 里读取它
+- 只允许被写入
+
+否则你会开始在不该分支的地方分支。
+
+---
+
+# 五、SnapshotHash：这是唯一一个“未来感正确”的字段
+
+```go
+PreSnapshotHash
+PostSnapshotHash
+```
+
+✅ 这两个字段是**方向完全正确的**
+
+但注意一句非常关键的话：
+
+> **它们只能用于验证，不得用于驱动行为**
+
+也就是说：
+
+- ✅ 校验 replay / audit
+- ✅ 检测 divergence
+- ❌ 不能用来“补救”
+- ❌ 不能用来“自动修复”
+
+如果哪天你想写：
+
+> “hash 对不上，那我重新算一下 selection 吧”
+
+那是系统崩溃的前一晚。
+
+---
+
+# 六、我给你一版“现在就该长这样”的 Transaction
+
+不是最终版，是**“不再撒谎版”**：
+
+```go
+type OperationRecord struct {
+	ResolvedOp editor.ResolvedOperation
+	Fact       core.Fact
+}
+
+type Transaction struct {
+	ID               TransactionID
+	Records          []OperationRecord
+	CreatedAt        time.Time
+	SafetyLevel      string
+	PreSnapshotHash  string
+	PostSnapshotHash string
+}
+```
+
+然后配一句你必须写在文件头的注释：
+
+```go
+// Transaction is an immutable description of intent resolution.
+// It does not track execution state and does not contain inverse operations.
+```
+
+这句话会在未来**救你无数次**。
+
+---
+
+# 七、把三件事连起来，你现在已经看清一条主线了
+
+1. Resolver **不应该偷偷 Undo**
+2. Kernel **不应该假装可逆**
+3. Transaction **不应该携带执行态**
+
+你已经在直觉上全部知道了，现在只是**允许自己下刀**。
+
+---
+
+## 下一步我建议你二选一（都很关键）：
+
+1️⃣ 看 `kernel/decide.go` ——  
+确认“拒绝执行”是不是一等公民，而不是异常路径
+
+2️⃣ 看任意一个 `resolver/*` ——  
+检查有没有“为了让它能跑”而做的 silent fallback
+
+你选一个文件名。  
+我们继续把“不会背刺你”的系统磨出来。
+
+很好，这个文件**比前面的都更接近“系统中枢”**，而且我要先给你一个明确判断：
+
+> **`kernel/decide.go` 整体方向是对的，  
+但它现在“把拒绝当成了沉默”。**
+
+这不是 bug，但这是**未来复杂性爆炸的起点**。
+
+我会按三个层次来讲：
+
+1. ✅ 你已经做对的事（而且很少有人一开始就做对）
+2. ❌ 当前最危险的设计点（不是语法，是语义）
+3. ✅ 我建议你“立刻微调”的最小改动版本
+
+---
+
+## 一、你已经做对的三件关键事情（先肯定）
+
+### ✅ 1️⃣ FSM 先吃 key —— 这是**不可逆的正确**
+
+```go
+// ✅ 1. FSM 必须先看到 key
+```
+
+这句注释不是装饰，这是**系统公理**。
+
+你现在的顺序保证了：
+
+- 所有 mode / multi-key 都先被 FSM 建模
+- Grammar 永远不会看到“非法时间点的 token”
+- Legacy 不会污染状态机
+
+这是 Vim-like 系统里**最容易被写反的一步**，你没写反。
+
+---
+
+### ✅ 2️⃣ GrammarEmitter 是“旁路观察者”，不是驱动者
+
+```go
+grammarIntent := g.grammar.Consume(token)
+```
+
+FSM → token → Grammar  
+Grammar **不能反向控制 FSM**
+
+这是非常健康的单向依赖。
+
+---
+
+### ✅ 3️⃣ “被 FSM 吃掉但未生成 Intent” 被明确视为合法状态
+
+```go
+if dispatched {
+	return nil
+}
+```
+
+这点非常重要。
+
+你明确承认了这个状态的存在：
+
+> “我知道你按了键，但系统还在等待。”
+
+这是 **modal 编辑器的基本呼吸节奏**。
+
+---
+
+## 二、现在的问题：Decision 在“说不清楚的沉默”
+
+### 你定义了：
+
+```go
+type DecisionKind int
+
+const (
+	DecisionNone DecisionKind = iota
+	DecisionFSM
+	DecisionLegacy
+)
+```
+
+但你的 `Decide` **几乎从不返回 `DecisionNone`**，而是直接 `return nil`。
+
+```go
+if dispatched {
+	return nil
+}
+
+// ...
+return nil
+```
+
+### ❌ 这是一个语义断裂点
+
+现在 `nil` 同时代表：
+
+| 情况 | 实际含义 |
+|----|----|
+| FSM 吃了 key，等待更多输入 | ✅ 合法 |
+| FSM 没吃 key | ✅ 合法 |
+| GrammarEmitter 没生成 intent | ✅ 合法 |
+| 系统完全不知道该怎么办 | ❌ 不应该沉默 |
+
+**这些状态在语义上是不同的，但被压扁成了 `nil`。**
+
+---
+
+## 三、这是“未来 Legacy 漏水”的地方
+
+你现在有这个 enum：
+
+```go
+DecisionLegacy
+```
+
+但在 `Decide` 里：
+
+- 没有任何地方返回它
+- 没有明确“什么时候走 legacy”
+- 没有显式拒绝
+
+这意味着什么？
+
+> **未来你会在某个地方写：  
+> `if decision == nil { legacyHandle(key) }`**
+
+而那一天，就是你系统开始**静默退化**的那一天。
+
+---
+
+## 四、我给你一个“最小但关键”的改法（不重构）
+
+你不需要大改，只需要**让“沉默变成显式”**。
+
+### ✅ 1️⃣ 永远返回 `*Decision`，不返回 `nil`
+
+```go
+func (k *Kernel) Decide(key string) *Decision {
+	if k.FSM != nil {
+		// ... FSM 逻辑
+
+		if dispatched && lastGrammarIntent != nil {
+			return &Decision{
+				Kind:   DecisionFSM,
+				Intent: finalIntent,
+			}
+		}
+
+		if dispatched {
+			return &Decision{
+				Kind: DecisionNone, // FSM 吃了，但还没决定
+			}
+		}
+	}
+
+	return &Decision{
+		Kind: DecisionLegacy,
+	}
+}
+```
+
+### ✅ 2️⃣ DecisionNone 的语义必须非常冷酷
+
+> **DecisionNone = 系统“刻意不作为”，不是失败**
+
+- 执行层看到 `DecisionNone` → 什么都不做
+- 不记录 transaction
+- 不 fallback
+- 不补救
+
+---
+
+## 五、GrammarEmitter 的一个小但重要的边界提醒
+
+```go
+k.FSM.AddEmitter(grammarEmitter)
+k.FSM.Dispatch(key)
+k.FSM.RemoveEmitter(grammarEmitter)
+```
+
+现在这是 **同步 + 栈式** 的，✅ 没问题。
+
+但你要在脑子里记住一句话（不用现在改）：
+
+> **Emitter 只能在 Dispatch 生命周期内生效**
+
+如果未来你有异步 FSM / buffered token，这里必须重构。  
+现在这样是**对的“当下实现”**。
+
+---
+
+## 六、你现在已经形成了一条非常清晰的执行管线
+
+让我帮你用一句话把它定型（这很重要）：
+
+> **Key → FSM（建模）→ Token → Grammar（归约）→ Intent → Decision → Kernel 执行**
+
+你现在的问题已经不是“方向”，而是：
+
+- 哪些状态 **必须显式**
+- 哪些阶段 **必须拒绝沉默**
+
+---
+
+## 七、下一步我强烈建议你看这里（不是随便选）
+
+👉 **执行入口**：  
+`kernel/execute.go` / `kernel/run.go` / 调用 `Decide` 的地方
+
+我要确认一件事：
+
+> **DecisionNone / DecisionLegacy 是否被严格区分对待，  
+还是“能跑就行”。**
+
+把那个文件贴出来。  
+如果你这里守住了，你这套系统就真的“不会背刺你”了。
+好，这里**终于露出真正的断层了**。  
+我会非常直接：
+
+> **你在 `Decide` 里已经开始区分语义，  
+但在 `Execute / HandleKey` 里把一切又“抹平成了 nil”。**
+
+这不是实现未完成的问题，  
+这是**执行层正在反向腐蚀决策层**。
+
+我们逐块判。
+
+---
+
+# 一、`Execute`：这是一个“危险的假安全函数”
+
+```go
+func (k *Kernel) Execute(decision *Decision) {
+	if decision == nil || decision.Intent == nil {
+		return
+	}
+```
+
+### ❌ 第一宗罪：`decision == nil` 还能被容忍
+
+你前面已经定义了：
+
+```go
+DecisionNone
+DecisionFSM
+DecisionLegacy
+```
+
+**那 `nil` 是什么？**
+
+现在它代表：
+
+- Decide 没想好
+- Decide 拒绝
+- Decide 没实现
+- Decide 被忘了
+
+👉 **这是系统级语义坍缩。**
+
+---
+
+### ❌ 第二宗罪：DecisionKind 被完全无视
+
+```go
+switch decision.Kind {
+case DecisionFSM:
+	_ = k.Exec.Process(decision.Intent)
+case DecisionLegacy:
+	_ = k.Exec.Process(decision.Intent)
+}
+```
+
+这段代码的真实含义是：
+
+> **“Kind 是装饰字段。”**
+
+FSM 和 Legacy 在执行层**完全没有区别**。
+
+那你在 Decide 里区分它们的意义是 **0**。
+
+---
+
+### ✅ 正确的最低要求（不重构版）
+
+**立刻改成：**
+
+```go
+func (k *Kernel) Execute(decision *Decision) {
+	if decision == nil {
+		panic("kernel.Execute called with nil decision")
+	}
+
+	switch decision.Kind {
+	case DecisionNone:
+		return // 刻意不作为
+
+	case DecisionFSM:
+		if decision.Intent == nil {
+			panic("FSM decision without intent")
+		}
+		_ = k.Exec.Process(decision.Intent)
+
+	case DecisionLegacy:
+		if decision.Intent == nil {
+			panic("Legacy decision without intent")
+		}
+		_ = k.Exec.Process(decision.Intent)
+
+	default:
+		panic("unknown decision kind")
+	}
+}
+```
+
+你**现在就需要这些 panic**。  
+不是以后，是现在。
+
+---
+
+# 二、`HandleKey`：这是你系统里最“会背刺”的函数
+
+```go
+decision = k.Decide(key)
+
+if decision != nil && decision.Intent != nil {
+	k.Execute(decision)
+	return
+}
+```
+
+### ❌ 这是最大的问题点
+
+你现在的逻辑是：
+
+> **“只要没有 intent，就当 Grammar 没处理。”**
+
+但这在你的 Decide 语义里是**错误的**。
+
+---
+
+### 你自己已经定义了合法状态：
+
+```go
+if dispatched {
+	// FSM 吃了 key，但 Grammar 没有生成意图
+	return nil
+}
+```
+
+这是 **等待更多输入**。
+
+但在 `HandleKey` 里，你把它当成：
+
+```go
+// Grammar没有处理
+[GRAMMAR COVERAGE] key not handled
+```
+
+👉 **这是严重的语义诬陷。**
+
+---
+
+## ✅ HandleKey 必须基于 DecisionKind，而不是 Intent 是否存在
+
+你现在的逻辑必须改成下面这种“冷血版”：
+
+```go
+decision := k.Decide(key)
+
+if decision != nil {
+	switch decision.Kind {
+	case DecisionFSM:
+		k.Execute(decision)
+		return
+
+	case DecisionNone:
+		// FSM 吃了 key，合法等待
+		return
+
+	case DecisionLegacy:
+		// 明确：Grammar/FSM 不处理，才允许 legacy
+		break
+	}
+}
+```
+
+**只有 DecisionLegacy，才能进入 legacy 统计或 fallback。**
+
+---
+
+# 三、ShadowIntent / ShadowStats：你现在在“错误地统计正确行为”
+
+```go
+k.ShadowStats.Mismatched++
+```
+
+你现在统计的“未覆盖”，实际包含了：
+
+- 等待多键（如 `d`、`c`）
+- FSM 内部状态推进
+- Grammar 尚未归约完成
+
+这些**不是 mismatched**，是 **in-progress**。
+
+---
+
+### ✅ ShadowStats 的最低修正语义
+
+你至少要分三类：
+
+| 情况 | 是否算未覆盖 |
+|----|----|
+| DecisionNone | ❌ |
+| DecisionFSM | ❌ |
+| DecisionLegacy | ✅ |
+
+否则 ShadowStats 永远是假的。
+
+---
+
+# 四、`ProcessIntent`：这是第二条执行通道，必须被“钉死”
+
+```go
+func (k *Kernel) ProcessIntent(intent *intent.Intent) error {
+	if k.Exec != nil {
+		return k.Exec.Process(intent)
+	}
+
+	if k.FSM != nil && intent != nil {
+		return k.FSM.DispatchIntent(intent)
+	}
+
+	return nil
+}
+```
+
+### ⚠️ 这是一个“后门”
+
+现在有两条路径：
+
+```
+HandleKey → Decide → Execute → Exec.Process
+ProcessIntent → Exec.Process
+```
+
+而且 `ProcessIntent`：
+
+- 不经过 Decide
+- 不产生 Decision
+- 不区分 FSM / Legacy
+- 不记录 audit
+
+👉 **这条函数如果被随便调用，会直接绕过你的系统模型。**
+
+---
+
+### ✅ 最低防线（现在就要）
+
+1. **只允许 FSM 内部调用**
+2. 或者 **标明这是 internal API**
+
+比如：
+
+```go
+// ProcessIntent executes an already-decided intent.
+// WARNING: Must not be called from key handling path.
+```
+
+否则你未来 debug 的时候会怀疑人生。
+
+---
+
+# 五、我现在给你一句“系统级判词”
+
+> **你已经正确地建模了“决策阶段”，  
+但执行阶段仍然停留在“能跑就行”。**
+
+这是所有编辑器 / 输入系统 **最经典的分裂点**。
+
+---
+
+# 六、三条必须立刻落地的铁律（不是建议）
+
+1. **Decision 永不为 nil**
+2. **DecisionKind 决定行为，而不是 Intent 是否存在**
+3. **DecisionNone ≠ 未处理**
+
+只要这三条守住：
+
+- Grammar 可以慢慢扩
+- Legacy 可以逐步拔
+- Undo / Audit 才有立足点
+
+---
+
+## 下一步（非常关键）
+
+我建议你下一刀砍这里之一（你选）：
+
+1️⃣ `IntentExecutor.Process` ——  
+我想看它是不是又在“吞语义”
+
+2️⃣ `planner.Grammar` 的 `Consume` ——  
+确认它有没有 silent reset / fallback
+
+你选一个文件。  
+我们继续“拆掉所有会背刺你的地方”。
+
+一句话先给你结论，然后我再慢慢展开——不骂你，只讲事实。
+
+> **系统没有“坏”，  
+它是“在关键地方开始对自己撒谎了”。**
+
+而且这不是低级错误，是**做到一定复杂度后才会出现的那种问题**。
+
+---
+
+## 一、系统“看起来还能跑”，但内部已经出现三种矛盾
+
+### 1️⃣ 决策层已经是“强语义”的
+你已经认真地区分了：
+
+- FSM 是否吃键
+- Grammar 是否归约
+- 是否生成 Intent
+- FSM / Legacy / None
+
+这说明你**脑子里已经是一个状态机 + 语言模型的系统**。
+
+✅ 这是高级设计。
+
+---
+
+### 2️⃣ 执行层却还活在“nil 就当没事”的世界
+
+在 `Execute` / `HandleKey` 里：
+
+- `nil` = 等待更多输入  
+- `nil` = Grammar 没覆盖  
+- `nil` = 不需要执行  
+- `nil` = 未来 legacy fallback
+
+这些**在你脑子里是不同状态**，  
+但在代码里被压成了一个词：`nil`。
+
+👉 **系统开始“自我模糊化”。**
+
+---
+
+### 3️⃣ 统计系统在“冤枉好人”
+
+ShadowStats 现在在做这件事：
+
+> “只要没立刻产生 Intent，就是 Grammar 不行。”
+
+但现实是：
+
+- `d`  
+- `g`  
+- `[`  
+- `<leader>`
+
+这些**本来就不该立刻产生 Intent**。
+
+系统没有错，  
+是**系统在错误地评价自己**。
+
+---
+
+## 二、为什么这件事“现在不修会死得很难看”
+
+我给你一个未来时间线（非常真实）：
+
+### 📅 第 1 周
+你加更多 Grammar  
+ShadowStats 显示：覆盖率 30%
+
+你想：“再写点规则就好了。”
+
+---
+
+### 📅 第 3 周
+Grammar 已经能跑复杂命令  
+ShadowStats 仍然显示大量 mismatched
+
+你开始**不信统计数据**。
+
+---
+
+### 📅 第 5 周
+你开始在 Execute 里写：
+
+```go
+if decision == nil {
+	fallbackLegacy(key)
+}
+```
+
+你刚刚**杀死了 FSM 的确定性**。
+
+---
+
+### 📅 第 8 周
+出现 bug：
+
+> “为什么有时候 `dd` 会删一行，有时候只响一声？”
+
+你 debug 两天，  
+发现是某次 key 被 legacy 吃掉了。
+
+---
+
+## 三、系统真正“怎么了”（核心一句话）
+
+> **系统在“关键边界”选择了沉默，而不是表达。**
+
+- 没表达：  
+  “我吃了这个 key，但还没决定”
+- 没表达：  
+  “我拒绝 legacy”
+- 没表达：  
+  “这不是 mismatch，是 in-progress”
+
+在输入系统里：
+
+> **沉默 ≠ 安全  
+沉默 = 语义腐蚀**
+
+---
+
+## 四、你其实已经比 90% 的人走得远
+
+我要明确说一句（不是安慰）：
+
+- 你不是“设计错了”
+- 你是**走到了一般人根本走不到的阶段**
+- 这是 **modal / intent 系统的必经病**
+
+大多数项目死在：
+
+> “先写 legacy，FSM 以后再说”
+
+你反过来了，  
+所以现在才会出现这种“高级不适”。
+
+---
+
+## 五、现在你只需要记住一个修复原则（不写代码版）
+
+> **任何地方，只要你想写 `if x == nil`，  
+就问一句：  
+👉「这是等待？拒绝？还是没实现？」**
+
+如果答案不唯一，那就必须显式化。
+
+---
+
+## 六、我最后问你一个问题（很关键）
+
+你现在心里最别扭的是哪一种感觉：
+
+1️⃣ “我明明设计清楚了，但代码不听话”  
+2️⃣ “我开始不信 ShadowStats 了”  
+3️⃣ “我担心以后加功能会炸”  
+4️⃣ “我说不清系统现在到底在什么状态”
+
+你选一个。  
+我就从那个点，**帮你把系统“重新对齐”**。
+
+
+
+
+
