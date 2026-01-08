@@ -14,6 +14,30 @@ type Transaction interface {
 	Merge(next Transaction) Transaction
 }
 
+// ChainInverse 将两个事务的逆操作链接起来
+func ChainInverse(a, b Transaction) Transaction {
+	return FuncTx{
+		apply: func() error {
+			_ = b.Inverse().Apply()
+			return a.Inverse().Apply()
+		},
+		inverse: func() Transaction {
+			// 逆操作的逆操作是原操作
+			return FuncTx{
+				apply: func() error {
+					_ = a.Apply()
+					return b.Apply()
+				},
+				inverse: func() Transaction { return ChainInverse(a, b) },
+				kind: "chained_apply",
+				tags: []string{"chained"},
+			}
+		},
+		kind: "chained_inverse",
+		tags: []string{"chained"},
+	}
+}
+
 // FuncTx 是 Transaction 的通用实现
 type FuncTx struct {
 	apply   func() error
@@ -55,7 +79,16 @@ func (t FuncTx) Merge(next Transaction) Transaction {
 	if !ok {
 		return next
 	}
-	return merged
+
+	// 确保合并后的事务的逆操作是正确的
+	// merged.Inverse() 应该等价于 Inverse(next) 再 Inverse(self)
+	return FuncTx{
+		apply: func() error { return merged.Apply() },
+		inverse: func() Transaction { return ChainInverse(t.inverse(), next.Inverse()) },
+		kind: merged.Kind(),
+		tags: merged.Tags(),
+		mergeFn: nil, // 合并后的事务不再支持进一步合并
+	}
 }
 
 // TxRecord 事务记录
@@ -64,6 +97,11 @@ type TxRecord struct {
 	Applied bool
 	Failed  bool
 	Time    time.Time
+}
+
+// Age 返回记录的时间差
+func (r TxRecord) Age() time.Duration {
+	return time.Since(r.Time)
 }
 
 // TxJournal 事务日志
@@ -106,20 +144,46 @@ func (j *TxJournal) ApplyTxs(txs []Transaction) error {
 	return nil
 }
 
-// Undo 撤销最后一个事务
+// hasTag 检查事务是否包含指定标签
+func hasTag(tx Transaction, tag string) bool {
+	tags := tx.Tags()
+	for _, t := range tags {
+		if t == tag {
+			return true
+		}
+	}
+	return false
+}
+
+// Undo 撤销最后一个事务（支持原子操作）
 func (j *TxJournal) Undo() error {
 	if len(j.applied) == 0 {
 		return nil
 	}
 
 	rec := j.applied[len(j.applied)-1]
-	j.applied = j.applied[:len(j.applied)-1]
+	atomic := hasTag(rec.Tx, "atomic")
 
-	if err := rec.Tx.Inverse().Apply(); err != nil {
-		return err
+	for {
+		if err := rec.Tx.Inverse().Apply(); err != nil {
+			return err
+		}
+
+		// 从 applied 移除
+		j.applied = j.applied[:len(j.applied)-1]
+		// 添加到 undone
+		j.undone = append(j.undone, rec)
+
+		if !atomic || len(j.applied) == 0 {
+			break
+		}
+
+		// 检查前一个事务是否也是原子操作的一部分
+		rec = j.applied[len(j.applied)-1]
+		if !hasTag(rec.Tx, "atomic") {
+			break
+		}
 	}
-
-	j.undone = append(j.undone, rec)
 	return nil
 }
 
@@ -142,6 +206,9 @@ func (j *TxJournal) Redo() error {
 
 // appendTx 添加事务并尝试合并
 func (j *TxJournal) appendTx(tx Transaction) {
+	// 新历史出现 → Redo 失效
+	j.undone = nil
+
 	n := len(j.applied)
 	if n == 0 {
 		j.applied = append(j.applied, TxRecord{Tx: tx, Applied: true, Time: time.Now()})
