@@ -30,8 +30,10 @@ var kernelInstance *kernel.Kernel
 // TransactionManager 事务管理器
 // 负责管理编辑操作的历史记录，遵循Vim语义规则
 type TransactionManager struct {
-	current *types.Transaction
-	nextID  types.TransactionID
+	current           *types.Transaction
+	nextID            types.TransactionID
+	history           []*types.Transaction  // 存储已提交的事务，用于 . repeat 和 undo
+	lastCommittedTx   *types.Transaction   // 最近提交的事务，用于 . repeat
 }
 
 // BeginTransaction 开始一个新的事务
@@ -71,6 +73,13 @@ func (tm *TransactionManager) CommitTransaction() error {
 	}
 
 	tm.current.Applied = true
+
+	// 保存到历史记录
+	tm.history = append(tm.history, tm.current)
+
+	// 更新最近提交的事务（用于 . repeat）
+	tm.lastCommittedTx = tm.current
+
 	tm.current = nil // 重置当前事务
 
 	return nil
@@ -91,6 +100,12 @@ func (tm *TransactionManager) AbortTransaction() error {
 // GetCurrentTransaction 获取当前事务（如果存在）
 func (tm *TransactionManager) GetCurrentTransaction() *types.Transaction {
 	return tm.current
+}
+
+// LastCommittedTransaction 获取最近提交的事务
+// 用于 . repeat 功能
+func (tm *TransactionManager) LastCommittedTransaction() *types.Transaction {
+	return tm.lastCommittedTx
 }
 
 
@@ -386,6 +401,234 @@ func (a *intentAdapter) GetAnchors() []core.Anchor {
 		}
 	}
 	return coreAnchors
+}
+
+// RepeatLastTransaction 重复执行最近提交的事务
+// 这是 . repeat 功能的核心实现
+func RepeatLastTransaction(tm *TransactionManager) error {
+	tx := tm.LastCommittedTransaction()
+	if tx == nil {
+		return nil // Vim 行为：无事发生
+	}
+
+	// 开始新事务以支持 repeat 本身的 undo
+	tm.BeginTransaction()
+
+	// 重放最近事务中的所有操作
+	for _, opRecord := range tx.Records {
+		err := editor.ApplyResolvedOperation(opRecord.ResolvedOp)
+		if err != nil {
+			tm.AbortTransaction()
+			return err
+		}
+	}
+
+	return tm.CommitTransaction()
+}
+
+// UndoLastTransaction 撤销最近的事务
+// 这是 undo 功能的核心实现
+func UndoLastTransaction(tm *TransactionManager) error {
+	if len(tm.history) == 0 {
+		return nil // 没有可撤销的事务
+	}
+
+	// 获取最近的事务
+	lastTx := tm.history[len(tm.history)-1]
+
+	// 从历史记录中移除（但保留引用以供使用）
+	tm.history = tm.history[:len(tm.history)-1]
+
+	// 更新最近提交的事务为倒数第二个（如果存在）
+	if len(tm.history) > 0 {
+		tm.lastCommittedTx = tm.history[len(tm.history)-1]
+	} else {
+		tm.lastCommittedTx = nil
+	}
+
+	// 开始新事务以执行撤销操作
+	tm.BeginTransaction()
+
+	// 逆序执行每个操作的反向操作
+	for i := len(lastTx.Records) - 1; i >= 0; i-- {
+		opRecord := lastTx.Records[i]
+		// 使用反向操作执行 undo
+		err := editor.ApplyResolvedOperation(opRecord.Inverse)
+		if err != nil {
+			tm.AbortTransaction()
+			return err
+		}
+	}
+
+	return tm.CommitTransaction()
+}
+
+// TxNode 事务节点，用于构建 redo tree
+type TxNode struct {
+	Tx       *types.Transaction
+	Parent   *TxNode
+	Children []*TxNode
+}
+
+// History 编辑历史，支持 undo/redo tree
+type History struct {
+	Root    *TxNode
+	Current *TxNode
+}
+
+// NewHistory 创建新的历史记录
+func NewHistory() *History {
+	root := &TxNode{
+		Tx:       nil, // 根节点不包含事务
+		Parent:   nil,
+		Children: make([]*TxNode, 0),
+	}
+
+	return &History{
+		Root:    root,
+		Current: root,
+	}
+}
+
+// Commit 将事务提交到历史记录中
+func (h *History) Commit(tx *types.Transaction) {
+	node := &TxNode{
+		Tx:       tx,
+		Parent:   h.Current,
+		Children: make([]*TxNode, 0),
+	}
+
+	h.Current.Children = append(h.Current.Children, node)
+	h.Current = node
+}
+
+// Undo 执行撤销操作
+func (h *History) Undo() *types.Transaction {
+	if h.Current == h.Root {
+		return nil // 已经在根节点，无法再撤销
+	}
+
+	tx := h.Current.Tx
+	h.Current = h.Current.Parent
+	return tx
+}
+
+// Redo 执行重做操作
+func (h *History) Redo(childIndex int) *types.Transaction {
+	if len(h.Current.Children) == 0 {
+		return nil // 没有可重做的事务
+	}
+
+	if childIndex < 0 || childIndex >= len(h.Current.Children) {
+		childIndex = 0 // 默认选择第一个子节点
+	}
+
+	next := h.Current.Children[childIndex]
+	h.Current = next
+	return next.Tx
+}
+
+// Macro 宏定义，包含一系列事务
+type Macro struct {
+	Name       string
+	Transactions []*types.Transaction
+}
+
+// MacroManager 宏管理器
+type MacroManager struct {
+	macros map[string]*Macro
+	activeMacro *Macro  // 当前正在录制的宏
+}
+
+// NewMacroManager 创建新的宏管理器
+func NewMacroManager() *MacroManager {
+	return &MacroManager{
+		macros: make(map[string]*Macro),
+	}
+}
+
+// StartRecording 开始录制宏
+func (mm *MacroManager) StartRecording(name string) {
+	mm.activeMacro = &Macro{
+		Name: name,
+		Transactions: make([]*types.Transaction, 0),
+	}
+}
+
+// StopRecording 停止录制宏
+func (mm *MacroManager) StopRecording() {
+	if mm.activeMacro != nil {
+		// 保存宏
+		mm.macros[mm.activeMacro.Name] = mm.activeMacro
+		mm.activeMacro = nil
+	}
+}
+
+// RecordTransaction 记录事务到当前宏
+func (mm *MacroManager) RecordTransaction(tx *types.Transaction) {
+	if mm.activeMacro != nil {
+		// 复制事务以避免后续修改影响宏
+		clonedTx := cloneTransaction(tx)
+		mm.activeMacro.Transactions = append(mm.activeMacro.Transactions, clonedTx)
+	}
+}
+
+// PlayMacro 执行宏
+func (mm *MacroManager) PlayMacro(name string, count int) error {
+	macro, exists := mm.macros[name]
+	if !exists {
+		return fmt.Errorf("macro '%s' not found", name)
+	}
+
+	if count <= 0 {
+		count = 1
+	}
+
+	for i := 0; i < count; i++ {
+		for _, tx := range macro.Transactions {
+			err := replayTransaction(tx)
+			if err != nil {
+				return fmt.Errorf("error replaying macro '%s': %v", name, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// cloneTransaction 克隆事务
+func cloneTransaction(src *types.Transaction) *types.Transaction {
+	dst := &types.Transaction{
+		ID:               src.ID,
+		Records:          make([]types.OperationRecord, len(src.Records)),
+		CreatedAt:        src.CreatedAt,
+		Applied:          src.Applied,
+		Skipped:          src.Skipped,
+		SafetyLevel:      src.SafetyLevel,
+		PreSnapshotHash:  src.PreSnapshotHash,
+		PostSnapshotHash: src.PostSnapshotHash,
+	}
+
+	// 克隆 Records
+	copy(dst.Records, src.Records)
+
+	return dst
+}
+
+// replayTransaction 重放事务
+func replayTransaction(tx *types.Transaction) error {
+	for _, record := range tx.Records {
+		err := editor.ApplyResolvedOperation(record.ResolvedOp)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// IsRecording 检查是否正在录制宏
+func (mm *MacroManager) IsRecording() bool {
+	return mm.activeMacro != nil
 }
 
 // ProcessIntentGlobal 全局意图处理入口

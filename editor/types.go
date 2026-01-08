@@ -73,16 +73,46 @@ type Intent struct {
 	Target Target
 }
 
+// ResolvedOperationKind 定义解析后操作的类型
+type ResolvedOperationKind int
+
+const (
+	OpInsert ResolvedOperationKind = iota
+	OpDeleteResolved
+	OpMoveResolved
+)
+
+// BufferID 代表缓冲区ID
+type BufferID string
+
+// WindowID 代表窗口ID
+type WindowID string
+
+// TextRange 定义文本范围
+type TextRange struct {
+	Start Cursor
+	End   Cursor
+}
+
 // ResolvedOperation 表示解析后的操作
+// 这是用于 . repeat 和 undo 的核心数据结构
 type ResolvedOperation struct {
-	Operator OperatorKind // OpDelete / OpChange / OpYank / OpNone
-	Motion   MotionKind   // 原始 motion（用于 repeat / undo 语义）
-	Count    int
+	Kind ResolvedOperationKind
 
-	From Cursor
-	To   Cursor
+	BufferID BufferID
+	WindowID WindowID
 
-	Range *MotionRange // nil 表示纯移动
+	// 执行位置（执行前就已确定）
+	Anchor Cursor
+
+	// Insert 专用
+	Text string
+
+	// Delete/Move 专用（半开区间）
+	Range *TextRange
+
+	// Delete 时记录被删除的文本，用于 undo
+	DeletedText string
 }
 
 // Resolver 负责解析意图到具体操作
@@ -258,4 +288,414 @@ func resolveRange(op OperatorKind, from Cursor, to Cursor, motion MotionKind) *M
 
 	// fallback
 	return &MotionRange{Start: from, End: to}
+}
+
+// ResolveDelete 将 Motion 转换为 ResolvedOperation
+// 这是将高级意图转换为可重复操作的关键步骤
+func ResolveDelete(cursor Cursor, motion Motion, buffer Buffer) (ResolvedOperation, ResolvedOperation, error) {
+	// 计算运动结束位置
+	start := cursor
+	end := start // 简化实现，实际需要根据 motion 计算 end 位置
+
+	// 根据不同的运动类型计算结束位置
+	switch motion.Kind {
+	case MotionCharForward:
+		end.Col += motion.Count
+	case MotionCharBackward:
+		end.Col -= motion.Count
+	case MotionWordForward:
+		// 简化实现：向前移动几个单词
+		end.Col += motion.Count * 5 // 假设每个单词平均5个字符
+	case MotionWordBackward:
+		end.Col -= motion.Count * 5
+	case MotionLineStart:
+		end.Col = 0
+	case MotionLineEnd:
+		// 需要获取当前行的长度
+		if buffer != nil {
+			end.Col = buffer.LineLength(start.Row)
+		}
+	}
+
+	// 确保 end 位置有效
+	if buffer != nil {
+		end.Row, end.Col = clamp(end.Row, end.Col, buffer.LineCount(), buffer.LineLength(end.Row))
+	}
+
+	// 标准化区间（确保 start 在前，end 在后）
+	if end.Row < start.Row || (end.Row == start.Row && end.Col < start.Col) {
+		start, end = end, start
+	}
+
+	// 获取被删除的文本
+	deletedText := ""
+	if buffer != nil {
+		// 这里需要一个获取范围文本的方法
+		// 简化实现，暂时返回空字符串
+	}
+
+	// 创建删除操作
+	deleteOp := ResolvedOperation{
+		Kind:        OpDelete,
+		BufferID:    "", // 实际应用中应设置适当的 BufferID
+		WindowID:    "", // 实际应用中应设置适当的 WindowID
+		Anchor:      start,
+		Range:       &TextRange{Start: start, End: end},
+		DeletedText: deletedText,
+	}
+
+	// 创建对应的插入操作（作为反向操作，用于 undo）
+	insertOp := ResolvedOperation{
+		Kind:     OpInsert,
+		BufferID: deleteOp.BufferID,
+		WindowID: deleteOp.WindowID,
+		Anchor:   start,
+		Text:     deletedText,
+	}
+
+	return deleteOp, insertOp, nil
+}
+
+// ResolveInsert 将插入意图转换为 ResolvedOperation
+// 返回插入操作和其反向操作（删除操作）
+func ResolveInsert(cursor Cursor, text string) (ResolvedOperation, ResolvedOperation) {
+	insertOp := ResolvedOperation{
+		Kind:     OpInsert,
+		BufferID: "", // 实际应用中应设置适当的 BufferID
+		WindowID: "", // 实际应用中应设置适当的 WindowID
+		Anchor:   cursor,
+		Text:     text,
+	}
+
+	// 创建对应的删除操作（作为反向操作，用于 undo）
+	deleteOp := ResolvedOperation{
+		Kind:        OpDelete,
+		BufferID:    insertOp.BufferID,
+		WindowID:    insertOp.WindowID,
+		Anchor:      cursor,
+		Range:       &TextRange{Start: cursor, End: Cursor{Row: cursor.Row, Col: cursor.Col + len(text)}},
+		DeletedText: text,
+	}
+
+	return insertOp, deleteOp
+}
+
+// TextObjectKind 定义文本对象类型
+type TextObjectKind int
+
+const (
+	TextObjectInnerParen TextObjectKind = iota
+	TextObjectAroundParen
+	TextObjectInnerQuote
+	TextObjectAroundQuote
+	TextObjectInnerBracket
+	TextObjectAroundBracket
+	TextObjectInnerBrace
+	TextObjectAroundBrace
+)
+
+// TextObject 定义文本对象
+type TextObject struct {
+	Kind TextObjectKind
+}
+
+// ResolveInnerParen 解析内部括号文本对象
+func ResolveInnerParen(cursor Cursor, buffer Buffer) (*TextRange, error) {
+	if buffer == nil {
+		return nil, errors.New("buffer is nil")
+	}
+
+	// 从当前位置向前查找匹配的左括号
+	leftParenPos, err := findMatchingBackward(cursor, '(', ')', buffer)
+	if err != nil {
+		return nil, err
+	}
+
+	// 从左括号位置向后查找匹配的右括号
+	rightParenPos, err := findMatchingForward(*leftParenPos, '(', ')', buffer)
+	if err != nil {
+		return nil, err
+	}
+
+	// 返回括号内的范围（不包括括号本身）
+	result := &TextRange{
+		Start: Cursor{Row: leftParenPos.Row, Col: leftParenPos.Col + 1},
+		End:   Cursor{Row: rightParenPos.Row, Col: rightParenPos.Col},
+	}
+
+	return result, nil
+}
+
+// ResolveAroundParen 解析周围括号文本对象
+func ResolveAroundParen(cursor Cursor, buffer Buffer) (*TextRange, error) {
+	if buffer == nil {
+		return nil, errors.New("buffer is nil")
+	}
+
+	// 从当前位置向前查找匹配的左括号
+	leftParenPos, err := findMatchingBackward(cursor, '(', ')', buffer)
+	if err != nil {
+		return nil, err
+	}
+
+	// 从左括号位置向后查找匹配的右括号
+	rightParenPos, err := findMatchingForward(*leftParenPos, '(', ')', buffer)
+	if err != nil {
+		return nil, err
+	}
+
+	// 返回括号及其中内容的范围（包括括号本身）
+	result := &TextRange{
+		Start: *leftParenPos,
+		End:   Cursor{Row: rightParenPos.Row, Col: rightParenPos.Col + 1}, // 包含右括号
+	}
+
+	return result, nil
+}
+
+// ResolveInnerQuote 解析内部引号文本对象
+func ResolveInnerQuote(cursor Cursor, quoteChar rune, buffer Buffer) (*TextRange, error) {
+	if buffer == nil {
+		return nil, errors.New("buffer is nil")
+	}
+
+	// 从当前位置向前查找匹配的左引号
+	leftQuotePos, err := findCharBackward(cursor, quoteChar, buffer)
+	if err != nil {
+		return nil, err
+	}
+
+	// 从左引号位置向后查找匹配的右引号
+	rightQuotePos, err := findCharForward(*leftQuotePos, quoteChar, buffer)
+	if err != nil {
+		return nil, err
+	}
+
+	// 返回引号内的范围（不包括引号本身）
+	result := &TextRange{
+		Start: Cursor{Row: leftQuotePos.Row, Col: leftQuotePos.Col + 1},
+		End:   *rightQuotePos,
+	}
+
+	return result, nil
+}
+
+// findMatchingBackward 向后查找匹配的括号
+func findMatchingBackward(cursor Cursor, open, close rune, buffer Buffer) (*Cursor, error) {
+	// 从当前位置开始向前搜索
+	row, col := cursor.Row, cursor.Col
+
+	// 首先尝试当前位置是否是右括号
+	if row >= 0 && row < buffer.LineCount() && col >= 0 {
+		lineLen := buffer.LineLength(row)
+		if col < lineLen {
+			char := buffer.RuneAt(row, col)
+			if char == close {
+				// 如果当前位置是右括号，直接从这里开始匹配
+				return findMatchingPair(row, col-1, open, close, true, buffer)
+			}
+		}
+	}
+
+	// 否则从当前位置前面开始搜索
+	return findMatchingPair(row, col-1, open, close, true, buffer)
+}
+
+// findMatchingForward 向前查找匹配的括号
+func findMatchingForward(cursor Cursor, open, close rune, buffer Buffer) (*Cursor, error) {
+	row, col := cursor.Row, cursor.Col
+	return findMatchingPair(row, col+1, open, close, false, buffer)
+}
+
+// findMatchingPair 查找匹配的括号对
+func findMatchingPair(startRow, startCol int, open, close rune, backward bool, buffer Buffer) (*Cursor, error) {
+	if buffer == nil {
+		return nil, errors.New("buffer is nil")
+	}
+
+	count := 0
+	row, col := startRow, startCol
+
+	for {
+		// 检查边界
+		if row < 0 || row >= buffer.LineCount() {
+			break
+		}
+
+		lineLen := buffer.LineLength(row)
+		if backward {
+			if col < 0 {
+				row--
+				if row < 0 {
+					break
+				}
+				col = buffer.LineLength(row) - 1
+				if col < 0 {
+					col = 0
+				}
+				continue
+			}
+		} else {
+			if col >= lineLen {
+				row++
+				if row >= buffer.LineCount() {
+					break
+				}
+				col = 0
+				continue
+			}
+		}
+
+		char := buffer.RuneAt(row, col)
+
+		if char == open {
+			count++
+		} else if char == close {
+			count--
+			if count == -1 {
+				// 找到了匹配的右括号
+				pos := Cursor{Row: row, Col: col}
+				return &pos, nil
+			}
+		}
+
+		if backward {
+			col--
+		} else {
+			col++
+		}
+	}
+
+	// 如果是向后查找且没找到，尝试从当前位置开始向前查找右括号
+	if backward {
+		row, col = startRow, startCol
+		count = 0
+
+		for {
+			// 检查边界
+			if row < 0 || row >= buffer.LineCount() {
+				break
+			}
+
+			lineLen := buffer.LineLength(row)
+			if col < 0 {
+				row--
+				if row < 0 {
+					break
+				}
+				col = buffer.LineLength(row) - 1
+				if col < 0 {
+					col = 0
+				}
+				continue
+			}
+
+			if col >= lineLen {
+				col = lineLen - 1
+				if col < 0 {
+					col = 0
+				}
+			}
+
+			char := buffer.RuneAt(row, col)
+
+			if char == close {
+				// 找到右括号，开始匹配
+				return findMatchingPair(row, col-1, open, close, true, buffer)
+			}
+
+			col--
+		}
+	}
+
+	return nil, errors.New("matching bracket not found")
+}
+
+// findCharBackward 向后查找字符
+func findCharBackward(cursor Cursor, target rune, buffer Buffer) (*Cursor, error) {
+	row, col := cursor.Row, cursor.Col
+
+	for {
+		if row < 0 || row >= buffer.LineCount() {
+			break
+		}
+
+		if col < 0 {
+			row--
+			if row < 0 {
+				break
+			}
+			col = buffer.LineLength(row) - 1
+			if col < 0 {
+				col = 0
+			}
+			continue
+		}
+
+		char := buffer.RuneAt(row, col)
+		if char == target {
+			pos := Cursor{Row: row, Col: col}
+			return &pos, nil
+		}
+
+		col--
+	}
+
+	return nil, errors.New("character not found")
+}
+
+// findCharForward 向前查找字符
+func findCharForward(cursor Cursor, target rune, buffer Buffer) (*Cursor, error) {
+	row, col := cursor.Row, cursor.Col
+
+	for {
+		if row < 0 || row >= buffer.LineCount() {
+			break
+		}
+
+		lineLen := buffer.LineLength(row)
+		if col >= lineLen {
+			row++
+			if row >= buffer.LineCount() {
+				break
+			}
+			col = 0
+			continue
+		}
+
+		char := buffer.RuneAt(row, col)
+		if char == target {
+			pos := Cursor{Row: row, Col: col}
+			return &pos, nil
+		}
+
+		col++
+	}
+
+	return nil, errors.New("character not found")
+}
+
+// clamp 限制光标位置
+func clamp(row, col, maxRow, maxCol int) (int, int) {
+	if row < 0 {
+		row = 0
+	}
+	if row >= maxRow {
+		row = maxRow - 1
+		if row < 0 {
+			row = 0
+		}
+	}
+
+	if col < 0 {
+		col = 0
+	}
+	if col >= maxCol {
+		col = maxCol - 1
+		if col < 0 {
+			col = 0
+		}
+	}
+
+	return row, col
 }

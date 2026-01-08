@@ -18,6 +18,19 @@ type RepeatableAction struct {
 	Count    int
 }
 
+// Macro 宏结构
+type Macro struct {
+	Name           string
+	IntentSequence []*intent.Intent
+	Active         bool
+}
+
+// MacroManager 宏管理器
+type MacroManager struct {
+	macros   map[string]*Macro
+	recording *Macro
+}
+
 // Resolver 解析器
 type Resolver struct {
 	engine EngineAdapter
@@ -29,10 +42,61 @@ type Resolver struct {
 	macroManager *MacroManager
 }
 
+// NewMacroManager 创建新的宏管理器
+func NewMacroManager() *MacroManager {
+	return &MacroManager{
+		macros: make(map[string]*Macro),
+	}
+}
+
+// StartRecording 开始录制宏
+func (mm *MacroManager) StartRecording(name string) {
+	macro := &Macro{
+		Name:           name,
+		IntentSequence: make([]*intent.Intent, 0),
+		Active:         true,
+	}
+	mm.recording = macro
+}
+
+// StopRecording 停止录制宏
+func (mm *MacroManager) StopRecording() {
+	if mm.recording != nil {
+		mm.macros[mm.recording.Name] = mm.recording
+		mm.recording = nil
+	}
+}
+
+// AddIntentToRecording 向正在录制的宏添加意图
+func (mm *MacroManager) AddIntentToRecording(i *intent.Intent) {
+	if mm.recording != nil {
+		// 只记录某些类型的意图
+		if i.Kind == intent.IntentMove || i.Kind == intent.IntentOperator {
+			// 深拷贝意图以避免后续修改影响录制内容
+			mm.recording.IntentSequence = append(mm.recording.IntentSequence, cloneIntent(i))
+		}
+	}
+}
+
+// GetMacro 获取宏
+func (mm *MacroManager) GetMacro(name string) *Macro {
+	return mm.macros[name]
+}
+
+// PlayMacro 撪放宏
+func (mm *MacroManager) PlayMacro(name string) []*intent.Intent {
+	macro := mm.macros[name]
+	if macro == nil {
+		return nil
+	}
+	return macro.IntentSequence
+}
+
 // New 创建新的解析器
-func New(_ EngineAdapter) *Resolver {
+func New(adapter EngineAdapter) *Resolver {
 	return &Resolver{
-		engine: &NoopEngine{},
+		engine:       adapter,
+		macroManager: NewMacroManager(),
 	}
 }
 
@@ -94,4 +158,76 @@ func (r *Resolver) ResolveWithContext(i *intent.Intent, ctx ExecContext) error {
 	}
 
 	return err
+}
+
+// cloneIntent 深拷贝意图
+func cloneIntent(i *intent.Intent) *intent.Intent {
+	if i == nil {
+		return nil
+	}
+
+	meta := make(map[string]interface{})
+	for k, v := range i.Meta {
+		meta[k] = v
+	}
+
+	anchors := make([]intent.Anchor, len(i.Anchors))
+	copy(anchors, i.Anchors)
+
+	return &intent.Intent{
+		Kind:         i.Kind,
+		Target:       i.Target,
+		Count:        i.Count,
+		Meta:         meta,
+		PaneID:       i.PaneID,
+		SnapshotHash: i.SnapshotHash,
+		AllowPartial: i.AllowPartial,
+		Anchors:      anchors,
+		UseRange:     i.UseRange,
+	}
+}
+
+// resolveMacro 解析宏意图
+func (r *Resolver) resolveMacro(i *intent.Intent) error {
+	operation, ok := i.Meta["operation"].(string)
+	if !ok {
+		return nil
+	}
+
+	switch operation {
+	case "start_recording":
+		name, ok := i.Meta["register"].(string)
+		if ok {
+			r.macroManager.StartRecording(name)
+		}
+	case "stop_recording":
+		r.macroManager.StopRecording()
+	case "play":
+		name, ok := i.Meta["register"].(string)
+		if ok {
+			sequence := r.macroManager.PlayMacro(name)
+
+			// 创建新的上下文，标记为来自宏
+			newCtx := ExecContext{
+				FromMacro:  true,
+				FromRepeat: false, // 宏播放时不应记录重复
+				FromUndo:   false, // 宏播放时不应记录撤销
+			}
+
+			// 递归执行宏中的每个意图
+			for _, intent := range sequence {
+				// 根据计数重复执行
+				count := i.Count
+				if count <= 0 {
+					count = 1
+				}
+
+				for j := 0; j < count; j++ {
+					_ = r.ResolveWithContext(intent, newCtx)
+				}
+			}
+		}
+	}
+
+	return nil
 }

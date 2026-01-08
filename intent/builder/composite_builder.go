@@ -15,7 +15,9 @@ func NewCompositeBuilder() *CompositeBuilder {
 	cb := &CompositeBuilder{
 		builders: []Builder{
 			&MoveBuilder{},
+			&TextObjectBuilder{},
 			&OperatorBuilder{},
+			&MacroBuilder{},
 		},
 	}
 	cb.sort()

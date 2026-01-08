@@ -12,8 +12,8 @@ type TransactionID uint64
 // OperationRecord 操作记录，基于ResolvedOperation
 type OperationRecord struct {
 	ResolvedOp editor.ResolvedOperation `json:"resolved_operation"`
+	Inverse    editor.ResolvedOperation `json:"inverse"`  // 用于 undo 的反向操作
 	Fact       core.Fact               `json:"fact"`
-	Inverse    core.Fact               `json:"inverse"`
 }
 
 // Transaction 事务

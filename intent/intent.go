@@ -46,7 +46,8 @@ const (
 type TargetKind int
 
 const (
-	TargetUnknown TargetKind = iota
+	TargetNone TargetKind = iota
+	TargetUnknown
 	TargetChar
 	TargetWord
 	TargetLine

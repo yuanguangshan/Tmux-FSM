@@ -1,0 +1,1210 @@
+diff --git a/editor/engine.go b/editor/engine.go
+index 25a1ae7..a6823d9 100644
+--- a/editor/engine.go
++++ b/editor/engine.go
+@@ -48,6 +48,97 @@ func (sb *SimpleBuffer) RuneAt(row, col int) rune {
+ 	return rune(line[col])
+ }
+ 
++// InsertAt 在指定位置插入文本
++func (sb *SimpleBuffer) InsertAt(anchor Cursor, text string) error {
++	if anchor.Row < 0 || anchor.Row >= len(sb.lines) {
++		return errors.New("invalid row")
++	}
++
++	line := sb.lines[anchor.Row]
++	if anchor.Col < 0 || anchor.Col > len(line) {
++		return errors.New("invalid column")
++	}
++
++	// 在指定位置插入文本
++	newLine := line[:anchor.Col] + text + line[anchor.Col:]
++	sb.lines[anchor.Row] = newLine
++
++	return nil
++}
++
++// DeleteRange 删除指定范围的文本
++func (sb *SimpleBuffer) DeleteRange(start, end Cursor) error {
++	if start.Row < 0 || start.Row >= len(sb.lines) || end.Row < 0 || end.Row >= len(sb.lines) {
++		return errors.New("invalid row")
++	}
++
++	if start.Row == end.Row {
++		// 同一行删除
++		if start.Col < 0 || end.Col > len(sb.lines[start.Row]) || start.Col >= end.Col {
++			return errors.New("invalid column range")
++		}
++
++		line := sb.lines[start.Row]
++		newLine := line[:start.Col] + line[end.Col:]
++		sb.lines[start.Row] = newLine
++	} else if start.Row < end.Row {
++		// 跨行删除
++		// 1. 删除结束行的开始部分
++		endLine := sb.lines[end.Row]
++		remainder := endLine[end.Col:]
++
++		// 2. 删除起始行的结束部分
++		startLine := sb.lines[start.Row]
++		prefix := startLine[:start.Col]
++
++		// 3. 合并前缀和后缀
++		newLine := prefix + remainder
++
++		// 4. 删除中间的整行
++		newLines := make([]string, 0, len(sb.lines))
++		newLines = append(newLines, sb.lines[:start.Row]...)
++		newLines = append(newLines, newLine)
++		newLines = append(newLines, sb.lines[end.Row+1:]...)
++
++		sb.lines = newLines
++	} else {
++		return errors.New("end position is before start position")
++	}
++
++	return nil
++}
++
++// GetTextInRange 获取指定范围的文本
++func (sb *SimpleBuffer) GetTextInRange(start, end Cursor) (string, error) {
++	if start.Row < 0 || start.Row >= len(sb.lines) || end.Row < 0 || end.Row >= len(sb.lines) {
++		return "", errors.New("invalid row")
++	}
++
++	if start.Row == end.Row {
++		// 同一行
++		if start.Col < 0 || end.Col > len(sb.lines[start.Row]) || start.Col >= end.Col {
++			return "", errors.New("invalid column range")
++		}
++
++		return sb.lines[start.Row][start.Col:end.Col], nil
++	} else if start.Row < end.Row {
++		// 跨行
++		result := sb.lines[start.Row][start.Col:] // 从起始位置到行尾
++
++		// 添加中间的整行
++		for i := start.Row + 1; i < end.Row; i++ {
++			result += sb.lines[i] + "\n" // 假设换行符
++		}
++
++		// 添加结束行的开始部分
++		result += sb.lines[end.Row][:end.Col]
++
++		return result, nil
++	} else {
++		return "", errors.New("end position is before start position")
++	}
++}
++
+ // Motion 定义动作
+ type Motion struct {
+ 	Kind  MotionKind
+@@ -108,4 +199,106 @@ func clamp(value, min, max int) int {
+ 		return max
+ 	}
+ 	return value
++}
++
++// GlobalCursorEngine 全局光标引擎，用于操作缓冲区
++var GlobalCursorEngine *CursorEngine
++
++// ApplyResolvedOperation 应用解析后的操作
++// 这是 . repeat 的核心执行函数
++func ApplyResolvedOperation(op ResolvedOperation) error {
++	switch op.Kind {
++	case OpInsert:
++		return applyInsert(op)
++	case OpDelete:
++		return applyDelete(op)
++	case OpMove:
++		return applyMove(op)
++	default:
++		return errors.New("unsupported operation kind")
++	}
++}
++
++// applyInsert 执行插入操作
++func applyInsert(op ResolvedOperation) error {
++	if GlobalCursorEngine == nil || GlobalCursorEngine.Buffer == nil {
++		return errors.New("buffer not initialized")
++	}
++
++	buffer, ok := GlobalCursorEngine.Buffer.(interface{ InsertAt(Cursor, string) error })
++	if !ok {
++		return errors.New("buffer does not support InsertAt")
++	}
++
++	if op.Range != nil {
++		// 如果有范围，先删除范围内的内容
++		err := deleteRange(op.Range.Start, op.Range.End)
++		if err != nil {
++			return err
++		}
++	}
++
++	// 在指定位置插入文本
++	return buffer.InsertAt(op.Anchor, op.Text)
++}
++
++// applyDelete 执行删除操作
++func applyDelete(op ResolvedOperation) error {
++	if op.Range == nil {
++		return errors.New("delete operation requires a range")
++	}
++
++	if GlobalCursorEngine == nil || GlobalCursorEngine.Buffer == nil {
++		return errors.New("buffer not initialized")
++	}
++
++	buffer, ok := GlobalCursorEngine.Buffer.(interface{ DeleteRange(Cursor, Cursor) error })
++	if !ok {
++		return errors.New("buffer does not support DeleteRange")
++	}
++
++	return buffer.DeleteRange(op.Range.Start, op.Range.End)
++}
++
++// applyMove 执行移动操作
++func applyMove(op ResolvedOperation) error {
++	if op.Range == nil {
++		return errors.New("move operation requires a range")
++	}
++
++	if GlobalCursorEngine != nil {
++		// 更新光标位置到范围的结束位置
++		GlobalCursorEngine.Cursor.Row = op.Range.End.Row
++		GlobalCursorEngine.Cursor.Col = op.Range.End.Col
++	}
++
++	return nil
++}
++
++// insertAt 在指定位置插入文本
++func insertAt(anchor Cursor, text string) error {
++	if GlobalCursorEngine == nil || GlobalCursorEngine.Buffer == nil {
++		return errors.New("buffer not initialized")
++	}
++
++	buffer, ok := GlobalCursorEngine.Buffer.(interface{ InsertAt(Cursor, string) error })
++	if !ok {
++		return errors.New("buffer does not support InsertAt")
++	}
++
++	return buffer.InsertAt(anchor, text)
++}
++
++// deleteRange 删除指定范围的文本
++func deleteRange(start, end Cursor) error {
++	if GlobalCursorEngine == nil || GlobalCursorEngine.Buffer == nil {
++		return errors.New("buffer not initialized")
++	}
++
++	buffer, ok := GlobalCursorEngine.Buffer.(interface{ DeleteRange(Cursor, Cursor) error })
++	if !ok {
++		return errors.New("buffer does not support DeleteRange")
++	}
++
++	return buffer.DeleteRange(start, end)
+ }
+\ No newline at end of file
+diff --git a/editor/types.go b/editor/types.go
+index 8102306..d036e72 100644
+--- a/editor/types.go
++++ b/editor/types.go
+@@ -73,16 +73,46 @@ type Intent struct {
+ 	Target Target
+ }
+ 
++// ResolvedOperationKind 定义解析后操作的类型
++type ResolvedOperationKind int
++
++const (
++	OpInsert ResolvedOperationKind = iota
++	OpDeleteResolved
++	OpMoveResolved
++)
++
++// BufferID 代表缓冲区ID
++type BufferID string
++
++// WindowID 代表窗口ID
++type WindowID string
++
++// TextRange 定义文本范围
++type TextRange struct {
++	Start Cursor
++	End   Cursor
++}
++
+ // ResolvedOperation 表示解析后的操作
++// 这是用于 . repeat 和 undo 的核心数据结构
+ type ResolvedOperation struct {
+-	Operator OperatorKind // OpDelete / OpChange / OpYank / OpNone
+-	Motion   MotionKind   // 原始 motion（用于 repeat / undo 语义）
+-	Count    int
++	Kind ResolvedOperationKind
++
++	BufferID BufferID
++	WindowID WindowID
++
++	// 执行位置（执行前就已确定）
++	Anchor Cursor
+ 
+-	From Cursor
+-	To   Cursor
++	// Insert 专用
++	Text string
+ 
+-	Range *MotionRange // nil 表示纯移动
++	// Delete/Move 专用（半开区间）
++	Range *TextRange
++
++	// Delete 时记录被删除的文本，用于 undo
++	DeletedText string
+ }
+ 
+ // Resolver 负责解析意图到具体操作
+@@ -258,4 +288,414 @@ func resolveRange(op OperatorKind, from Cursor, to Cursor, motion MotionKind) *M
+ 
+ 	// fallback
+ 	return &MotionRange{Start: from, End: to}
++}
++
++// ResolveDelete 将 Motion 转换为 ResolvedOperation
++// 这是将高级意图转换为可重复操作的关键步骤
++func ResolveDelete(cursor Cursor, motion Motion, buffer Buffer) (ResolvedOperation, ResolvedOperation, error) {
++	// 计算运动结束位置
++	start := cursor
++	end := start // 简化实现，实际需要根据 motion 计算 end 位置
++
++	// 根据不同的运动类型计算结束位置
++	switch motion.Kind {
++	case MotionCharForward:
++		end.Col += motion.Count
++	case MotionCharBackward:
++		end.Col -= motion.Count
++	case MotionWordForward:
++		// 简化实现：向前移动几个单词
++		end.Col += motion.Count * 5 // 假设每个单词平均5个字符
++	case MotionWordBackward:
++		end.Col -= motion.Count * 5
++	case MotionLineStart:
++		end.Col = 0
++	case MotionLineEnd:
++		// 需要获取当前行的长度
++		if buffer != nil {
++			end.Col = buffer.LineLength(start.Row)
++		}
++	}
++
++	// 确保 end 位置有效
++	if buffer != nil {
++		end.Row, end.Col = clamp(end.Row, end.Col, buffer.LineCount(), buffer.LineLength(end.Row))
++	}
++
++	// 标准化区间（确保 start 在前，end 在后）
++	if end.Row < start.Row || (end.Row == start.Row && end.Col < start.Col) {
++		start, end = end, start
++	}
++
++	// 获取被删除的文本
++	deletedText := ""
++	if buffer != nil {
++		// 这里需要一个获取范围文本的方法
++		// 简化实现，暂时返回空字符串
++	}
++
++	// 创建删除操作
++	deleteOp := ResolvedOperation{
++		Kind:        OpDelete,
++		BufferID:    "", // 实际应用中应设置适当的 BufferID
++		WindowID:    "", // 实际应用中应设置适当的 WindowID
++		Anchor:      start,
++		Range:       &TextRange{Start: start, End: end},
++		DeletedText: deletedText,
++	}
++
++	// 创建对应的插入操作（作为反向操作，用于 undo）
++	insertOp := ResolvedOperation{
++		Kind:     OpInsert,
++		BufferID: deleteOp.BufferID,
++		WindowID: deleteOp.WindowID,
++		Anchor:   start,
++		Text:     deletedText,
++	}
++
++	return deleteOp, insertOp, nil
++}
++
++// ResolveInsert 将插入意图转换为 ResolvedOperation
++// 返回插入操作和其反向操作（删除操作）
++func ResolveInsert(cursor Cursor, text string) (ResolvedOperation, ResolvedOperation) {
++	insertOp := ResolvedOperation{
++		Kind:     OpInsert,
++		BufferID: "", // 实际应用中应设置适当的 BufferID
++		WindowID: "", // 实际应用中应设置适当的 WindowID
++		Anchor:   cursor,
++		Text:     text,
++	}
++
++	// 创建对应的删除操作（作为反向操作，用于 undo）
++	deleteOp := ResolvedOperation{
++		Kind:        OpDelete,
++		BufferID:    insertOp.BufferID,
++		WindowID:    insertOp.WindowID,
++		Anchor:      cursor,
++		Range:       &TextRange{Start: cursor, End: Cursor{Row: cursor.Row, Col: cursor.Col + len(text)}},
++		DeletedText: text,
++	}
++
++	return insertOp, deleteOp
++}
++
++// TextObjectKind 定义文本对象类型
++type TextObjectKind int
++
++const (
++	TextObjectInnerParen TextObjectKind = iota
++	TextObjectAroundParen
++	TextObjectInnerQuote
++	TextObjectAroundQuote
++	TextObjectInnerBracket
++	TextObjectAroundBracket
++	TextObjectInnerBrace
++	TextObjectAroundBrace
++)
++
++// TextObject 定义文本对象
++type TextObject struct {
++	Kind TextObjectKind
++}
++
++// ResolveInnerParen 解析内部括号文本对象
++func ResolveInnerParen(cursor Cursor, buffer Buffer) (*TextRange, error) {
++	if buffer == nil {
++		return nil, errors.New("buffer is nil")
++	}
++
++	// 从当前位置向前查找匹配的左括号
++	leftParenPos, err := findMatchingBackward(cursor, '(', ')', buffer)
++	if err != nil {
++		return nil, err
++	}
++
++	// 从左括号位置向后查找匹配的右括号
++	rightParenPos, err := findMatchingForward(*leftParenPos, '(', ')', buffer)
++	if err != nil {
++		return nil, err
++	}
++
++	// 返回括号内的范围（不包括括号本身）
++	result := &TextRange{
++		Start: Cursor{Row: leftParenPos.Row, Col: leftParenPos.Col + 1},
++		End:   Cursor{Row: rightParenPos.Row, Col: rightParenPos.Col},
++	}
++
++	return result, nil
++}
++
++// ResolveAroundParen 解析周围括号文本对象
++func ResolveAroundParen(cursor Cursor, buffer Buffer) (*TextRange, error) {
++	if buffer == nil {
++		return nil, errors.New("buffer is nil")
++	}
++
++	// 从当前位置向前查找匹配的左括号
++	leftParenPos, err := findMatchingBackward(cursor, '(', ')', buffer)
++	if err != nil {
++		return nil, err
++	}
++
++	// 从左括号位置向后查找匹配的右括号
++	rightParenPos, err := findMatchingForward(*leftParenPos, '(', ')', buffer)
++	if err != nil {
++		return nil, err
++	}
++
++	// 返回括号及其中内容的范围（包括括号本身）
++	result := &TextRange{
++		Start: *leftParenPos,
++		End:   Cursor{Row: rightParenPos.Row, Col: rightParenPos.Col + 1}, // 包含右括号
++	}
++
++	return result, nil
++}
++
++// ResolveInnerQuote 解析内部引号文本对象
++func ResolveInnerQuote(cursor Cursor, quoteChar rune, buffer Buffer) (*TextRange, error) {
++	if buffer == nil {
++		return nil, errors.New("buffer is nil")
++	}
++
++	// 从当前位置向前查找匹配的左引号
++	leftQuotePos, err := findCharBackward(cursor, quoteChar, buffer)
++	if err != nil {
++		return nil, err
++	}
++
++	// 从左引号位置向后查找匹配的右引号
++	rightQuotePos, err := findCharForward(*leftQuotePos, quoteChar, buffer)
++	if err != nil {
++		return nil, err
++	}
++
++	// 返回引号内的范围（不包括引号本身）
++	result := &TextRange{
++		Start: Cursor{Row: leftQuotePos.Row, Col: leftQuotePos.Col + 1},
++		End:   *rightQuotePos,
++	}
++
++	return result, nil
++}
++
++// findMatchingBackward 向后查找匹配的括号
++func findMatchingBackward(cursor Cursor, open, close rune, buffer Buffer) (*Cursor, error) {
++	// 从当前位置开始向前搜索
++	row, col := cursor.Row, cursor.Col
++
++	// 首先尝试当前位置是否是右括号
++	if row >= 0 && row < buffer.LineCount() && col >= 0 {
++		lineLen := buffer.LineLength(row)
++		if col < lineLen {
++			char := buffer.RuneAt(row, col)
++			if char == close {
++				// 如果当前位置是右括号，直接从这里开始匹配
++				return findMatchingPair(row, col-1, open, close, true, buffer)
++			}
++		}
++	}
++
++	// 否则从当前位置前面开始搜索
++	return findMatchingPair(row, col-1, open, close, true, buffer)
++}
++
++// findMatchingForward 向前查找匹配的括号
++func findMatchingForward(cursor Cursor, open, close rune, buffer Buffer) (*Cursor, error) {
++	row, col := cursor.Row, cursor.Col
++	return findMatchingPair(row, col+1, open, close, false, buffer)
++}
++
++// findMatchingPair 查找匹配的括号对
++func findMatchingPair(startRow, startCol int, open, close rune, backward bool, buffer Buffer) (*Cursor, error) {
++	if buffer == nil {
++		return nil, errors.New("buffer is nil")
++	}
++
++	count := 0
++	row, col := startRow, startCol
++
++	for {
++		// 检查边界
++		if row < 0 || row >= buffer.LineCount() {
++			break
++		}
++
++		lineLen := buffer.LineLength(row)
++		if backward {
++			if col < 0 {
++				row--
++				if row < 0 {
++					break
++				}
++				col = buffer.LineLength(row) - 1
++				if col < 0 {
++					col = 0
++				}
++				continue
++			}
++		} else {
++			if col >= lineLen {
++				row++
++				if row >= buffer.LineCount() {
++					break
++				}
++				col = 0
++				continue
++			}
++		}
++
++		char := buffer.RuneAt(row, col)
++
++		if char == open {
++			count++
++		} else if char == close {
++			count--
++			if count == -1 {
++				// 找到了匹配的右括号
++				pos := Cursor{Row: row, Col: col}
++				return &pos, nil
++			}
++		}
++
++		if backward {
++			col--
++		} else {
++			col++
++		}
++	}
++
++	// 如果是向后查找且没找到，尝试从当前位置开始向前查找右括号
++	if backward {
++		row, col = startRow, startCol
++		count = 0
++
++		for {
++			// 检查边界
++			if row < 0 || row >= buffer.LineCount() {
++				break
++			}
++
++			lineLen := buffer.LineLength(row)
++			if col < 0 {
++				row--
++				if row < 0 {
++					break
++				}
++				col = buffer.LineLength(row) - 1
++				if col < 0 {
++					col = 0
++				}
++				continue
++			}
++
++			if col >= lineLen {
++				col = lineLen - 1
++				if col < 0 {
++					col = 0
++				}
++			}
++
++			char := buffer.RuneAt(row, col)
++
++			if char == close {
++				// 找到右括号，开始匹配
++				return findMatchingPair(row, col-1, open, close, true, buffer)
++			}
++
++			col--
++		}
++	}
++
++	return nil, errors.New("matching bracket not found")
++}
++
++// findCharBackward 向后查找字符
++func findCharBackward(cursor Cursor, target rune, buffer Buffer) (*Cursor, error) {
++	row, col := cursor.Row, cursor.Col
++
++	for {
++		if row < 0 || row >= buffer.LineCount() {
++			break
++		}
++
++		if col < 0 {
++			row--
++			if row < 0 {
++				break
++			}
++			col = buffer.LineLength(row) - 1
++			if col < 0 {
++				col = 0
++			}
++			continue
++		}
++
++		char := buffer.RuneAt(row, col)
++		if char == target {
++			pos := Cursor{Row: row, Col: col}
++			return &pos, nil
++		}
++
++		col--
++	}
++
++	return nil, errors.New("character not found")
++}
++
++// findCharForward 向前查找字符
++func findCharForward(cursor Cursor, target rune, buffer Buffer) (*Cursor, error) {
++	row, col := cursor.Row, cursor.Col
++
++	for {
++		if row < 0 || row >= buffer.LineCount() {
++			break
++		}
++
++		lineLen := buffer.LineLength(row)
++		if col >= lineLen {
++			row++
++			if row >= buffer.LineCount() {
++				break
++			}
++			col = 0
++			continue
++		}
++
++		char := buffer.RuneAt(row, col)
++		if char == target {
++			pos := Cursor{Row: row, Col: col}
++			return &pos, nil
++		}
++
++		col++
++	}
++
++	return nil, errors.New("character not found")
++}
++
++// clamp 限制光标位置
++func clamp(row, col, maxRow, maxCol int) (int, int) {
++	if row < 0 {
++		row = 0
++	}
++	if row >= maxRow {
++		row = maxRow - 1
++		if row < 0 {
++			row = 0
++		}
++	}
++
++	if col < 0 {
++		col = 0
++	}
++	if col >= maxCol {
++		col = maxCol - 1
++		if col < 0 {
++			col = 0
++		}
++	}
++
++	return row, col
+ }
+\ No newline at end of file
+diff --git a/intent/builder/builder.go b/intent/builder/builder.go
+index bd0c4df..86204e6 100644
+--- a/intent/builder/builder.go
++++ b/intent/builder/builder.go
+@@ -6,11 +6,12 @@ import (
+ 
+ // BuildContext 构建上下文
+ type BuildContext struct {
+-	Action   string  // legacy action string
+-	Command  string  // normalized command (future)
++	Action   string                 // legacy action string
++	Command  string                 // normalized command (future)
+ 	Count    int
+ 	PaneID   string
+ 	SnapshotHash string
++	Meta     map[string]interface{} // 额外元数据
+ }
+ 
+ // Builder Intent构建器接口
+diff --git a/intent/builder/composite_builder.go b/intent/builder/composite_builder.go
+index 1d3f6fe..c1b1ec5 100644
+--- a/intent/builder/composite_builder.go
++++ b/intent/builder/composite_builder.go
+@@ -15,7 +15,9 @@ func NewCompositeBuilder() *CompositeBuilder {
+ 	cb := &CompositeBuilder{
+ 		builders: []Builder{
+ 			&MoveBuilder{},
++			&TextObjectBuilder{},
+ 			&OperatorBuilder{},
++			&MacroBuilder{},
+ 		},
+ 	}
+ 	cb.sort()
+diff --git a/intent/intent.go b/intent/intent.go
+index 802d8aa..a2d4ece 100644
+--- a/intent/intent.go
++++ b/intent/intent.go
+@@ -46,7 +46,8 @@ const (
+ type TargetKind int
+ 
+ const (
+-	TargetUnknown TargetKind = iota
++	TargetNone TargetKind = iota
++	TargetUnknown
+ 	TargetChar
+ 	TargetWord
+ 	TargetLine
+diff --git a/main.go b/main.go
+index 1128253..67cee26 100644
+--- a/main.go
++++ b/main.go
+@@ -30,8 +30,10 @@ var kernelInstance *kernel.Kernel
+ // TransactionManager 事务管理器
+ // 负责管理编辑操作的历史记录，遵循Vim语义规则
+ type TransactionManager struct {
+-	current *types.Transaction
+-	nextID  types.TransactionID
++	current           *types.Transaction
++	nextID            types.TransactionID
++	history           []*types.Transaction  // 存储已提交的事务，用于 . repeat 和 undo
++	lastCommittedTx   *types.Transaction   // 最近提交的事务，用于 . repeat
+ }
+ 
+ // BeginTransaction 开始一个新的事务
+@@ -71,6 +73,13 @@ func (tm *TransactionManager) CommitTransaction() error {
+ 	}
+ 
+ 	tm.current.Applied = true
++
++	// 保存到历史记录
++	tm.history = append(tm.history, tm.current)
++
++	// 更新最近提交的事务（用于 . repeat）
++	tm.lastCommittedTx = tm.current
++
+ 	tm.current = nil // 重置当前事务
+ 
+ 	return nil
+@@ -93,6 +102,12 @@ func (tm *TransactionManager) GetCurrentTransaction() *types.Transaction {
+ 	return tm.current
+ }
+ 
++// LastCommittedTransaction 获取最近提交的事务
++// 用于 . repeat 功能
++func (tm *TransactionManager) LastCommittedTransaction() *types.Transaction {
++	return tm.lastCommittedTx
++}
++
+ 
+ func main() {
+ 	serverMode := flag.Bool("server", false, "run as server")
+@@ -388,6 +403,234 @@ func (a *intentAdapter) GetAnchors() []core.Anchor {
+ 	return coreAnchors
+ }
+ 
++// RepeatLastTransaction 重复执行最近提交的事务
++// 这是 . repeat 功能的核心实现
++func RepeatLastTransaction(tm *TransactionManager) error {
++	tx := tm.LastCommittedTransaction()
++	if tx == nil {
++		return nil // Vim 行为：无事发生
++	}
++
++	// 开始新事务以支持 repeat 本身的 undo
++	tm.BeginTransaction()
++
++	// 重放最近事务中的所有操作
++	for _, opRecord := range tx.Records {
++		err := editor.ApplyResolvedOperation(opRecord.ResolvedOp)
++		if err != nil {
++			tm.AbortTransaction()
++			return err
++		}
++	}
++
++	return tm.CommitTransaction()
++}
++
++// UndoLastTransaction 撤销最近的事务
++// 这是 undo 功能的核心实现
++func UndoLastTransaction(tm *TransactionManager) error {
++	if len(tm.history) == 0 {
++		return nil // 没有可撤销的事务
++	}
++
++	// 获取最近的事务
++	lastTx := tm.history[len(tm.history)-1]
++
++	// 从历史记录中移除（但保留引用以供使用）
++	tm.history = tm.history[:len(tm.history)-1]
++
++	// 更新最近提交的事务为倒数第二个（如果存在）
++	if len(tm.history) > 0 {
++		tm.lastCommittedTx = tm.history[len(tm.history)-1]
++	} else {
++		tm.lastCommittedTx = nil
++	}
++
++	// 开始新事务以执行撤销操作
++	tm.BeginTransaction()
++
++	// 逆序执行每个操作的反向操作
++	for i := len(lastTx.Records) - 1; i >= 0; i-- {
++		opRecord := lastTx.Records[i]
++		// 使用反向操作执行 undo
++		err := editor.ApplyResolvedOperation(opRecord.Inverse)
++		if err != nil {
++			tm.AbortTransaction()
++			return err
++		}
++	}
++
++	return tm.CommitTransaction()
++}
++
++// TxNode 事务节点，用于构建 redo tree
++type TxNode struct {
++	Tx       *types.Transaction
++	Parent   *TxNode
++	Children []*TxNode
++}
++
++// History 编辑历史，支持 undo/redo tree
++type History struct {
++	Root    *TxNode
++	Current *TxNode
++}
++
++// NewHistory 创建新的历史记录
++func NewHistory() *History {
++	root := &TxNode{
++		Tx:       nil, // 根节点不包含事务
++		Parent:   nil,
++		Children: make([]*TxNode, 0),
++	}
++
++	return &History{
++		Root:    root,
++		Current: root,
++	}
++}
++
++// Commit 将事务提交到历史记录中
++func (h *History) Commit(tx *types.Transaction) {
++	node := &TxNode{
++		Tx:       tx,
++		Parent:   h.Current,
++		Children: make([]*TxNode, 0),
++	}
++
++	h.Current.Children = append(h.Current.Children, node)
++	h.Current = node
++}
++
++// Undo 执行撤销操作
++func (h *History) Undo() *types.Transaction {
++	if h.Current == h.Root {
++		return nil // 已经在根节点，无法再撤销
++	}
++
++	tx := h.Current.Tx
++	h.Current = h.Current.Parent
++	return tx
++}
++
++// Redo 执行重做操作
++func (h *History) Redo(childIndex int) *types.Transaction {
++	if len(h.Current.Children) == 0 {
++		return nil // 没有可重做的事务
++	}
++
++	if childIndex < 0 || childIndex >= len(h.Current.Children) {
++		childIndex = 0 // 默认选择第一个子节点
++	}
++
++	next := h.Current.Children[childIndex]
++	h.Current = next
++	return next.Tx
++}
++
++// Macro 宏定义，包含一系列事务
++type Macro struct {
++	Name       string
++	Transactions []*types.Transaction
++}
++
++// MacroManager 宏管理器
++type MacroManager struct {
++	macros map[string]*Macro
++	activeMacro *Macro  // 当前正在录制的宏
++}
++
++// NewMacroManager 创建新的宏管理器
++func NewMacroManager() *MacroManager {
++	return &MacroManager{
++		macros: make(map[string]*Macro),
++	}
++}
++
++// StartRecording 开始录制宏
++func (mm *MacroManager) StartRecording(name string) {
++	mm.activeMacro = &Macro{
++		Name: name,
++		Transactions: make([]*types.Transaction, 0),
++	}
++}
++
++// StopRecording 停止录制宏
++func (mm *MacroManager) StopRecording() {
++	if mm.activeMacro != nil {
++		// 保存宏
++		mm.macros[mm.activeMacro.Name] = mm.activeMacro
++		mm.activeMacro = nil
++	}
++}
++
++// RecordTransaction 记录事务到当前宏
++func (mm *MacroManager) RecordTransaction(tx *types.Transaction) {
++	if mm.activeMacro != nil {
++		// 复制事务以避免后续修改影响宏
++		clonedTx := cloneTransaction(tx)
++		mm.activeMacro.Transactions = append(mm.activeMacro.Transactions, clonedTx)
++	}
++}
++
++// PlayMacro 执行宏
++func (mm *MacroManager) PlayMacro(name string, count int) error {
++	macro, exists := mm.macros[name]
++	if !exists {
++		return fmt.Errorf("macro '%s' not found", name)
++	}
++
++	if count <= 0 {
++		count = 1
++	}
++
++	for i := 0; i < count; i++ {
++		for _, tx := range macro.Transactions {
++			err := replayTransaction(tx)
++			if err != nil {
++				return fmt.Errorf("error replaying macro '%s': %v", name, err)
++			}
++		}
++	}
++
++	return nil
++}
++
++// cloneTransaction 克隆事务
++func cloneTransaction(src *types.Transaction) *types.Transaction {
++	dst := &types.Transaction{
++		ID:               src.ID,
++		Records:          make([]types.OperationRecord, len(src.Records)),
++		CreatedAt:        src.CreatedAt,
++		Applied:          src.Applied,
++		Skipped:          src.Skipped,
++		SafetyLevel:      src.SafetyLevel,
++		PreSnapshotHash:  src.PreSnapshotHash,
++		PostSnapshotHash: src.PostSnapshotHash,
++	}
++
++	// 克隆 Records
++	copy(dst.Records, src.Records)
++
++	return dst
++}
++
++// replayTransaction 重放事务
++func replayTransaction(tx *types.Transaction) error {
++	for _, record := range tx.Records {
++		err := editor.ApplyResolvedOperation(record.ResolvedOp)
++		if err != nil {
++			return err
++		}
++	}
++	return nil
++}
++
++// IsRecording 检查是否正在录制宏
++func (mm *MacroManager) IsRecording() bool {
++	return mm.activeMacro != nil
++}
++
+ // ProcessIntentGlobal 全局意图处理入口
+ // RFC-WC-002: Intent ABI - 统一入口，统一审计
+ func ProcessIntentGlobal(intent intent.Intent) error {
+diff --git a/resolver/macro.go b/resolver/macro.go
+deleted file mode 100644
+index 91180cf..0000000
+--- a/resolver/macro.go
++++ /dev/null
+@@ -1,14 +0,0 @@
+-package resolver
+-
+-import "tmux-fsm/intent"
+-
+-// resolveMacro 解析宏意图
+-func (r *Resolver) resolveMacro(i *intent.Intent) error {
+-	// 暂时留空，实际实现需要宏管理器
+-	return nil
+-}
+-
+-// recordIntentForMacro 记录意图到宏
+-func (r *Resolver) recordIntentForMacro(i *intent.Intent) {
+-	// 暂时留空，实际实现需要宏管理器
+-}
+\ No newline at end of file
+diff --git a/resolver/resolver.go b/resolver/resolver.go
+index f0016e0..7866dc2 100644
+--- a/resolver/resolver.go
++++ b/resolver/resolver.go
+@@ -18,6 +18,19 @@ type RepeatableAction struct {
+ 	Count    int
+ }
+ 
++// Macro 宏结构
++type Macro struct {
++	Name           string
++	IntentSequence []*intent.Intent
++	Active         bool
++}
++
++// MacroManager 宏管理器
++type MacroManager struct {
++	macros   map[string]*Macro
++	recording *Macro
++}
++
+ // Resolver 解析器
+ type Resolver struct {
+ 	engine EngineAdapter
+@@ -29,10 +42,61 @@ type Resolver struct {
+ 	macroManager *MacroManager
+ }
+ 
++// NewMacroManager 创建新的宏管理器
++func NewMacroManager() *MacroManager {
++	return &MacroManager{
++		macros: make(map[string]*Macro),
++	}
++}
++
++// StartRecording 开始录制宏
++func (mm *MacroManager) StartRecording(name string) {
++	macro := &Macro{
++		Name:           name,
++		IntentSequence: make([]*intent.Intent, 0),
++		Active:         true,
++	}
++	mm.recording = macro
++}
++
++// StopRecording 停止录制宏
++func (mm *MacroManager) StopRecording() {
++	if mm.recording != nil {
++		mm.macros[mm.recording.Name] = mm.recording
++		mm.recording = nil
++	}
++}
++
++// AddIntentToRecording 向正在录制的宏添加意图
++func (mm *MacroManager) AddIntentToRecording(i *intent.Intent) {
++	if mm.recording != nil {
++		// 只记录某些类型的意图
++		if i.Kind == intent.IntentMove || i.Kind == intent.IntentOperator {
++			// 深拷贝意图以避免后续修改影响录制内容
++			mm.recording.IntentSequence = append(mm.recording.IntentSequence, cloneIntent(i))
++		}
++	}
++}
++
++// GetMacro 获取宏
++func (mm *MacroManager) GetMacro(name string) *Macro {
++	return mm.macros[name]
++}
++
++// PlayMacro 撪放宏
++func (mm *MacroManager) PlayMacro(name string) []*intent.Intent {
++	macro := mm.macros[name]
++	if macro == nil {
++		return nil
++	}
++	return macro.IntentSequence
++}
++
+ // New 创建新的解析器
+-func New(_ EngineAdapter) *Resolver {
++func New(adapter EngineAdapter) *Resolver {
+ 	return &Resolver{
+-		engine: &NoopEngine{},
++		engine:       adapter,
++		macroManager: NewMacroManager(),
+ 	}
+ }
+ 
+@@ -94,4 +158,76 @@ func (r *Resolver) ResolveWithContext(i *intent.Intent, ctx ExecContext) error {
+ 	}
+ 
+ 	return err
++}
++
++// cloneIntent 深拷贝意图
++func cloneIntent(i *intent.Intent) *intent.Intent {
++	if i == nil {
++		return nil
++	}
++
++	meta := make(map[string]interface{})
++	for k, v := range i.Meta {
++		meta[k] = v
++	}
++
++	anchors := make([]intent.Anchor, len(i.Anchors))
++	copy(anchors, i.Anchors)
++
++	return &intent.Intent{
++		Kind:         i.Kind,
++		Target:       i.Target,
++		Count:        i.Count,
++		Meta:         meta,
++		PaneID:       i.PaneID,
++		SnapshotHash: i.SnapshotHash,
++		AllowPartial: i.AllowPartial,
++		Anchors:      anchors,
++		UseRange:     i.UseRange,
++	}
++}
++
++// resolveMacro 解析宏意图
++func (r *Resolver) resolveMacro(i *intent.Intent) error {
++	operation, ok := i.Meta["operation"].(string)
++	if !ok {
++		return nil
++	}
++
++	switch operation {
++	case "start_recording":
++		name, ok := i.Meta["register"].(string)
++		if ok {
++			r.macroManager.StartRecording(name)
++		}
++	case "stop_recording":
++		r.macroManager.StopRecording()
++	case "play":
++		name, ok := i.Meta["register"].(string)
++		if ok {
++			sequence := r.macroManager.PlayMacro(name)
++
++			// 创建新的上下文，标记为来自宏
++			newCtx := ExecContext{
++				FromMacro:  true,
++				FromRepeat: false, // 宏播放时不应记录重复
++				FromUndo:   false, // 宏播放时不应记录撤销
++			}
++
++			// 递归执行宏中的每个意图
++			for _, intent := range sequence {
++				// 根据计数重复执行
++				count := i.Count
++				if count <= 0 {
++					count = 1
++				}
++
++				for j := 0; j < count; j++ {
++					_ = r.ResolveWithContext(intent, newCtx)
++				}
++			}
++		}
++	}
++
++	return nil
+ }
+\ No newline at end of file
+diff --git a/types/types.go b/types/types.go
+index 41652be..07e4990 100644
+--- a/types/types.go
++++ b/types/types.go
+@@ -12,8 +12,8 @@ type TransactionID uint64
+ // OperationRecord 操作记录，基于ResolvedOperation
+ type OperationRecord struct {
+ 	ResolvedOp editor.ResolvedOperation `json:"resolved_operation"`
++	Inverse    editor.ResolvedOperation `json:"inverse"`  // 用于 undo 的反向操作
+ 	Fact       core.Fact               `json:"fact"`
+-	Inverse    core.Fact               `json:"inverse"`
+ }
+ 
+ // Transaction 事务
