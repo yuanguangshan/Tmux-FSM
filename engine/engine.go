@@ -1,8 +1,12 @@
 package engine
 
 import (
+	"fmt"
 	"tmux-fsm/crdt"
+	"tmux-fsm/index"
+	"tmux-fsm/policy"
 	"tmux-fsm/replay"
+	"tmux-fsm/selection"
 	"tmux-fsm/wal"
 )
 
@@ -20,6 +24,21 @@ type Engine interface {
 	// CRDT 位置管理
 	AllocatePosition(after, before *crdt.PositionID) crdt.PositionID
 	ComparePosition(a, b crdt.PositionID) int
+
+	// Selection 管理
+	ApplySelection(actor crdt.ActorID, fact selection.SetSelectionFact)
+	GetSelection(cursorID selection.CursorID) (selection.Selection, bool)
+	GetAllSelections() map[selection.CursorID]selection.Selection
+
+	// Policy 管理
+	RegisterActor(actorID crdt.ActorID, level policy.TrustLevel, name string)
+	CheckPolicy(event crdt.SemanticEvent) error
+
+	// Index 查询
+	QueryByActor(actor crdt.ActorID) []crdt.EventID
+	QueryByType(ft index.FactType) []crdt.EventID
+	QueryByTimeRange(start, end time.Time) []crdt.EventID
+	QueryAIChanges(aiActorPrefix string) []crdt.EventID
 
 	// GC 垃圾回收
 	Compact(stable crdt.EventID)
@@ -40,18 +59,9 @@ type HeadlessEngine struct {
 	store      *crdt.EventStore
 	snapshots  map[crdt.EventID]*Snapshot
 	currentState replay.TextState
-}
-
-// NewEngine 创建新的引擎
-func NewEngine() *HeadlessEngine {
-	return &HeadlessEngine{
-		store:     crdt.NewEventStore(),
-		snapshots: make(map[crdt.EventID]*Snapshot),
-		currentState: replay.TextState{
-			Text:   "",
-			Cursor: 0,
-		},
-	}
+	selectionMgr *selection.SelectionManager
+	policyMgr    *policy.DefaultPolicy
+	index        *index.EventIndex
 }
 
 // Apply 应用事件
@@ -197,14 +207,66 @@ func (e *HeadlessEngine) Integrate(events []wal.SemanticEvent) error {
 			Time:          walEvent.Time,
 			Fact:          walEvent.Fact,
 		}
-		
+
 		// 转换 CausalParents
 		for _, parent := range walEvent.CausalParents {
 			crdtEvent.CausalParents = append(crdtEvent.CausalParents, crdt.EventID(parent))
 		}
-		
+
 		e.store.Merge(crdtEvent)
 	}
-	
+
 	return nil
+}
+
+// ApplySelection 应用选择区域变更
+func (e *HeadlessEngine) ApplySelection(actor crdt.ActorID, fact selection.SetSelectionFact) {
+	e.selectionMgr.ApplySelection(actor, fact)
+}
+
+// GetSelection 获取选择区域
+func (e *HeadlessEngine) GetSelection(cursorID selection.CursorID) (selection.Selection, bool) {
+	return e.selectionMgr.GetSelection(cursorID)
+}
+
+// GetAllSelections 获取所有选择区域
+func (e *HeadlessEngine) GetAllSelections() map[selection.CursorID]selection.Selection {
+	return e.selectionMgr.GetAllSelections()
+}
+
+// RegisterActor 注册参与者
+func (e *HeadlessEngine) RegisterActor(actorID crdt.ActorID, level policy.TrustLevel, name string) {
+	e.policyMgr.RegisterActor(actorID, level, name)
+}
+
+// CheckPolicy 检查策略
+func (e *HeadlessEngine) CheckPolicy(event crdt.SemanticEvent) error {
+	actorInfo, exists := e.policyMgr.Actors[event.Actor]
+	if !exists {
+		return fmt.Errorf("unknown actor: %s", event.Actor)
+	}
+	ctx := policy.PolicyContext{
+		ActorInfo: actorInfo,
+	}
+	return e.policyMgr.Allow(event, ctx)
+}
+
+// QueryByActor 按参与者查询
+func (e *HeadlessEngine) QueryByActor(actor crdt.ActorID) []crdt.EventID {
+	return e.index.QueryByActor(actor)
+}
+
+// QueryByType 按类型查询
+func (e *HeadlessEngine) QueryByType(ft index.FactType) []crdt.EventID {
+	return e.index.QueryByType(ft)
+}
+
+// QueryByTimeRange 按时间范围查询
+func (e *HeadlessEngine) QueryByTimeRange(start, end time.Time) []crdt.EventID {
+	return e.index.QueryByTimeRange(start, end)
+}
+
+// QueryAIChanges 查询 AI 的更改
+func (e *HeadlessEngine) QueryAIChanges(aiActorPrefix string) []crdt.EventID {
+	return e.index.QueryAIChanges(aiActorPrefix)
 }
