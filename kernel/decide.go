@@ -68,10 +68,14 @@ func (k *Kernel) Decide(key string) *Decision {
 		if dispatched {
 			// ✅ 合法状态：key 被 FSM 吃了，但 Grammar 没有生成意图
 			// 这是正常情况，例如在等待更多按键时
-			return nil
+			return &Decision{
+				Kind: DecisionNone, // FSM 吃了，但还没决定
+			}
 		}
 	}
 
-	// 没有 FSM 处理，返回 nil
-	return nil
+	// 没有 FSM 处理，明确返回 Legacy 决策
+	return &Decision{
+		Kind: DecisionLegacy,
+	}
 }
