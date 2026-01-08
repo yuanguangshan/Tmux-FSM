@@ -206,22 +206,24 @@ var GlobalCursorEngine *CursorEngine
 
 // ApplyResolvedOperation 应用解析后的操作
 // 这是 . repeat 的核心执行函数
-// 注意：此函数只执行预定义的操作，不做任何语义判断
+// 严格按照预定义的操作类型执行，无任何语义判断
 func ApplyResolvedOperation(op ResolvedOperation) error {
+	// 所有操作类型和参数都在 resolve 阶段完全确定
+	// replay 阶段只执行预定义的动作
 	switch op.Kind {
 	case OpInsert:
-		return applyInsert(op)
+		return executeInsert(op.Anchor, op.Text, op.Range, op.DeleteBeforeInsert)
 	case OpDelete:
-		return applyDelete(op)
+		return executeDelete(op.Range)
 	case OpMove:
-		return applyMove(op)
+		return executeMove(op.Anchor)
 	default:
 		return errors.New("unsupported operation kind")
 	}
 }
 
-// applyInsert 执行插入操作
-func applyInsert(op ResolvedOperation) error {
+// executeInsert 执行插入操作
+func executeInsert(anchor Cursor, text string, rangeToDelete *TextRange, deleteBeforeInsert bool) error {
 	if GlobalCursorEngine == nil || GlobalCursorEngine.Buffer == nil {
 		return errors.New("buffer not initialized")
 	}
@@ -232,20 +234,20 @@ func applyInsert(op ResolvedOperation) error {
 	}
 
 	// 如果需要先删除范围内容（例如替换操作）
-	if op.DeleteBeforeInsert && op.Range != nil {
-		err := deleteRange(op.Range.Start, op.Range.End)
+	if deleteBeforeInsert && rangeToDelete != nil {
+		err := deleteRange(rangeToDelete.Start, rangeToDelete.End)
 		if err != nil {
 			return err
 		}
 	}
 
 	// 在指定位置插入文本
-	return buffer.InsertAt(op.Anchor, op.Text)
+	return buffer.InsertAt(anchor, text)
 }
 
-// applyDelete 执行删除操作
-func applyDelete(op ResolvedOperation) error {
-	if op.Range == nil {
+// executeDelete 执行删除操作
+func executeDelete(rangeToDelete *TextRange) error {
+	if rangeToDelete == nil {
 		return errors.New("delete operation requires a range")
 	}
 
@@ -258,19 +260,20 @@ func applyDelete(op ResolvedOperation) error {
 		return errors.New("buffer does not support DeleteRange")
 	}
 
-	return buffer.DeleteRange(op.Range.Start, op.Range.End)
+	return buffer.DeleteRange(rangeToDelete.Start, rangeToDelete.End)
 }
 
-// applyMove 执行移动操作
-func applyMove(op ResolvedOperation) error {
+// executeMove 执行移动操作
+func executeMove(anchor Cursor) error {
 	if GlobalCursorEngine != nil {
 		// 更新光标位置到指定位置
-		GlobalCursorEngine.Cursor.Row = op.Anchor.Row
-		GlobalCursorEngine.Cursor.Col = op.Anchor.Col
+		GlobalCursorEngine.Cursor.Row = anchor.Row
+		GlobalCursorEngine.Cursor.Col = anchor.Col
 	}
 
 	return nil
 }
+
 
 // insertAt 在指定位置插入文本
 func insertAt(anchor Cursor, text string) error {
