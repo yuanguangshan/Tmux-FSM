@@ -3,6 +3,10 @@ package resolver
 import "tmux-fsm/intent"
 
 // NoopEngine 空操作引擎实现
+//
+// TEMP: bootstrap phase - 过渡期临时实现
+// 此实现不执行任何实际操作，仅用于架构迁移期间的接口兼容
+// 最终将被替换为实际的CursorEngine实现
 type NoopEngine struct{}
 
 func (n *NoopEngine) SendKeys(keys ...string) {}

@@ -1,3 +1,9 @@
+// Package resolver - DEPRECATED: 冻结状态，不再开发
+//
+// 此包已被标记为冻结状态，不再接受任何新功能开发。
+// 所有新的Vim语义解析逻辑应使用 main 包中的新Resolver实现。
+//
+// 此包仅用于过渡期兼容，最终将被完全替换。
 package resolver
 
 import (

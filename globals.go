@@ -36,6 +36,13 @@ var (
 	socketPath  = os.Getenv("HOME") + "/.tmux-fsm.sock"
 )
 
+func init() {
+	// 初始化全局事务管理器
+	transMgr = &TransactionManager{
+		nextID: 0,
+	}
+}
+
 func loadState() FSMState {
 	// Use GlobalBackend to read tmux options
 	out, err := backend.GlobalBackend.GetUserOption("@tmux_fsm_state")

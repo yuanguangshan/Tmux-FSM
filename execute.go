@@ -12,7 +12,10 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	"tmux-fsm/editor"
 	"tmux-fsm/intent"
+	"tmux-fsm/types"
+	"tmux-fsm/weaver/core"
 )
 
 type Executor interface {
@@ -295,7 +298,16 @@ func executeShellAction(action string, state *FSMState, targetPane string) {
 			if content != "" {
 				// Record semantic Fact in active transaction
 				record := captureShellDelete(targetPane, startPos[0], content)
-				transMgr.Append(record)
+
+				// 将ActionRecord转换为OperationRecord
+				// 由于Fact类型不匹配，我们创建一个空的ResolvedOperation
+				// 在实际实现中，这里应该是有意义的ResolvedOperation
+				opRecord := types.OperationRecord{
+					ResolvedOp: editor.ResolvedOperation{},
+					Fact:       convertFactToCoreFact(record.Fact),
+					Inverse:    convertFactToCoreFact(record.Inverse),
+				}
+				transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact, opRecord.Inverse)
 
 				// [Phase 7] Robust Deletion:
 				// Since we know EXACTLY what we captured, we delete by character count.
@@ -983,7 +995,16 @@ func executeVimAction(action string, state *FSMState, targetPane string) {
 			Fact:    Fact{Kind: "insert", Target: Range{Anchor: anchor, Text: vimKey}, Meta: map[string]interface{}{"is_vim_raw": true}}, // Pseudo-fact
 			Inverse: Fact{Kind: "undo", Target: Range{Anchor: anchor}},
 		}
-		transMgr.Append(record)
+
+		// 将ActionRecord转换为OperationRecord
+		// 由于Fact类型不匹配，我们创建一个空的ResolvedOperation
+		// 在实际实现中，这里应该是有意义的ResolvedOperation
+		opRecord := types.OperationRecord{
+			ResolvedOp: editor.ResolvedOperation{},
+			Fact:       convertFactToCoreFact(record.Fact),
+			Inverse:    convertFactToCoreFact(record.Inverse),
+		}
+		transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact, opRecord.Inverse)
 	}
 
 	// For Vim, we just send the count + key
@@ -1083,5 +1104,43 @@ func performPhysicalToggleCase(targetPane string) {
 		if newChar != char {
 			exec.Command("tmux", "send-keys", "-t", targetPane, "Delete", string(newChar)).Run()
 		}
+	}
+}
+
+// convertFactToCoreFact 将main.Fact转换为core.Fact
+func convertFactToCoreFact(mainFact Fact) core.Fact {
+	// 创建一个锚点转换
+	anchor := core.Anchor{
+		PaneID:   mainFact.Target.Anchor.PaneID,
+		Kind:     core.AnchorKind(mainFact.Target.Anchor.LineHint), // 简单转换，实际实现中可能需要更复杂的映射
+		Ref:      mainFact.Target.Anchor.LineHash, // 使用LineHash作为参考
+		Hash:     mainFact.Target.Anchor.LineHash,
+		LineID:   core.LineID(fmt.Sprintf("%d", mainFact.Target.Anchor.LineHint)),
+		Start:    mainFact.Target.StartOffset,
+		End:      mainFact.Target.EndOffset,
+	}
+
+	// 确定FactKind
+	var factKind core.FactKind
+	switch mainFact.Kind {
+	case "insert":
+		factKind = core.FactInsert
+	case "delete":
+		factKind = core.FactDelete
+	case "replace":
+		factKind = core.FactReplace
+	case "undo":
+		factKind = core.FactMove  // 使用FactMove作为占位符，实际实现中可能需要其他处理
+	default:
+		factKind = core.FactNone
+	}
+
+	return core.Fact{
+		Kind:        factKind,
+		Anchor:      anchor,
+		Payload:     core.FactPayload{}, // 根据需要填充实际负载
+		Meta:        mainFact.Meta,
+		Timestamp:   time.Now().Unix(),
+		SideEffects: mainFact.SideEffects,
 	}
 }

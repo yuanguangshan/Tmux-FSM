@@ -12,9 +12,11 @@ import (
 	"syscall"
 	"time"
 
+	"tmux-fsm/editor"
 	"tmux-fsm/fsm"
 	"tmux-fsm/intent"
 	"tmux-fsm/kernel"
+	"tmux-fsm/types"
 	"tmux-fsm/weaver/core"
 	"tmux-fsm/weaver/manager"
 )
@@ -26,33 +28,71 @@ var weaverMgr *manager.WeaverManager
 var kernelInstance *kernel.Kernel
 
 // TransactionManager 事务管理器
+// 负责管理编辑操作的历史记录，遵循Vim语义规则
 type TransactionManager struct {
-	current *Transaction
-	nextID  TransactionID
+	current *types.Transaction
+	nextID  types.TransactionID
 }
 
-// Append 向事务管理器追加记录
-func (tm *TransactionManager) Append(record ActionRecord) {
+// BeginTransaction 开始一个新的事务
+// 一个事务对应一次可被 `.` 重复的最小操作单元
+func (tm *TransactionManager) BeginTransaction() *types.Transaction {
+	tm.current = &types.Transaction{
+		ID:        tm.nextID,
+		Records:   make([]types.OperationRecord, 0),
+		CreatedAt: time.Now(),
+		Applied:   false,
+		Skipped:   false,
+	}
+	tm.nextID++
+	return tm.current
+}
+
+// AppendEffect 向当前事务追加效果记录
+// 注意：调用此方法前必须确保事务已开始
+func (tm *TransactionManager) AppendEffect(resolvedOp editor.ResolvedOperation, fact core.Fact, inverse core.Fact) {
 	if tm.current == nil {
-		tm.current = &Transaction{
-			ID:        tm.nextID,
-			Records:   []ActionRecord{record},
-			CreatedAt: time.Now(),
-			Applied:   false,
-			Skipped:   false,
-		}
-		tm.nextID++
-	} else {
-		tm.current.Records = append(tm.current.Records, record)
+		panic("AppendEffect called without active transaction - transaction must be explicitly started")
 	}
+
+	record := types.OperationRecord{
+		ResolvedOp: resolvedOp,
+		Fact:       fact,
+		Inverse:    inverse,
+	}
+
+	tm.current.Records = append(tm.current.Records, record)
 }
 
-// 初始化全局事务管理器
-func init() {
-	transMgr = &TransactionManager{
-		nextID: 0,
+// CommitTransaction 提交当前事务
+func (tm *TransactionManager) CommitTransaction() error {
+	if tm.current == nil {
+		return fmt.Errorf("no active transaction to commit")
 	}
+
+	tm.current.Applied = true
+	tm.current = nil // 重置当前事务
+
+	return nil
 }
+
+// AbortTransaction 放弃当前事务
+func (tm *TransactionManager) AbortTransaction() error {
+	if tm.current == nil {
+		return fmt.Errorf("no active transaction to abort")
+	}
+
+	tm.current.Skipped = true
+	tm.current = nil // 重置当前事务
+
+	return nil
+}
+
+// GetCurrentTransaction 获取当前事务（如果存在）
+func (tm *TransactionManager) GetCurrentTransaction() *types.Transaction {
+	return tm.current
+}
+
 
 func main() {
 	serverMode := flag.Bool("server", false, "run as server")
@@ -77,8 +117,15 @@ func main() {
 	// Initialize FSM engine with loaded keymap
 	fsm.InitEngine(&fsm.KM)
 
-	// Initialize kernel with FSM engine
-	kernelInstance = kernel.NewKernel(fsm.GetDefaultEngine(), nil) // Will set executor later
+	// 初始化新的编辑内核组件
+	cursorEngine := editor.NewCursorEngine(editor.NewSimpleBuffer()) // 创建光标引擎
+	newResolver := editor.NewResolver(cursorEngine)                  // 创建新的解析器
+
+	// 创建基于新解析器的执行器
+	resolverExecutor := kernel.NewResolverExecutor(newResolver)
+
+	// Initialize kernel with FSM engine and new resolver executor
+	kernelInstance = kernel.NewKernel(fsm.GetDefaultEngine(), resolverExecutor)
 
 	// 初始化 Weaver 系统
 	manager.InitWeaver(manager.ModeWeaver) // 默认启用 Weaver 模式
@@ -349,6 +396,23 @@ func ProcessIntentGlobal(intent intent.Intent) error {
 		return nil
 	}
 
+	// 开始事务 - 一个事务对应一次可被 `.` 重复的最小操作单元
+	if transMgr != nil {
+		transMgr.BeginTransaction()
+	}
+
 	// 使用 weaver manager 处理意图
-	return weaverMgr.ProcessIntentGlobal(&intentAdapter{intent: intent})
+	err := weaverMgr.ProcessIntentGlobal(&intentAdapter{intent: intent})
+	if err != nil && transMgr != nil {
+		// 如果处理过程中出现错误，回滚事务
+		transMgr.AbortTransaction()
+		return err
+	}
+
+	// 成功处理后提交事务
+	if transMgr != nil {
+		return transMgr.CommitTransaction()
+	}
+
+	return err
 }
