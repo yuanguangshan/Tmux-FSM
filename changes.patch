@@ -1,229 +1,312 @@
 diff --git a/changes.patch b/changes.patch
-index 579f150..e69de29 100644
+index 20ec417..e69de29 100644
 --- a/changes.patch
 +++ b/changes.patch
-@@ -1,820 +0,0 @@
+@@ -1,1115 +0,0 @@
 -diff --git a/changes.patch b/changes.patch
--index 20405c1..e69de29 100644
+-index 579f150..e69de29 100644
 ---- a/changes.patch
 -+++ b/changes.patch
--@@ -1,589 +0,0 @@
+-@@ -1,820 +0,0 @@
 --diff --git a/changes.patch b/changes.patch
---index 4bc9d2e..e69de29 100644
+--index 20405c1..e69de29 100644
 ----- a/changes.patch
 --+++ b/changes.patch
---@@ -1,384 +0,0 @@
+--@@ -1,589 +0,0 @@
 ---diff --git a/changes.patch b/changes.patch
----index 2f5a43e..e69de29 100644
+---index 4bc9d2e..e69de29 100644
 ------ a/changes.patch
 ---+++ b/changes.patch
----@@ -1,252 +0,0 @@
+---@@ -1,384 +0,0 @@
 ----diff --git a/changes.patch b/changes.patch
-----index b321a39..e69de29 100644
+----index 2f5a43e..e69de29 100644
 ------- a/changes.patch
 ----+++ b/changes.patch
-----@@ -1,196 +0,0 @@
+----@@ -1,252 +0,0 @@
+-----diff --git a/changes.patch b/changes.patch
+-----index b321a39..e69de29 100644
+-------- a/changes.patch
+-----+++ b/changes.patch
+-----@@ -1,196 +0,0 @@
+------diff --git a/resolver/noop_engine.go b/resolver/noop_engine.go
+------new file mode 100644
+------index 0000000..46e74ac
+--------- /dev/null
+------+++ b/resolver/noop_engine.go
+------@@ -0,0 +1,40 @@
+------+package resolver
+------+
+------+import "tmux-fsm/intent"
+------+
+------+// NoopEngine 空操作引擎实现
+------+type NoopEngine struct{}
+------+
+------+func (n *NoopEngine) SendKeys(keys ...string) {}
+------+
+------+func (n *NoopEngine) GetVisualMode() intent.VisualMode {
+------+	return intent.VisualModeNormal
+------+}
+------+
+------+func (n *NoopEngine) EnterVisualMode(mode intent.VisualMode) {}
+------+
+------+func (n *NoopEngine) ExitVisualMode() {}
+------+
+------+func (n *NoopEngine) GetCurrentCursor() ResolverCursor {
+------+	return ResolverCursor{}
+------+}
+------+
+------+func (n *NoopEngine) ComputeMotion(m *intent.Motion) (ResolverRange, error) {
+------+	return ResolverRange{}, nil
+------+}
+------+
+------+func (n *NoopEngine) MoveCursor(r ResolverRange) error {
+------+	return nil
+------+}
+------+
+------+func (n *NoopEngine) DeleteRange(r ResolverRange) error {
+------+	return nil
+------+}
+------+
+------+func (n *NoopEngine) YankRange(r ResolverRange) error {
+------+	return nil
+------+}
+------+
+------+func (n *NoopEngine) ChangeRange(r ResolverRange) error {
+------+	return nil
+------+}
+------\ No newline at end of file
+------diff --git a/resolver/resolver.go b/resolver/resolver.go
+------index d4d2d44..04b59f1 100644
+--------- a/resolver/resolver.go
+------+++ b/resolver/resolver.go
+------@@ -5,13 +5,6 @@ import (
+------ 	"tmux-fsm/intent"
+------ )
+------ 
+-------// ExecContext 执行上下文
+-------type ExecContext struct {
+-------	FromRepeat bool // 是否来自重复操作
+-------	FromMacro  bool // 是否来自宏
+-------	FromUndo   bool // 是否来自撤销操作
+-------}
+-------
+------ // RepeatableAction 可重复操作
+------ type RepeatableAction struct {
+------ 	Operator *intent.OperatorKind
+------@@ -31,9 +24,9 @@ type Resolver struct {
+------ }
+------ 
+------ // New 创建新的解析器
+-------func New(engine EngineAdapter) *Resolver {
+------+func New(_ EngineAdapter) *Resolver {
+------ 	return &Resolver{
+-------		engine: engine,
+------+		engine: &NoopEngine{},
+------ 	}
+------ }
+------ 
+------diff --git a/resolver/selection.go b/resolver/selection.go
+------deleted file mode 100644
+------index 5f88e5a..0000000
+--------- a/resolver/selection.go
+------+++ /dev/null
+------@@ -1,10 +0,0 @@
+-------package resolver
+-------
+-------// SelectionMode 选择模式
+-------type SelectionMode int
+-------
+-------const (
+-------	SelectionChar SelectionMode = iota
+-------	SelectionLine
+-------	SelectionBlock
+-------)
+------\ No newline at end of file
+------diff --git a/resolver/semantic_action.go b/resolver/semantic_action.go
+------deleted file mode 100644
+------index 9709b07..0000000
+--------- a/resolver/semantic_action.go
+------+++ /dev/null
+------@@ -1,36 +0,0 @@
+-------package resolver
+-------
+-------import (
+-------	"tmux-fsm/intent"
+-------)
+-------
+-------// SemanticAction 语义动作，代表意图的语义表示
+-------type SemanticAction struct {
+-------	Operator  intent.OperatorKind
+-------	Selection *Selection
+-------	Motion    intent.MotionKind
+-------	Target    intent.TargetKind
+-------	Count     int
+-------}
+-------
+-------// ActionType 语义动作类型
+-------type ActionType int
+-------
+-------const (
+-------	ActionMove ActionType = iota
+-------	ActionDelete
+-------	ActionYank
+-------	ActionChange
+-------	ActionVisual
+-------	ActionUndo
+-------	ActionRepeat
+-------	ActionMacro
+-------)
+-------
+-------// Action 代表一个具体的语义动作
+-------type Action struct {
+-------	Type        ActionType
+-------	Semantic    *SemanticAction
+-------	RawIntent   *intent.Intent
+-------	Description string
+-------}
+------\ No newline at end of file
+------diff --git a/resolver/visual.go b/resolver/visual.go
+------deleted file mode 100644
+------index c904626..0000000
+--------- a/resolver/visual.go
+------+++ /dev/null
+------@@ -1,52 +0,0 @@
+-------package resolver
+-------
+-------import "tmux-fsm/intent"
+-------
+-------// handleVisualMode 处理视觉模式切换
+-------func (r *Resolver) handleVisualMode(i *intent.Intent) error {
+-------	if i.Kind == intent.IntentVisual {
+-------		// 使用 Target.Scope 来判断操作
+-------		switch i.Target.Scope {
+-------		case "char":
+-------			return r.EnterVisual(SelectionChar)
+-------		case "line":
+-------			return r.EnterVisual(SelectionLine)
+-------		case "block":
+-------			return r.EnterVisual(SelectionBlock)
+-------		case "cancel":
+-------			return r.ExitVisual()
+-------		}
+-------	}
+-------	return nil
+-------}
+-------
+-------// resolveEnterVisual 解析进入视觉模式意图
+-------func (r *Resolver) resolveEnterVisual(i *intent.Intent) error {
+-------	// 通过 Target.Scope 来判断模式
+-------	switch i.Target.Scope {
+-------	case "char":
+-------		return r.EnterVisual(SelectionChar)
+-------	case "line":
+-------		return r.EnterVisual(SelectionLine)
+-------	case "block":
+-------		return r.EnterVisual(SelectionBlock)
+-------	}
+-------	return nil
+-------}
+-------
+-------// resolveExitVisual 解析退出视觉模式意图
+-------func (r *Resolver) resolveExitVisual(i *intent.Intent) error {
+-------	return r.ExitVisual()
+-------}
+-------
+-------// EnterVisual 进入视觉模式
+-------func (r *Resolver) EnterVisual(mode SelectionMode) error {
+-------	r.engine.EnterVisualMode(intent.VisualMode(mode))
+-------	return nil
+-------}
+-------
+-------// ExitVisual 退出视觉模式
+-------func (r *Resolver) ExitVisual() error {
+-------	r.engine.ExitVisualMode()
+-------	return nil
+-------}
+------\ No newline at end of file
+-----diff --git a/main.go b/main.go
+-----index 49671fb..77764f0 100644
+-------- a/main.go
+-----+++ b/main.go
+-----@@ -77,8 +77,15 @@ func main() {
+----- 	// Initialize FSM engine with loaded keymap
+----- 	fsm.InitEngine(&fsm.KM)
+----- 
+------	// Initialize kernel with FSM engine
+------	kernelInstance = kernel.NewKernel(fsm.GetDefaultEngine(), nil) // Will set executor later
+-----+	// 初始化新的编辑内核组件
+-----+	cursorEngine := editor.NewCursorEngine(editor.NewSimpleBuffer()) // 创建光标引擎
+-----+	newResolver := editor.NewResolver(cursorEngine)                  // 创建新的解析器
+-----+
+-----+	// 创建基于新解析器的执行器
+-----+	resolverExecutor := kernel.NewResolverExecutor(newResolver)
+-----+
+-----+	// Initialize kernel with FSM engine and new resolver executor
+-----+	kernelInstance = kernel.NewKernel(fsm.GetDefaultEngine(), resolverExecutor)
+----- 
+----- 	// 初始化 Weaver 系统
+----- 	manager.InitWeaver(manager.ModeWeaver) // 默认启用 Weaver 模式
 -----diff --git a/resolver/noop_engine.go b/resolver/noop_engine.go
------new file mode 100644
------index 0000000..46e74ac
--------- /dev/null
+-----index d3aec9a..ab5460c 100644
+-------- a/resolver/noop_engine.go
 -----+++ b/resolver/noop_engine.go
------@@ -0,0 +1,40 @@
------+package resolver
------+
------+import "tmux-fsm/intent"
------+
------+// NoopEngine 空操作引擎实现
------+type NoopEngine struct{}
------+
------+func (n *NoopEngine) SendKeys(keys ...string) {}
------+
------+func (n *NoopEngine) GetVisualMode() intent.VisualMode {
------+	return intent.VisualModeNormal
------+}
------+
------+func (n *NoopEngine) EnterVisualMode(mode intent.VisualMode) {}
------+
------+func (n *NoopEngine) ExitVisualMode() {}
------+
------+func (n *NoopEngine) GetCurrentCursor() ResolverCursor {
------+	return ResolverCursor{}
------+}
------+
------+func (n *NoopEngine) ComputeMotion(m *intent.Motion) (ResolverRange, error) {
------+	return ResolverRange{}, nil
------+}
------+
------+func (n *NoopEngine) MoveCursor(r ResolverRange) error {
------+	return nil
------+}
------+
------+func (n *NoopEngine) DeleteRange(r ResolverRange) error {
------+	return nil
------+}
------+
------+func (n *NoopEngine) YankRange(r ResolverRange) error {
------+	return nil
------+}
------+
------+func (n *NoopEngine) ChangeRange(r ResolverRange) error {
------+	return nil
------+}
------\ No newline at end of file
+-----@@ -3,6 +3,10 @@ package resolver
+----- import "tmux-fsm/intent"
+----- 
+----- // NoopEngine 空操作引擎实现
+-----+//
+-----+// TEMP: bootstrap phase - 过渡期临时实现
+-----+// 此实现不执行任何实际操作，仅用于架构迁移期间的接口兼容
+-----+// 最终将被替换为实际的CursorEngine实现
+----- type NoopEngine struct{}
+----- 
+----- func (n *NoopEngine) SendKeys(keys ...string) {}
 -----diff --git a/resolver/resolver.go b/resolver/resolver.go
------index d4d2d44..04b59f1 100644
+-----index 178d696..f0016e0 100644
 -------- a/resolver/resolver.go
 -----+++ b/resolver/resolver.go
------@@ -5,13 +5,6 @@ import (
------ 	"tmux-fsm/intent"
------ )
+-----@@ -1,3 +1,9 @@
+-----+// Package resolver - DEPRECATED: 冻结状态，不再开发
+-----+//
+-----+// 此包已被标记为冻结状态，不再接受任何新功能开发。
+-----+// 所有新的Vim语义解析逻辑应使用 main 包中的新Resolver实现。
+-----+//
+-----+// 此包仅用于过渡期兼容，最终将被完全替换。
+----- package resolver
 ----- 
-------// ExecContext 执行上下文
-------type ExecContext struct {
-------	FromRepeat bool // 是否来自重复操作
-------	FromMacro  bool // 是否来自宏
-------	FromUndo   bool // 是否来自撤销操作
-------}
-------
------ // RepeatableAction 可重复操作
------ type RepeatableAction struct {
------ 	Operator *intent.OperatorKind
------@@ -31,9 +24,9 @@ type Resolver struct {
------ }
------ 
------ // New 创建新的解析器
-------func New(engine EngineAdapter) *Resolver {
------+func New(_ EngineAdapter) *Resolver {
------ 	return &Resolver{
-------		engine: engine,
------+		engine: &NoopEngine{},
------ 	}
------ }
------ 
------diff --git a/resolver/selection.go b/resolver/selection.go
------deleted file mode 100644
------index 5f88e5a..0000000
--------- a/resolver/selection.go
------+++ /dev/null
------@@ -1,10 +0,0 @@
-------package resolver
-------
-------// SelectionMode 选择模式
-------type SelectionMode int
-------
-------const (
-------	SelectionChar SelectionMode = iota
-------	SelectionLine
-------	SelectionBlock
-------)
------\ No newline at end of file
------diff --git a/resolver/semantic_action.go b/resolver/semantic_action.go
------deleted file mode 100644
------index 9709b07..0000000
--------- a/resolver/semantic_action.go
------+++ /dev/null
------@@ -1,36 +0,0 @@
-------package resolver
-------
-------import (
-------	"tmux-fsm/intent"
-------)
-------
-------// SemanticAction 语义动作，代表意图的语义表示
-------type SemanticAction struct {
-------	Operator  intent.OperatorKind
-------	Selection *Selection
-------	Motion    intent.MotionKind
-------	Target    intent.TargetKind
-------	Count     int
-------}
-------
-------// ActionType 语义动作类型
-------type ActionType int
-------
-------const (
-------	ActionMove ActionType = iota
-------	ActionDelete
-------	ActionYank
-------	ActionChange
-------	ActionVisual
-------	ActionUndo
-------	ActionRepeat
-------	ActionMacro
-------)
-------
-------// Action 代表一个具体的语义动作
-------type Action struct {
-------	Type        ActionType
-------	Semantic    *SemanticAction
-------	RawIntent   *intent.Intent
-------	Description string
-------}
------\ No newline at end of file
------diff --git a/resolver/visual.go b/resolver/visual.go
------deleted file mode 100644
------index c904626..0000000
--------- a/resolver/visual.go
------+++ /dev/null
------@@ -1,52 +0,0 @@
-------package resolver
-------
-------import "tmux-fsm/intent"
-------
-------// handleVisualMode 处理视觉模式切换
-------func (r *Resolver) handleVisualMode(i *intent.Intent) error {
-------	if i.Kind == intent.IntentVisual {
-------		// 使用 Target.Scope 来判断操作
-------		switch i.Target.Scope {
-------		case "char":
-------			return r.EnterVisual(SelectionChar)
-------		case "line":
-------			return r.EnterVisual(SelectionLine)
-------		case "block":
-------			return r.EnterVisual(SelectionBlock)
-------		case "cancel":
-------			return r.ExitVisual()
-------		}
-------	}
-------	return nil
-------}
-------
-------// resolveEnterVisual 解析进入视觉模式意图
-------func (r *Resolver) resolveEnterVisual(i *intent.Intent) error {
-------	// 通过 Target.Scope 来判断模式
-------	switch i.Target.Scope {
-------	case "char":
-------		return r.EnterVisual(SelectionChar)
-------	case "line":
-------		return r.EnterVisual(SelectionLine)
-------	case "block":
-------		return r.EnterVisual(SelectionBlock)
-------	}
-------	return nil
-------}
-------
-------// resolveExitVisual 解析退出视觉模式意图
-------func (r *Resolver) resolveExitVisual(i *intent.Intent) error {
-------	return r.ExitVisual()
-------}
-------
-------// EnterVisual 进入视觉模式
-------func (r *Resolver) EnterVisual(mode SelectionMode) error {
-------	r.engine.EnterVisualMode(intent.VisualMode(mode))
-------	return nil
-------}
-------
-------// ExitVisual 退出视觉模式
-------func (r *Resolver) ExitVisual() error {
-------	r.engine.ExitVisualMode()
-------	return nil
-------}
------\ No newline at end of file
+----- import (
 ----diff --git a/main.go b/main.go
-----index 49671fb..77764f0 100644
+----index 49671fb..513033a 100644
 ------- a/main.go
 ----+++ b/main.go
-----@@ -77,8 +77,15 @@ func main() {
+----@@ -25,18 +25,21 @@ var weaverMgr *manager.WeaverManager
+---- // kernelInstance 全局 Kernel 实例
+---- var kernelInstance *kernel.Kernel
+---- 
+----+// transMgr 全局事务管理器
+----+var transMgr *TransactionManager
+----+
+---- // TransactionManager 事务管理器
+---- type TransactionManager struct {
+-----	current *Transaction
+-----	nextID  TransactionID
+----+	current *types.Transaction
+----+	nextID  types.TransactionID
+---- }
+---- 
+---- // Append 向事务管理器追加记录
+-----func (tm *TransactionManager) Append(record ActionRecord) {
+----+func (tm *TransactionManager) Append(record types.OperationRecord) {
+---- 	if tm.current == nil {
+-----		tm.current = &Transaction{
+----+		tm.current = &types.Transaction{
+---- 			ID:        tm.nextID,
+-----			Records:   []ActionRecord{record},
+----+			Records:   []types.OperationRecord{record},
+---- 			CreatedAt: time.Now(),
+---- 			Applied:   false,
+---- 			Skipped:   false,
+----@@ -77,8 +80,15 @@ func main() {
 ---- 	// Initialize FSM engine with loaded keymap
 ---- 	fsm.InitEngine(&fsm.KM)
 ---- 
@@ -270,11 +353,72 @@ index 579f150..e69de29 100644
 ---- package resolver
 ---- 
 ---- import (
+----diff --git a/types/types.go b/types/types.go
+----index 07f1bbe..41652be 100644
+------- a/types/types.go
+----+++ b/types/types.go
+----@@ -3,26 +3,31 @@ package types
+---- import (
+---- 	"time"
+---- 	"tmux-fsm/weaver/core"
+----+	"tmux-fsm/editor"
+---- )
+---- 
+---- // TransactionID 事务ID类型
+---- type TransactionID uint64
+---- 
+-----// ActionRecord 动作记录
+-----type ActionRecord struct {
+-----	Fact    core.Fact `json:"fact"`
+-----	Inverse core.Fact `json:"inverse"`
+----+// OperationRecord 操作记录，基于ResolvedOperation
+----+type OperationRecord struct {
+----+	ResolvedOp editor.ResolvedOperation `json:"resolved_operation"`
+----+	Fact       core.Fact               `json:"fact"`
+----+	Inverse    core.Fact               `json:"inverse"`
+---- }
+---- 
+---- // Transaction 事务
+---- // RFC-WC-003: Audit Trail - 所有编辑操作必须可追溯
+----+// 
+----+// 更新：现在使用ResolvedOperation作为核心操作表示
+----+// 这样可以更好地支持Vim语义的repeat/undo操作
+---- type Transaction struct {
+-----	ID               TransactionID  `json:"id"`
+-----	Records          []ActionRecord `json:"records"`
+-----	CreatedAt        time.Time      `json:"created_at"`
+-----	Applied          bool           `json:"applied"`
+-----	Skipped          bool           `json:"skipped"`
+-----	SafetyLevel      string         `json:"safety_level,omitempty"`       // exact, fuzzy
+-----	PreSnapshotHash  string         `json:"pre_snapshot_hash,omitempty"`  // Phase 8: World state before transaction
+-----	PostSnapshotHash string         `json:"post_snapshot_hash,omitempty"` // Phase 8: World state after transaction
+----+	ID               TransactionID      `json:"id"`
+----+	Records          []OperationRecord  `json:"records"`
+----+	CreatedAt        time.Time          `json:"created_at"`
+----+	Applied          bool               `json:"applied"`
+----+	Skipped          bool               `json:"skipped"`
+----+	SafetyLevel      string             `json:"safety_level,omitempty"`       // exact, fuzzy
+----+	PreSnapshotHash  string             `json:"pre_snapshot_hash,omitempty"`  // Phase 8: World state before transaction
+----+	PostSnapshotHash string             `json:"post_snapshot_hash,omitempty"` // Phase 8: World state after transaction
+---- }
+----\ No newline at end of file
 ---diff --git a/main.go b/main.go
----index 49671fb..513033a 100644
+---index 49671fb..61dbe39 100644
 ------ a/main.go
 ---+++ b/main.go
----@@ -25,18 +25,21 @@ var weaverMgr *manager.WeaverManager
+---@@ -12,9 +12,11 @@ import (
+--- 	"syscall"
+--- 	"time"
+--- 
+---+	"tmux-fsm/editor"
+--- 	"tmux-fsm/fsm"
+--- 	"tmux-fsm/intent"
+--- 	"tmux-fsm/kernel"
+---+	"tmux-fsm/types"
+--- 	"tmux-fsm/weaver/core"
+--- 	"tmux-fsm/weaver/manager"
+--- )
+---@@ -25,26 +27,73 @@ var weaverMgr *manager.WeaverManager
 --- // kernelInstance 全局 Kernel 实例
 --- var kernelInstance *kernel.Kernel
 --- 
@@ -282,26 +426,87 @@ index 579f150..e69de29 100644
 ---+var transMgr *TransactionManager
 ---+
 --- // TransactionManager 事务管理器
+---+// 负责管理编辑操作的历史记录，遵循Vim语义规则
 --- type TransactionManager struct {
 ----	current *Transaction
 ----	nextID  TransactionID
 ---+	current *types.Transaction
 ---+	nextID  types.TransactionID
+---+}
+---+
+---+// BeginTransaction 开始一个新的事务
+---+// 一个事务对应一次可被 `.` 重复的最小操作单元
+---+func (tm *TransactionManager) BeginTransaction() *types.Transaction {
+---+	tm.current = &types.Transaction{
+---+		ID:        tm.nextID,
+---+		Records:   make([]types.OperationRecord, 0),
+---+		CreatedAt: time.Now(),
+---+		Applied:   false,
+---+		Skipped:   false,
+---+	}
+---+	tm.nextID++
+---+	return tm.current
 --- }
 --- 
---- // Append 向事务管理器追加记录
+----// Append 向事务管理器追加记录
 ----func (tm *TransactionManager) Append(record ActionRecord) {
----+func (tm *TransactionManager) Append(record types.OperationRecord) {
+---+// AppendEffect 向当前事务追加效果记录
+---+func (tm *TransactionManager) AppendEffect(resolvedOp editor.ResolvedOperation, fact core.Fact, inverse core.Fact) {
 --- 	if tm.current == nil {
 ----		tm.current = &Transaction{
----+		tm.current = &types.Transaction{
---- 			ID:        tm.nextID,
+----			ID:        tm.nextID,
 ----			Records:   []ActionRecord{record},
----+			Records:   []types.OperationRecord{record},
---- 			CreatedAt: time.Now(),
---- 			Applied:   false,
---- 			Skipped:   false,
----@@ -77,8 +80,15 @@ func main() {
+----			CreatedAt: time.Now(),
+----			Applied:   false,
+----			Skipped:   false,
+----		}
+----		tm.nextID++
+----	} else {
+----		tm.current.Records = append(tm.current.Records, record)
+---+		// 如果没有正在进行的事务，则开始一个新事务
+---+		tm.BeginTransaction()
+--- 	}
+---+
+---+	record := types.OperationRecord{
+---+		ResolvedOp: resolvedOp,
+---+		Fact:       fact,
+---+		Inverse:    inverse,
+---+	}
+---+
+---+	tm.current.Records = append(tm.current.Records, record)
+---+}
+---+
+---+// CommitTransaction 提交当前事务
+---+func (tm *TransactionManager) CommitTransaction() error {
+---+	if tm.current == nil {
+---+		return fmt.Errorf("no active transaction to commit")
+---+	}
+---+
+---+	tm.current.Applied = true
+---+	tm.current = nil // 重置当前事务
+---+
+---+	return nil
+---+}
+---+
+---+// AbortTransaction 放弃当前事务
+---+func (tm *TransactionManager) AbortTransaction() error {
+---+	if tm.current == nil {
+---+		return fmt.Errorf("no active transaction to abort")
+---+	}
+---+
+---+	tm.current.Skipped = true
+---+	tm.current = nil // 重置当前事务
+---+
+---+	return nil
+---+}
+---+
+---+// GetCurrentTransaction 获取当前事务（如果存在）
+---+func (tm *TransactionManager) GetCurrentTransaction() *types.Transaction {
+---+	return tm.current
+--- }
+--- 
+--- // 初始化全局事务管理器
+---@@ -77,8 +126,15 @@ func main() {
 --- 	// Initialize FSM engine with loaded keymap
 --- 	fsm.InitEngine(&fsm.KM)
 --- 
@@ -398,7 +603,7 @@ index 579f150..e69de29 100644
 --- }
 ---\ No newline at end of file
 --diff --git a/main.go b/main.go
---index 49671fb..61dbe39 100644
+--index 49671fb..bc888c4 100644
 ----- a/main.go
 --+++ b/main.go
 --@@ -12,9 +12,11 @@ import (
@@ -460,13 +665,13 @@ index 579f150..e69de29 100644
 ---		tm.current.Records = append(tm.current.Records, record)
 --+		// 如果没有正在进行的事务，则开始一个新事务
 --+		tm.BeginTransaction()
--- 	}
+--+	}
 --+
 --+	record := types.OperationRecord{
 --+		ResolvedOp: resolvedOp,
 --+		Fact:       fact,
 --+		Inverse:    inverse,
---+	}
+-- 	}
 --+
 --+	tm.current.Records = append(tm.current.Records, record)
 --+}
@@ -519,6 +724,32 @@ index 579f150..e69de29 100644
 -- 
 -- 	// 初始化 Weaver 系统
 -- 	manager.InitWeaver(manager.ModeWeaver) // 默认启用 Weaver 模式
+--@@ -349,6 +405,24 @@ func ProcessIntentGlobal(intent intent.Intent) error {
+-- 		return nil
+-- 	}
+-- 
+--+	// 开始事务 - 一个事务对应一次可被 `.` 重复的最小操作单元
+--+	if transMgr != nil {
+--+		transMgr.BeginTransaction()
+--+		defer func() {
+--+			// 确保事务被提交或回滚
+--+			if transMgr.GetCurrentTransaction() != nil {
+--+				transMgr.CommitTransaction()
+--+			}
+--+		}()
+--+	}
+--+
+-- 	// 使用 weaver manager 处理意图
+---	return weaverMgr.ProcessIntentGlobal(&intentAdapter{intent: intent})
+--+	err := weaverMgr.ProcessIntentGlobal(&intentAdapter{intent: intent})
+--+	if err != nil && transMgr != nil {
+--+		// 如果处理过程中出现错误，回滚事务
+--+		transMgr.AbortTransaction()
+--+		return err
+--+	}
+--+
+--+	return nil
+-- }
 --diff --git a/resolver/noop_engine.go b/resolver/noop_engine.go
 --index d3aec9a..ab5460c 100644
 ----- a/resolver/noop_engine.go
@@ -597,8 +828,70 @@ index 579f150..e69de29 100644
 --+	PostSnapshotHash string             `json:"post_snapshot_hash,omitempty"` // Phase 8: World state after transaction
 -- }
 --\ No newline at end of file
+-diff --git a/execute.go b/execute.go
+-index 069b59a..3bdd4fe 100644
+---- a/execute.go
+-+++ b/execute.go
+-@@ -295,7 +295,18 @@ func executeShellAction(action string, state *FSMState, targetPane string) {
+- 			if content != "" {
+- 				// Record semantic Fact in active transaction
+- 				record := captureShellDelete(targetPane, startPos[0], content)
+--				transMgr.Append(record)
+-+
+-+				// 使用新的事务API
+-+				if transMgr.GetCurrentTransaction() == nil {
+-+					transMgr.BeginTransaction()
+-+				}
+-+				// 将ActionRecord转换为OperationRecord
+-+				opRecord := types.OperationRecord{
+-+					ResolvedOp: editor.ResolvedOperation{}, // 在实际实现中，这里应该是有意义的ResolvedOperation
+-+					Fact:       record.Fact,
+-+					Inverse:    record.Inverse,
+-+				}
+-+				transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact, opRecord.Inverse)
+- 
+- 				// [Phase 7] Robust Deletion:
+- 				// Since we know EXACTLY what we captured, we delete by character count.
+-@@ -983,7 +994,18 @@ func executeVimAction(action string, state *FSMState, targetPane string) {
+- 			Fact:    Fact{Kind: "insert", Target: Range{Anchor: anchor, Text: vimKey}, Meta: map[string]interface{}{"is_vim_raw": true}}, // Pseudo-fact
+- 			Inverse: Fact{Kind: "undo", Target: Range{Anchor: anchor}},
+- 		}
+--		transMgr.Append(record)
+-+
+-+		// 使用新的事务API
+-+		if transMgr.GetCurrentTransaction() == nil {
+-+			transMgr.BeginTransaction()
+-+		}
+-+		// 将ActionRecord转换为OperationRecord
+-+		opRecord := types.OperationRecord{
+-+			ResolvedOp: editor.ResolvedOperation{}, // 在实际实现中，这里应该是有意义的ResolvedOperation
+-+			Fact:       record.Fact,
+-+			Inverse:    record.Inverse,
+-+		}
+-+		transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact, opRecord.Inverse)
+- 	}
+- 
+- 	// For Vim, we just send the count + key
+-diff --git a/globals.go b/globals.go
+-index 106ccb0..fcd17a3 100644
+---- a/globals.go
+-+++ b/globals.go
+-@@ -36,6 +36,13 @@ var (
+- 	socketPath  = os.Getenv("HOME") + "/.tmux-fsm.sock"
+- )
+- 
+-+func init() {
+-+	// 初始化全局事务管理器
+-+	transMgr = &TransactionManager{
+-+		nextID: 0,
+-+	}
+-+}
+-+
+- func loadState() FSMState {
+- 	// Use GlobalBackend to read tmux options
+- 	out, err := backend.GlobalBackend.GetUserOption("@tmux_fsm_state")
 -diff --git a/main.go b/main.go
--index 49671fb..bc888c4 100644
+-index 49671fb..1128253 100644
 ---- a/main.go
 -+++ b/main.go
 -@@ -12,9 +12,11 @@ import (
@@ -613,13 +906,9 @@ index 579f150..e69de29 100644
 - 	"tmux-fsm/weaver/core"
 - 	"tmux-fsm/weaver/manager"
 - )
--@@ -25,26 +27,73 @@ var weaverMgr *manager.WeaverManager
-- // kernelInstance 全局 Kernel 实例
+-@@ -26,34 +28,72 @@ var weaverMgr *manager.WeaverManager
 - var kernelInstance *kernel.Kernel
 - 
--+// transMgr 全局事务管理器
--+var transMgr *TransactionManager
--+
 - // TransactionManager 事务管理器
 -+// 负责管理编辑操作的历史记录，遵循Vim语义规则
 - type TransactionManager struct {
@@ -627,8 +916,10 @@ index 579f150..e69de29 100644
 --	nextID  TransactionID
 -+	current *types.Transaction
 -+	nextID  types.TransactionID
--+}
--+
+- }
+- 
+--// Append 向事务管理器追加记录
+--func (tm *TransactionManager) Append(record ActionRecord) {
 -+// BeginTransaction 开始一个新的事务
 -+// 一个事务对应一次可被 `.` 重复的最小操作单元
 -+func (tm *TransactionManager) BeginTransaction() *types.Transaction {
@@ -641,11 +932,10 @@ index 579f150..e69de29 100644
 -+	}
 -+	tm.nextID++
 -+	return tm.current
-- }
-- 
---// Append 向事务管理器追加记录
---func (tm *TransactionManager) Append(record ActionRecord) {
+-+}
+-+
 -+// AppendEffect 向当前事务追加效果记录
+-+// 注意：调用此方法前必须确保事务已开始
 -+func (tm *TransactionManager) AppendEffect(resolvedOp editor.ResolvedOperation, fact core.Fact, inverse core.Fact) {
 - 	if tm.current == nil {
 --		tm.current = &Transaction{
@@ -658,8 +948,7 @@ index 579f150..e69de29 100644
 --		tm.nextID++
 --	} else {
 --		tm.current.Records = append(tm.current.Records, record)
--+		// 如果没有正在进行的事务，则开始一个新事务
--+		tm.BeginTransaction()
+-+		panic("AppendEffect called without active transaction - transaction must be explicitly started")
 -+	}
 -+
 -+	record := types.OperationRecord{
@@ -669,20 +958,24 @@ index 579f150..e69de29 100644
 - 	}
 -+
 -+	tm.current.Records = append(tm.current.Records, record)
--+}
--+
+- }
+- 
+--// 初始化全局事务管理器
+--func init() {
+--	transMgr = &TransactionManager{
+--		nextID: 0,
 -+// CommitTransaction 提交当前事务
 -+func (tm *TransactionManager) CommitTransaction() error {
 -+	if tm.current == nil {
 -+		return fmt.Errorf("no active transaction to commit")
--+	}
+- 	}
 -+
 -+	tm.current.Applied = true
 -+	tm.current = nil // 重置当前事务
 -+
 -+	return nil
--+}
--+
+- }
+- 
 -+// AbortTransaction 放弃当前事务
 -+func (tm *TransactionManager) AbortTransaction() error {
 -+	if tm.current == nil {
@@ -698,10 +991,13 @@ index 579f150..e69de29 100644
 -+// GetCurrentTransaction 获取当前事务（如果存在）
 -+func (tm *TransactionManager) GetCurrentTransaction() *types.Transaction {
 -+	return tm.current
-- }
-- 
-- // 初始化全局事务管理器
--@@ -77,8 +126,15 @@ func main() {
+-+}
+-+
+-+
+- func main() {
+- 	serverMode := flag.Bool("server", false, "run as server")
+- 	socketPath := flag.String("socket", "/tmp/tmux-fsm.sock", "socket path")
+-@@ -77,8 +117,15 @@ func main() {
 - 	// Initialize FSM engine with loaded keymap
 - 	fsm.InitEngine(&fsm.KM)
 - 
@@ -719,19 +1015,13 @@ index 579f150..e69de29 100644
 - 
 - 	// 初始化 Weaver 系统
 - 	manager.InitWeaver(manager.ModeWeaver) // 默认启用 Weaver 模式
--@@ -349,6 +405,24 @@ func ProcessIntentGlobal(intent intent.Intent) error {
+-@@ -349,6 +396,23 @@ func ProcessIntentGlobal(intent intent.Intent) error {
 - 		return nil
 - 	}
 - 
 -+	// 开始事务 - 一个事务对应一次可被 `.` 重复的最小操作单元
 -+	if transMgr != nil {
 -+		transMgr.BeginTransaction()
--+		defer func() {
--+			// 确保事务被提交或回滚
--+			if transMgr.GetCurrentTransaction() != nil {
--+				transMgr.CommitTransaction()
--+			}
--+		}()
 -+	}
 -+
 - 	// 使用 weaver manager 处理意图
@@ -743,7 +1033,12 @@ index 579f150..e69de29 100644
 -+		return err
 -+	}
 -+
--+	return nil
+-+	// 成功处理后提交事务
+-+	if transMgr != nil {
+-+		return transMgr.CommitTransaction()
+-+	}
+-+
+-+	return err
 - }
 -diff --git a/resolver/noop_engine.go b/resolver/noop_engine.go
 -index d3aec9a..ab5460c 100644
@@ -824,49 +1119,98 @@ index 579f150..e69de29 100644
 - }
 -\ No newline at end of file
 diff --git a/execute.go b/execute.go
-index 069b59a..3bdd4fe 100644
+index 069b59a..2aa4c39 100644
 --- a/execute.go
 +++ b/execute.go
-@@ -295,7 +295,18 @@ func executeShellAction(action string, state *FSMState, targetPane string) {
+@@ -12,7 +12,10 @@ import (
+ 	"os/exec"
+ 	"strings"
+ 	"time"
++	"tmux-fsm/editor"
+ 	"tmux-fsm/intent"
++	"tmux-fsm/types"
++	"tmux-fsm/weaver/core"
+ )
+ 
+ type Executor interface {
+@@ -295,7 +298,16 @@ func executeShellAction(action string, state *FSMState, targetPane string) {
  			if content != "" {
  				// Record semantic Fact in active transaction
  				record := captureShellDelete(targetPane, startPos[0], content)
 -				transMgr.Append(record)
 +
-+				// 使用新的事务API
-+				if transMgr.GetCurrentTransaction() == nil {
-+					transMgr.BeginTransaction()
-+				}
 +				// 将ActionRecord转换为OperationRecord
++				// 由于Fact类型不匹配，我们创建一个空的ResolvedOperation
++				// 在实际实现中，这里应该是有意义的ResolvedOperation
 +				opRecord := types.OperationRecord{
-+					ResolvedOp: editor.ResolvedOperation{}, // 在实际实现中，这里应该是有意义的ResolvedOperation
-+					Fact:       record.Fact,
-+					Inverse:    record.Inverse,
++					ResolvedOp: editor.ResolvedOperation{},
++					Fact:       convertFactToCoreFact(record.Fact),
++					Inverse:    convertFactToCoreFact(record.Inverse),
 +				}
 +				transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact, opRecord.Inverse)
  
  				// [Phase 7] Robust Deletion:
  				// Since we know EXACTLY what we captured, we delete by character count.
-@@ -983,7 +994,18 @@ func executeVimAction(action string, state *FSMState, targetPane string) {
+@@ -983,7 +995,16 @@ func executeVimAction(action string, state *FSMState, targetPane string) {
  			Fact:    Fact{Kind: "insert", Target: Range{Anchor: anchor, Text: vimKey}, Meta: map[string]interface{}{"is_vim_raw": true}}, // Pseudo-fact
  			Inverse: Fact{Kind: "undo", Target: Range{Anchor: anchor}},
  		}
 -		transMgr.Append(record)
 +
-+		// 使用新的事务API
-+		if transMgr.GetCurrentTransaction() == nil {
-+			transMgr.BeginTransaction()
-+		}
 +		// 将ActionRecord转换为OperationRecord
++		// 由于Fact类型不匹配，我们创建一个空的ResolvedOperation
++		// 在实际实现中，这里应该是有意义的ResolvedOperation
 +		opRecord := types.OperationRecord{
-+			ResolvedOp: editor.ResolvedOperation{}, // 在实际实现中，这里应该是有意义的ResolvedOperation
-+			Fact:       record.Fact,
-+			Inverse:    record.Inverse,
++			ResolvedOp: editor.ResolvedOperation{},
++			Fact:       convertFactToCoreFact(record.Fact),
++			Inverse:    convertFactToCoreFact(record.Inverse),
 +		}
 +		transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact, opRecord.Inverse)
  	}
  
  	// For Vim, we just send the count + key
+@@ -1085,3 +1106,41 @@ func performPhysicalToggleCase(targetPane string) {
+ 		}
+ 	}
+ }
++
++// convertFactToCoreFact 将main.Fact转换为core.Fact
++func convertFactToCoreFact(mainFact Fact) core.Fact {
++	// 创建一个锚点转换
++	anchor := core.Anchor{
++		PaneID:   mainFact.Target.Anchor.PaneID,
++		Kind:     core.AnchorKind(mainFact.Target.Anchor.LineHint), // 简单转换，实际实现中可能需要更复杂的映射
++		Ref:      mainFact.Target.Anchor.LineHash, // 使用LineHash作为参考
++		Hash:     mainFact.Target.Anchor.LineHash,
++		LineID:   core.LineID(fmt.Sprintf("%d", mainFact.Target.Anchor.LineHint)),
++		Start:    mainFact.Target.StartOffset,
++		End:      mainFact.Target.EndOffset,
++	}
++
++	// 确定FactKind
++	var factKind core.FactKind
++	switch mainFact.Kind {
++	case "insert":
++		factKind = core.FactInsert
++	case "delete":
++		factKind = core.FactDelete
++	case "replace":
++		factKind = core.FactReplace
++	case "undo":
++		factKind = core.FactMove  // 使用FactMove作为占位符，实际实现中可能需要其他处理
++	default:
++		factKind = core.FactNone
++	}
++
++	return core.Fact{
++		Kind:        factKind,
++		Anchor:      anchor,
++		Payload:     core.FactPayload{}, // 根据需要填充实际负载
++		Meta:        mainFact.Meta,
++		Timestamp:   time.Now().Unix(),
++		SideEffects: mainFact.SideEffects,
++	}
++}
 diff --git a/globals.go b/globals.go
 index 106ccb0..fcd17a3 100644
 --- a/globals.go
