@@ -1,7 +1,5 @@
 package kernel
 
-import "fmt"
-
 func (k *Kernel) Execute(decision *Decision) {
 	if decision == nil {
 		panic("kernel.Execute called with nil decision")

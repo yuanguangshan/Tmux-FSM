@@ -27,6 +27,9 @@ var weaverMgr *manager.WeaverManager
 // kernelInstance 全局 Kernel 实例
 var kernelInstance *kernel.Kernel
 
+// globalExecContext 全局执行上下文
+var globalExecContext *editor.ExecutionContext
+
 // TransactionManager 事务管理器
 // 负责管理编辑操作的历史记录，遵循Vim语义规则
 type TransactionManager struct {
@@ -43,8 +46,6 @@ func (tm *TransactionManager) BeginTransaction() *types.Transaction {
 		ID:        tm.nextID,
 		Records:   make([]types.OperationRecord, 0),
 		CreatedAt: time.Now(),
-		Applied:   false,
-		Skipped:   false,
 	}
 	tm.nextID++
 	return tm.current
@@ -52,7 +53,7 @@ func (tm *TransactionManager) BeginTransaction() *types.Transaction {
 
 // AppendEffect 向当前事务追加效果记录
 // 注意：调用此方法前必须确保事务已开始
-func (tm *TransactionManager) AppendEffect(resolvedOp editor.ResolvedOperation, fact core.Fact, inverse core.Fact) {
+func (tm *TransactionManager) AppendEffect(resolvedOp editor.ResolvedOperation, fact core.Fact) {
 	if tm.current == nil {
 		panic("AppendEffect called without active transaction - transaction must be explicitly started")
 	}
@@ -60,7 +61,6 @@ func (tm *TransactionManager) AppendEffect(resolvedOp editor.ResolvedOperation, 
 	record := types.OperationRecord{
 		ResolvedOp: resolvedOp,
 		Fact:       fact,
-		Inverse:    inverse,
 	}
 
 	tm.current.Records = append(tm.current.Records, record)
@@ -71,8 +71,6 @@ func (tm *TransactionManager) CommitTransaction() error {
 	if tm.current == nil {
 		return fmt.Errorf("no active transaction to commit")
 	}
-
-	tm.current.Applied = true
 
 	// 保存到历史记录
 	tm.history = append(tm.history, tm.current)
@@ -91,7 +89,6 @@ func (tm *TransactionManager) AbortTransaction() error {
 		return fmt.Errorf("no active transaction to abort")
 	}
 
-	tm.current.Skipped = true
 	tm.current = nil // 重置当前事务
 
 	return nil
@@ -132,11 +129,17 @@ func main() {
 	fsm.InitEngine(&fsm.KM)
 
 	// 初始化新的编辑内核组件
-	cursorEngine := editor.NewCursorEngine(editor.NewSimpleBuffer()) // 创建光标引擎
-	_ = cursorEngine                                                 // 暂时未使用
+	// cursorEngine := editor.NewCursorEngine(editor.NewSimpleBuffer([]string{})) // 创建光标引擎（已移除，因为函数不存在）
 
 	// 创建基于新解析器的执行器（过渡性实现）
 	resolverExecutor := kernel.NewResolverExecutor()
+
+	// 创建全局执行上下文
+	globalExecContext = editor.NewExecutionContext(
+		editor.NewSimpleBufferStore(),
+		editor.NewSimpleWindowStore(),
+		editor.NewSimpleSelectionStore(),
+	)
 
 	// Initialize kernel with FSM engine and new resolver executor
 	kernelInstance = kernel.NewKernel(fsm.GetDefaultEngine(), resolverExecutor)
@@ -404,7 +407,7 @@ func (a *intentAdapter) GetAnchors() []core.Anchor {
 
 // RepeatLastTransaction 重复执行最近提交的事务
 // 这是 . repeat 功能的核心实现
-func RepeatLastTransaction(tm *TransactionManager) error {
+func RepeatLastTransaction(ctx *editor.ExecutionContext, tm *TransactionManager) error {
 	tx := tm.LastCommittedTransaction()
 	if tx == nil {
 		return nil // Vim 行为：无事发生
@@ -415,7 +418,7 @@ func RepeatLastTransaction(tm *TransactionManager) error {
 
 	// 重放最近事务中的所有操作
 	for _, opRecord := range tx.Records {
-		err := editor.ApplyResolvedOperation(opRecord.ResolvedOp)
+		err := editor.ApplyResolvedOperation(ctx, opRecord.ResolvedOp)
 		if err != nil {
 			tm.AbortTransaction()
 			return err
@@ -428,38 +431,7 @@ func RepeatLastTransaction(tm *TransactionManager) error {
 // UndoLastTransaction 撤销最近的事务
 // 这是 undo 功能的核心实现
 func UndoLastTransaction(tm *TransactionManager) error {
-	if len(tm.history) == 0 {
-		return nil // 没有可撤销的事务
-	}
-
-	// 获取最近的事务
-	lastTx := tm.history[len(tm.history)-1]
-
-	// 从历史记录中移除（但保留引用以供使用）
-	tm.history = tm.history[:len(tm.history)-1]
-
-	// 更新最近提交的事务为倒数第二个（如果存在）
-	if len(tm.history) > 0 {
-		tm.lastCommittedTx = tm.history[len(tm.history)-1]
-	} else {
-		tm.lastCommittedTx = nil
-	}
-
-	// 开始新事务以执行撤销操作
-	tm.BeginTransaction()
-
-	// 逆序执行每个操作的反向操作
-	for i := len(lastTx.Records) - 1; i >= 0; i-- {
-		opRecord := lastTx.Records[i]
-		// 使用反向操作执行 undo
-		err := editor.ApplyResolvedOperation(opRecord.Inverse)
-		if err != nil {
-			tm.AbortTransaction()
-			return err
-		}
-	}
-
-	return tm.CommitTransaction()
+	return fmt.Errorf("undo not supported: inverse execution not implemented")
 }
 
 // TxNode 事务节点，用于构建 redo tree
@@ -585,7 +557,7 @@ func (mm *MacroManager) PlayMacro(name string, count int) error {
 
 	for i := 0; i < count; i++ {
 		for _, tx := range macro.Transactions {
-			err := replayTransaction(tx)
+			err := replayTransaction(globalExecContext, tx)
 			if err != nil {
 				return fmt.Errorf("error replaying macro '%s': %v", name, err)
 			}
@@ -601,8 +573,6 @@ func cloneTransaction(src *types.Transaction) *types.Transaction {
 		ID:               src.ID,
 		Records:          make([]types.OperationRecord, len(src.Records)),
 		CreatedAt:        src.CreatedAt,
-		Applied:          src.Applied,
-		Skipped:          src.Skipped,
 		SafetyLevel:      src.SafetyLevel,
 		PreSnapshotHash:  src.PreSnapshotHash,
 		PostSnapshotHash: src.PostSnapshotHash,
@@ -615,9 +585,9 @@ func cloneTransaction(src *types.Transaction) *types.Transaction {
 }
 
 // replayTransaction 重放事务
-func replayTransaction(tx *types.Transaction) error {
+func replayTransaction(ctx *editor.ExecutionContext, tx *types.Transaction) error {
 	for _, record := range tx.Records {
-		err := editor.ApplyResolvedOperation(record.ResolvedOp)
+		err := editor.ApplyResolvedOperation(ctx, record.ResolvedOp)
 		if err != nil {
 			return err
 		}

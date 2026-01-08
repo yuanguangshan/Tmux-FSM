@@ -305,9 +305,8 @@ func executeShellAction(action string, state *FSMState, targetPane string) {
 				opRecord := types.OperationRecord{
 					ResolvedOp: editor.ResolvedOperation{},
 					Fact:       convertFactToCoreFact(record.Fact),
-					Inverse:    convertFactToCoreFact(record.Inverse),
 				}
-				transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact, opRecord.Inverse)
+				transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact)
 
 				// [Phase 7] Robust Deletion:
 				// Since we know EXACTLY what we captured, we delete by character count.
@@ -1002,9 +1001,8 @@ func executeVimAction(action string, state *FSMState, targetPane string) {
 		opRecord := types.OperationRecord{
 			ResolvedOp: editor.ResolvedOperation{},
 			Fact:       convertFactToCoreFact(record.Fact),
-			Inverse:    convertFactToCoreFact(record.Inverse),
 		}
-		transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact, opRecord.Inverse)
+		transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact)
 	}
 
 	// For Vim, we just send the count + key
