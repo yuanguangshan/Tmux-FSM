@@ -12,12 +12,10 @@ import (
 	"syscall"
 	"time"
 
-	"tmux-fsm/decide"
 	"tmux-fsm/editor"
 	"tmux-fsm/fsm"
 	"tmux-fsm/intent"
 	"tmux-fsm/kernel"
-	"tmux-fsm/semantic"
 	"tmux-fsm/types"
 	"tmux-fsm/weaver/core"
 	"tmux-fsm/weaver/manager"
