@@ -206,6 +206,7 @@ var GlobalCursorEngine *CursorEngine
 
 // ApplyResolvedOperation 应用解析后的操作
 // 这是 . repeat 的核心执行函数
+// 注意：此函数只执行预定义的操作，不做任何语义判断
 func ApplyResolvedOperation(op ResolvedOperation) error {
 	switch op.Kind {
 	case OpInsert:
@@ -230,8 +231,8 @@ func applyInsert(op ResolvedOperation) error {
 		return errors.New("buffer does not support InsertAt")
 	}
 
-	if op.Range != nil {
-		// 如果有范围，先删除范围内的内容
+	// 如果需要先删除范围内容（例如替换操作）
+	if op.DeleteBeforeInsert && op.Range != nil {
 		err := deleteRange(op.Range.Start, op.Range.End)
 		if err != nil {
 			return err
@@ -262,14 +263,10 @@ func applyDelete(op ResolvedOperation) error {
 
 // applyMove 执行移动操作
 func applyMove(op ResolvedOperation) error {
-	if op.Range == nil {
-		return errors.New("move operation requires a range")
-	}
-
 	if GlobalCursorEngine != nil {
-		// 更新光标位置到范围的结束位置
-		GlobalCursorEngine.Cursor.Row = op.Range.End.Row
-		GlobalCursorEngine.Cursor.Col = op.Range.End.Col
+		// 更新光标位置到指定位置
+		GlobalCursorEngine.Cursor.Row = op.Anchor.Row
+		GlobalCursorEngine.Cursor.Col = op.Anchor.Col
 	}
 
 	return nil

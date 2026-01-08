@@ -96,6 +96,7 @@ type TextRange struct {
 
 // ResolvedOperation 表示解析后的操作
 // 这是用于 . repeat 和 undo 的核心数据结构
+// 所有语义解析应在 resolve 阶段完成，replay 阶段只执行预定义的操作
 type ResolvedOperation struct {
 	Kind ResolvedOperationKind
 
@@ -113,6 +114,9 @@ type ResolvedOperation struct {
 
 	// Delete 时记录被删除的文本，用于 undo
 	DeletedText string
+
+	// 是否需要先删除范围内容（用于替换操作）
+	DeleteBeforeInsert bool
 }
 
 // Resolver 负责解析意图到具体操作
@@ -330,8 +334,13 @@ func ResolveDelete(cursor Cursor, motion Motion, buffer Buffer) (ResolvedOperati
 	// 获取被删除的文本
 	deletedText := ""
 	if buffer != nil {
-		// 这里需要一个获取范围文本的方法
-		// 简化实现，暂时返回空字符串
+		// 尝试获取范围内的文本
+		if sb, ok := buffer.(*SimpleBuffer); ok {
+			text, err := sb.GetTextInRange(start, end)
+			if err == nil {
+				deletedText = text
+			}
+		}
 	}
 
 	// 创建删除操作
@@ -378,6 +387,50 @@ func ResolveInsert(cursor Cursor, text string) (ResolvedOperation, ResolvedOpera
 	}
 
 	return insertOp, deleteOp
+}
+
+// ResolveChange 将变更意图转换为 ResolvedOperation
+// 变更是先删除指定范围的内容，然后在原位置插入新内容
+func ResolveChange(cursor Cursor, rangeToDelete TextRange, newText string, buffer Buffer) (ResolvedOperation, ResolvedOperation, error) {
+	// 获取被删除的文本
+	deletedText := ""
+	if buffer != nil {
+		if sb, ok := buffer.(*SimpleBuffer); ok {
+			text, err := sb.GetTextInRange(rangeToDelete.Start, rangeToDelete.End)
+			if err == nil {
+				deletedText = text
+			}
+		}
+	}
+
+	// 创建变更操作（删除后插入）
+	changeOp := ResolvedOperation{
+		Kind:               OpInsert, // Change 本质上是替换，我们用带删除标记的插入表示
+		BufferID:          "",       // 实际应用中应设置适当的 BufferID
+		WindowID:          "",       // 实际应用中应设置适当的 WindowID
+		Anchor:            rangeToDelete.Start, // 插入位置是删除范围的起点
+		Text:              newText,
+		DeleteBeforeInsert: true,     // 标记需要先删除范围内容
+		Range:             &rangeToDelete, // 要删除的范围
+		DeletedText:       deletedText, // 被删除的文本内容
+	}
+
+	// 创建对应的反向操作（撤销变更：删除新插入的文本，恢复原来的内容）
+	undoOp := ResolvedOperation{
+		Kind:               OpInsert,
+		BufferID:          changeOp.BufferID,
+		WindowID:          changeOp.WindowID,
+		Anchor:            rangeToDelete.Start,
+		Text:              deletedText, // 恢复原来的文本
+		DeleteBeforeInsert: true,       // 标记需要先删除新插入的内容
+		Range:             &TextRange{
+			Start: rangeToDelete.Start,
+			End:   Cursor{Row: rangeToDelete.Start.Row, Col: rangeToDelete.Start.Col + len(newText)},
+		},
+		DeletedText: newText, // 新插入的文本（现在要被删除）
+	}
+
+	return changeOp, undoOp, nil
 }
 
 // TextObjectKind 定义文本对象类型
