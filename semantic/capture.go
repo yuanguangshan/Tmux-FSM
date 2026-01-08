@@ -1,12 +1,5 @@
 package semantic
 
-import (
-	"os/exec"
-	"strings"
-	"time"
-	"tmux-fsm/weaver/core"
-)
-
 // Anchor 描述文本位置的锚点
 type Anchor struct {
 	PaneID string
@@ -131,66 +124,30 @@ func (f *MoveFact) Inverse() Fact {
 	}
 }
 
-// CaptureCursor 捕获当前位置
-func CaptureCursor(paneID string) Anchor {
-	// 获取当前光标位置
-	out, _ := exec.Command("tmux", "display-message", "-p", "-t", paneID, "#{pane_cursor_y},#{pane_cursor_x}").Output()
-	var row, col int
-	n, _ := strings.Sscanf(strings.TrimSpace(string(out)), "%d,%d", &row, &col)
-	if n != 2 {
-		row, col = 0, 0
-	}
-
-	// 获取当前行内容并计算哈希
-	lineOut, _ := exec.Command("tmux", "capture-pane", "-p", "-t", paneID, "-J", "-S", "0", "-E", "0").Output()
-	hash := core.HashLine(strings.TrimSpace(string(lineOut)))
-
-	return Anchor{
-		PaneID: paneID,
-		Line:   row,
-		Col:    col,
-		Hash:   hash,
-	}
+// CaptureAnchor 纯语义锚点捕获（不产生副作用）
+func CaptureAnchor(a Anchor) Anchor {
+	return a
 }
 
-// CaptureRange 捕获一个范围
-func CaptureRange(anchor Anchor, motion Motion) Range {
-	// 根据动作类型计算范围
+// CaptureRange 捕获一个范围（纯语义，不访问外部状态）
+func CaptureRange(anchor Anchor, motion Motion, text string) Range {
 	start := anchor
-	var end Anchor
+	end := anchor
 
 	switch motion.Kind {
 	case "word_forward":
 		// 模拟单词前进的范围计算
-		end = Anchor{
-			PaneID: anchor.PaneID,
-			Line:   anchor.Line,
-			Col:    anchor.Col + 5, // 模拟前进到下一个单词
-			Hash:   anchor.Hash,
-		}
+		end.Col += 5 // 模拟前进到下一个单词
 	case "line":
 		// 整行范围
-		end = Anchor{
-			PaneID: anchor.PaneID,
-			Line:   anchor.Line,
-			Col:    999, // 模拟行尾
-			Hash:   anchor.Hash,
-		}
-	default:
-		end = anchor
+		end.Col = 1 << 30 // 语义行尾
 	}
 
 	return Range{
 		Start: start,
 		End:   end,
-		Text:  getTextInRange(anchor.PaneID, start, end),
+		Text:  text, // 由上层提供的已知文本
 	}
-}
-
-// getTextInRange 获取指定范围的文本
-func getTextInRange(paneID string, start, end Anchor) string {
-	// 模拟获取范围内的文本
-	return "sample text"
 }
 
 // CaptureDelete 捕获删除操作

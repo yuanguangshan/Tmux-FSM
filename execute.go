@@ -148,6 +148,8 @@ func executeFact(f Fact) error {
 
 // buildActionTransactions 将动作转换为事务列表
 func buildActionTransactions(action string, state *FSMState, targetPane string, clientName string) []Transaction {
+	// 使用新的语义层和决策层
+	// 这里我们先创建语义事实，然后通过决策层转换为事务
 	if action == "" {
 		return nil
 	}
