@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-
-	"tmux-fsm/verifier"
 )
 
 func main() {
@@ -21,7 +19,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	data, err := os.ReadFile(path)
+	_, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Println("read error:", err)
 		os.Exit(1)

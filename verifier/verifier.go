@@ -184,10 +184,10 @@ func (v *Verifier) checkPolicy(f Fact, state replay.TextState) bool {
 }
 
 // applyFact 应用事实
-func (v *Verifier) applyFact(state replay.TextState, event crdt.SemanticEvent) replay.TextState {
+func (v *Verifier) applyFact(state replay.TextState, payload CanonicalSemanticEvent) replay.TextState {
 	// 使用 replay 包来应用事实
 	newState := state
-	replay.ApplyFact(&newState, event.Fact)
+	replay.ApplyFact(&newState, payload.Fact)
 	return newState
 }
 

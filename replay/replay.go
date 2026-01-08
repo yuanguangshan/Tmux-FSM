@@ -3,7 +3,6 @@ package replay
 import (
 	"tmux-fsm/crdt"
 	"tmux-fsm/semantic"
-	"tmux-fsm/decide"
 )
 
 // TextState 文本状态
