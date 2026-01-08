@@ -2,14 +2,8 @@ package editor
 
 import (
 	"errors"
+	"fmt"
 )
-
-// Buffer 接口定义
-type Buffer interface {
-	LineCount() int
-	LineLength(row int) int
-	RuneAt(row, col int) rune
-}
 
 // SimpleBuffer 简单的缓冲区实现
 type SimpleBuffer struct {
@@ -17,18 +11,19 @@ type SimpleBuffer struct {
 }
 
 // NewSimpleBuffer 创建新的简单缓冲区
-func NewSimpleBuffer() *SimpleBuffer {
+func NewSimpleBuffer(initialText []string) *SimpleBuffer {
+	if len(initialText) == 0 {
+		initialText = []string{""}
+	}
 	return &SimpleBuffer{
-		lines: []string{""}, // 默认一行空字符串
+		lines: initialText,
 	}
 }
 
-// LineCount 返回行数
 func (sb *SimpleBuffer) LineCount() int {
 	return len(sb.lines)
 }
 
-// LineLength 返回指定行的长度
 func (sb *SimpleBuffer) LineLength(row int) int {
 	if row < 0 || row >= len(sb.lines) {
 		return 0
@@ -36,7 +31,13 @@ func (sb *SimpleBuffer) LineLength(row int) int {
 	return len(sb.lines[row])
 }
 
-// RuneAt 返回指定位置的字符
+func (sb *SimpleBuffer) Line(row int) string {
+	if row < 0 || row >= len(sb.lines) {
+		return ""
+	}
+	return sb.lines[row]
+}
+
 func (sb *SimpleBuffer) RuneAt(row, col int) rune {
 	if row < 0 || row >= len(sb.lines) {
 		return 0
@@ -48,7 +49,6 @@ func (sb *SimpleBuffer) RuneAt(row, col int) rune {
 	return rune(line[col])
 }
 
-// InsertAt 在指定位置插入文本
 func (sb *SimpleBuffer) InsertAt(anchor Cursor, text string) error {
 	if anchor.Row < 0 || anchor.Row >= len(sb.lines) {
 		return errors.New("invalid row")
@@ -59,134 +59,87 @@ func (sb *SimpleBuffer) InsertAt(anchor Cursor, text string) error {
 		return errors.New("invalid column")
 	}
 
-	// 在指定位置插入文本
 	newLine := line[:anchor.Col] + text + line[anchor.Col:]
 	sb.lines[anchor.Row] = newLine
 
 	return nil
 }
 
-// DeleteRange 删除指定范围的文本
-func (sb *SimpleBuffer) DeleteRange(start, end Cursor) error {
-	if start.Row < 0 || start.Row >= len(sb.lines) || end.Row < 0 || end.Row >= len(sb.lines) {
-		return errors.New("invalid row")
-	}
-
-	if start.Row == end.Row {
-		// 同一行删除
-		if start.Col < 0 || end.Col > len(sb.lines[start.Row]) || start.Col >= end.Col {
-			return errors.New("invalid column range")
-		}
-
-		line := sb.lines[start.Row]
-		newLine := line[:start.Col] + line[end.Col:]
-		sb.lines[start.Row] = newLine
-	} else if start.Row < end.Row {
-		// 跨行删除
-		// 1. 删除结束行的开始部分
-		endLine := sb.lines[end.Row]
-		remainder := endLine[end.Col:]
-
-		// 2. 删除起始行的结束部分
-		startLine := sb.lines[start.Row]
-		prefix := startLine[:start.Col]
-
-		// 3. 合并前缀和后缀
-		newLine := prefix + remainder
-
-		// 4. 删除中间的整行
-		newLines := make([]string, 0, len(sb.lines))
-		newLines = append(newLines, sb.lines[:start.Row]...)
-		newLines = append(newLines, newLine)
-		newLines = append(newLines, sb.lines[end.Row+1:]...)
-
-		sb.lines = newLines
-	} else {
-		return errors.New("end position is before start position")
-	}
-
-	return nil
-}
-
-// GetTextInRange 获取指定范围的文本
-func (sb *SimpleBuffer) GetTextInRange(start, end Cursor) (string, error) {
+func (sb *SimpleBuffer) DeleteRange(start, end Cursor) (string, error) {
 	if start.Row < 0 || start.Row >= len(sb.lines) || end.Row < 0 || end.Row >= len(sb.lines) {
 		return "", errors.New("invalid row")
 	}
 
+	// 确保 start <= end
+	if end.Row < start.Row || (start.Row == end.Row && end.Col < start.Col) {
+		start, end = end, start
+	}
+
+	var deletedText string
 	if start.Row == end.Row {
-		// 同一行
-		if start.Col < 0 || end.Col > len(sb.lines[start.Row]) || start.Col >= end.Col {
+		line := sb.lines[start.Row]
+		if start.Col < 0 || end.Col > len(line) {
 			return "", errors.New("invalid column range")
 		}
-
-		return sb.lines[start.Row][start.Col:end.Col], nil
-	} else if start.Row < end.Row {
-		// 跨行
-		result := sb.lines[start.Row][start.Col:] // 从起始位置到行尾
-
-		// 添加中间的整行
-		for i := start.Row + 1; i < end.Row; i++ {
-			result += sb.lines[i] + "\n" // 假设换行符
-		}
-
-		// 添加结束行的开始部分
-		result += sb.lines[end.Row][:end.Col]
-
-		return result, nil
+		deletedText = line[start.Col:end.Col]
+		sb.lines[start.Row] = line[:start.Col] + line[end.Col:]
 	} else {
-		return "", errors.New("end position is before start position")
+		// 跨行删除
+		firstLine := sb.lines[start.Row]
+		lastLine := sb.lines[end.Row]
+
+		deletedText = firstLine[start.Col:] + "\n"
+		for i := start.Row + 1; i < end.Row; i++ {
+			deletedText += sb.lines[i] + "\n"
+		}
+		deletedText += lastLine[:end.Col]
+
+		newLine := firstLine[:start.Col] + lastLine[end.Col:]
+
+		newLines := make([]string, 0, len(sb.lines)-(end.Row-start.Row))
+		newLines = append(newLines, sb.lines[:start.Row]...)
+		newLines = append(newLines, newLine)
+		newLines = append(newLines, sb.lines[end.Row+1:]...)
+		sb.lines = newLines
 	}
+
+	return deletedText, nil
 }
 
-// Motion 定义动作
-type Motion struct {
-	Kind  MotionKind
-	Count int
-}
-
-// MotionResult 动作结果
-type MotionResult struct {
-	DeltaRow int
-	DeltaCol int
-}
-
-// CursorEngine 光标引擎
-type CursorEngine struct {
-	Cursor *Cursor
-	Buffer Buffer
-}
-
-// NewCursorEngine 创建新的光标引擎
-func NewCursorEngine(buffer Buffer) *CursorEngine {
-	initialCursor := &Cursor{Row: 0, Col: 0}
-	return &CursorEngine{
-		Cursor: initialCursor,
-		Buffer: buffer,
+// ApplyResolvedOperation 应用解析后的操作
+// 严格按照预定义的操作类型执行，无任何语义判断
+func ApplyResolvedOperation(ctx *ExecutionContext, op ResolvedOperation) error {
+	buf := ctx.Buffers.Get(op.BufferID)
+	if buf == nil {
+		return fmt.Errorf("buffer %s not found", op.BufferID)
 	}
-}
 
-// ComputeMotion 计算动作结果（不实际移动光标）
-func (ce *CursorEngine) ComputeMotion(motion *Motion) (MotionResult, error) {
-	// 这里实现动作计算逻辑
-	// 为了简化，我们只处理一些基本动作
-	switch motion.Kind {
-	case MotionCharForward:
-		return MotionResult{DeltaRow: 0, DeltaCol: motion.Count}, nil
-	case MotionCharBackward:
-		return MotionResult{DeltaRow: 0, DeltaCol: -motion.Count}, nil
-	case MotionWordForward:
-		// 简化实现：假设每个单词之间有一个空格
-		return MotionResult{DeltaRow: 0, DeltaCol: motion.Count * 5}, nil // 每个单词平均5个字符
-	case MotionWordBackward:
-		return MotionResult{DeltaRow: 0, DeltaCol: -motion.Count * 5}, nil
-	case MotionLineStart:
-		return MotionResult{DeltaRow: 0, DeltaCol: -ce.Cursor.Col}, nil
-	case MotionLineEnd:
-		lineLength := ce.Buffer.LineLength(ce.Cursor.Row)
-		return MotionResult{DeltaRow: 0, DeltaCol: lineLength - ce.Cursor.Col}, nil
+	switch op.Kind {
+	case OpInsert:
+		if op.DeleteBeforeInsert && op.Range != nil {
+			_, err := buf.DeleteRange(op.Range.Start, op.Range.End)
+			if err != nil {
+				return err
+			}
+		}
+		return buf.InsertAt(op.Anchor, op.Text)
+
+	case OpDelete:
+		if op.Range == nil {
+			return errors.New("delete operation requires a range")
+		}
+		_, err := buf.DeleteRange(op.Range.Start, op.Range.End)
+		return err
+
+	case OpMove:
+		win := ctx.Windows.Get(op.WindowID)
+		if win != nil {
+			win.Cursor = op.Anchor
+		}
+		return nil
+
 	default:
-		return MotionResult{}, errors.New("unsupported motion")
+		return errors.New("unsupported operation kind")
 	}
 }
 
@@ -199,106 +152,4 @@ func clamp(value, min, max int) int {
 		return max
 	}
 	return value
-}
-
-// GlobalCursorEngine 全局光标引擎，用于操作缓冲区
-var GlobalCursorEngine *CursorEngine
-
-// ApplyResolvedOperation 应用解析后的操作
-// 这是 . repeat 的核心执行函数
-// 严格按照预定义的操作类型执行，无任何语义判断
-func ApplyResolvedOperation(op ResolvedOperation) error {
-	// 所有操作类型和参数都在 resolve 阶段完全确定
-	// replay 阶段只执行预定义的动作
-	switch op.Kind {
-	case OpInsert:
-		return executeInsert(op.Anchor, op.Text, op.Range, op.DeleteBeforeInsert)
-	case OpDelete:
-		return executeDelete(op.Range)
-	case OpMove:
-		return executeMove(op.Anchor)
-	default:
-		return errors.New("unsupported operation kind")
-	}
-}
-
-// executeInsert 执行插入操作
-func executeInsert(anchor Cursor, text string, rangeToDelete *TextRange, deleteBeforeInsert bool) error {
-	if GlobalCursorEngine == nil || GlobalCursorEngine.Buffer == nil {
-		return errors.New("buffer not initialized")
-	}
-
-	buffer, ok := GlobalCursorEngine.Buffer.(interface{ InsertAt(Cursor, string) error })
-	if !ok {
-		return errors.New("buffer does not support InsertAt")
-	}
-
-	// 如果需要先删除范围内容（例如替换操作）
-	if deleteBeforeInsert && rangeToDelete != nil {
-		err := deleteRange(rangeToDelete.Start, rangeToDelete.End)
-		if err != nil {
-			return err
-		}
-	}
-
-	// 在指定位置插入文本
-	return buffer.InsertAt(anchor, text)
-}
-
-// executeDelete 执行删除操作
-func executeDelete(rangeToDelete *TextRange) error {
-	if rangeToDelete == nil {
-		return errors.New("delete operation requires a range")
-	}
-
-	if GlobalCursorEngine == nil || GlobalCursorEngine.Buffer == nil {
-		return errors.New("buffer not initialized")
-	}
-
-	buffer, ok := GlobalCursorEngine.Buffer.(interface{ DeleteRange(Cursor, Cursor) error })
-	if !ok {
-		return errors.New("buffer does not support DeleteRange")
-	}
-
-	return buffer.DeleteRange(rangeToDelete.Start, rangeToDelete.End)
-}
-
-// executeMove 执行移动操作
-func executeMove(anchor Cursor) error {
-	if GlobalCursorEngine != nil {
-		// 更新光标位置到指定位置
-		GlobalCursorEngine.Cursor.Row = anchor.Row
-		GlobalCursorEngine.Cursor.Col = anchor.Col
-	}
-
-	return nil
-}
-
-
-// insertAt 在指定位置插入文本
-func insertAt(anchor Cursor, text string) error {
-	if GlobalCursorEngine == nil || GlobalCursorEngine.Buffer == nil {
-		return errors.New("buffer not initialized")
-	}
-
-	buffer, ok := GlobalCursorEngine.Buffer.(interface{ InsertAt(Cursor, string) error })
-	if !ok {
-		return errors.New("buffer does not support InsertAt")
-	}
-
-	return buffer.InsertAt(anchor, text)
-}
-
-// deleteRange 删除指定范围的文本
-func deleteRange(start, end Cursor) error {
-	if GlobalCursorEngine == nil || GlobalCursorEngine.Buffer == nil {
-		return errors.New("buffer not initialized")
-	}
-
-	buffer, ok := GlobalCursorEngine.Buffer.(interface{ DeleteRange(Cursor, Cursor) error })
-	if !ok {
-		return errors.New("buffer does not support DeleteRange")
-	}
-
-	return buffer.DeleteRange(start, end)
 }
