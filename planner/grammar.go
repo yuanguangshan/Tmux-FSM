@@ -517,23 +517,19 @@ func motionTypeToString(info *MotionPendingInfo) string {
 		if info.FindDir == intentPkg.FindForward {
 			if info.FindTill {
 				return "t"
-			} else {
-				return "f"
 			}
+			return "f"
 		}
-		// MotionBigFind 用 MotionFind + FindBackward 表示
-		// MotionG 用 MotionGoto 表示
-		if info.Kind == intentPkg.MotionFind && info.FindDir == intentPkg.FindBackward {
+		if info.FindDir == intentPkg.FindBackward {
 			if info.FindTill {
 				return "T"
-			} else {
-				return "F"
 			}
+			return "F"
 		}
-		if info.Kind == intentPkg.MotionGoto {
-			return "g"
-		}
-		}
+	case intentPkg.MotionGoto:
+		return "g"
+	}
+
 	return ""
 }
 

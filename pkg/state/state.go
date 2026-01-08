@@ -11,6 +11,7 @@ import (
 )
 
 // Transaction 事务结构（简化版）
+// TODO: Phase-3 undo/redo transaction log
 type Transaction struct {
 	ID               int                    `json:"id"`
 	Records          []interface{}          `json:"records"`
