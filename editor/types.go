@@ -78,8 +78,8 @@ type ResolvedOperationKind int
 
 const (
 	OpInsert ResolvedOperationKind = iota
-	OpDeleteResolved
-	OpMoveResolved
+	OpDeleteResolvedOp = OpInsert + 1
+	OpMoveResolvedOp = OpInsert + 2
 )
 
 // BufferID 代表缓冲区ID
@@ -222,7 +222,7 @@ func (r *Resolver) resolveOperator(intent *Intent, start Cursor) (*ResolvedOpera
 	var opKind OperatorKind = OpNone
 	switch intent.Kind {
 	case IntentDelete:
-		opKind = OpDelete
+		opKind = OpDeleteResolved
 	case IntentChange:
 		opKind = OpChange
 	case IntentYank:
@@ -280,7 +280,7 @@ func resolveRange(op OperatorKind, from Cursor, to Cursor, motion MotionKind) *M
 	switch motion {
 	case MotionWordForward:
 		switch op {
-		case OpDelete, OpYank:
+		case OpDeleteResolved, OpYank:
 			return &MotionRange{Start: from, End: to}
 		case OpChange:
 			// Vim: cw 不包含 word 后的空白
@@ -345,7 +345,7 @@ func ResolveDelete(cursor Cursor, motion Motion, buffer Buffer) (ResolvedOperati
 
 	// 创建删除操作
 	deleteOp := ResolvedOperation{
-		Kind:        OpDelete,
+		Kind:        OpDeleteResolved,
 		BufferID:    "", // 实际应用中应设置适当的 BufferID
 		WindowID:    "", // 实际应用中应设置适当的 WindowID
 		Anchor:      start,
@@ -378,7 +378,7 @@ func ResolveInsert(cursor Cursor, text string) (ResolvedOperation, ResolvedOpera
 
 	// 创建对应的删除操作（作为反向操作，用于 undo）
 	deleteOp := ResolvedOperation{
-		Kind:        OpDelete,
+		Kind:        OpDeleteResolved,
 		BufferID:    insertOp.BufferID,
 		WindowID:    insertOp.WindowID,
 		Anchor:      cursor,

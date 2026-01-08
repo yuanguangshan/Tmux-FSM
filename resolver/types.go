@@ -39,7 +39,3 @@ type UndoTree struct {
 	// 实际实现需要更复杂的撤销机制
 }
 
-// MacroManager 宏管理器（占位）
-type MacroManager struct {
-	recording interface{} // 实际实现需要宏记录器
-}

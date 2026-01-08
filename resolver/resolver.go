@@ -152,6 +152,11 @@ func (r *Resolver) ResolveWithContext(i *intent.Intent, ctx ExecContext) error {
 		// 忽略其他类型
 	}
 
+	// 如果不是来自宏，且正在录制宏，则记录意图
+	if !ctx.FromMacro && r.macroManager != nil && r.macroManager.recording != nil {
+		r.recordIntentForMacro(i)
+	}
+
 	// 如果不是撤销或重复操作，且不是来自重复操作，则记录操作
 	if err == nil && i.Kind != intent.IntentUndo && i.Kind != intent.IntentRepeat && !ctx.FromRepeat {
 		r.recordAction(i)
@@ -230,4 +235,11 @@ func (r *Resolver) resolveMacro(i *intent.Intent) error {
 	}
 
 	return nil
+}
+
+// recordIntentForMacro 在执行意图时，如果正在录制宏，则添加到宏中
+func (r *Resolver) recordIntentForMacro(i *intent.Intent) {
+	if r.macroManager != nil && r.macroManager.recording != nil {
+		r.macroManager.AddIntentToRecording(i)
+	}
 }
