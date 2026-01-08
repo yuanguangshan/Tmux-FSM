@@ -1,0 +1,16 @@
+{
+  "facts": [
+    {
+      "id": "H1_prime",
+      "actor": "alice",
+      "parents": [],
+      "timestamp": 1,
+      "policy_ref": "P0",
+      "payload": {
+        "actor": "alice",
+        "causal_parents": [],
+        "fact": { "type": "insert", "pos": 0, "text": "AB" }
+      }
+    }
+  ]
+}

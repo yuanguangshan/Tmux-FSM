@@ -14,13 +14,20 @@ import (
 // Hash 用于表示哈希值
 type Hash string
 
+// CanonicalSemanticEvent 用于验证的标准化语义事件
+type CanonicalSemanticEvent struct {
+	Actor         crdt.ActorID      `json:"actor"`
+	CausalParents []crdt.EventID    `json:"causal_parents"`
+	Fact          semantic.BaseFact `json:"fact"`
+}
+
 // Fact 表示一个经过验证的事件事实
 type Fact struct {
 	ID        Hash                    `json:"id"`
 	Actor     crdt.ActorID           `json:"actor"`
 	Parents   []Hash                 `json:"parents"`
 	Timestamp int64                  `json:"timestamp"`
-	Payload   crdt.SemanticEvent     `json:"payload"`
+	Payload   CanonicalSemanticEvent `json:"payload"`
 	PolicyRef Hash                   `json:"policy_ref"`
 }
 
@@ -187,11 +194,11 @@ func (v *Verifier) applyFact(state replay.TextState, event crdt.SemanticEvent) r
 // calculateFactHash 计算事实的哈希
 func calculateFactHash(f Fact) Hash {
 	data, _ := json.Marshal(struct {
-		Actor     crdt.ActorID       `json:"actor"`
-		Parents   []Hash             `json:"parents"`
-		Timestamp int64              `json:"timestamp"`
-		Payload   crdt.SemanticEvent `json:"payload"`
-		PolicyRef Hash               `json:"policy_ref"`
+		Actor     crdt.ActorID           `json:"actor"`
+		Parents   []Hash                 `json:"parents"`
+		Timestamp int64                  `json:"timestamp"`
+		Payload   CanonicalSemanticEvent `json:"payload"`
+		PolicyRef Hash                   `json:"policy_ref"`
 	}{
 		Actor:     f.Actor,
 		Parents:   f.Parents,
@@ -199,7 +206,7 @@ func calculateFactHash(f Fact) Hash {
 		Payload:   f.Payload,
 		PolicyRef: f.PolicyRef,
 	})
-	
+
 	hash := sha256.Sum256(data)
 	return Hash(hex.EncodeToString(hash[:]))
 }
