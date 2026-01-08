@@ -12,6 +12,13 @@ type EventID string
 // ActorID 参与者ID类型
 type ActorID string
 
+// PositionID CRDT 位置ID
+type PositionID struct {
+	Path  []uint32 `json:"path"`
+	Actor ActorID    `json:"actor"`
+	Epoch int      `json:"epoch"`  // 每次分叉/reset +1
+}
+
 // SemanticEvent 修正后的语义事件结构
 type SemanticEvent struct {
 	// 全局唯一、幂等基础
@@ -33,6 +40,77 @@ type SemanticEvent struct {
 
 	// 不可变语义
 	Fact semantic.BaseFact `json:"fact"`
+}
+
+// ComparePos 比较两个位置
+func ComparePos(a, b PositionID) int {
+	min := len(a.Path)
+	if len(b.Path) < min {
+		min = len(b.Path)
+	}
+
+	for i := 0; i < min; i++ {
+		if a.Path[i] < b.Path[i] {
+			return -1
+		}
+		if a.Path[i] > b.Path[i] {
+			return 1
+		}
+	}
+	if len(a.Path) != len(b.Path) {
+		if len(a.Path) < len(b.Path) {
+			return -1
+		}
+		return 1
+	}
+	if a.Actor < b.Actor {
+		return -1
+	}
+	if a.Actor > b.Actor {
+		return 1
+	}
+	if a.Epoch < b.Epoch {
+		return -1
+	}
+	if a.Epoch > b.Epoch {
+		return 1
+	}
+	return 0
+}
+
+// AllocateBetween 在两个位置之间分配新位置
+func AllocateBetween(a, b *PositionID, actor ActorID) PositionID {
+	const Base = uint32(1 << 31)
+
+	var path []uint32
+	i := 0
+
+	for {
+		var left uint32 = 0
+		var right uint32 = Base
+
+		if a != nil && i < len(a.Path) {
+			left = a.Path[i]
+		}
+		if b != nil && i < len(b.Path) {
+			right = b.Path[i]
+		}
+
+		if right-left > 1 {
+			mid := left + (right-left)/2
+			path = append(path, mid)
+			break
+		}
+
+		path = append(path, left)
+		i++
+	}
+
+	return PositionID{
+		Path:  path,
+		Actor: actor,
+		Epoch: 0, // 可能需要根据实际情况设置
+	}
 }
 
 // EventStore 事件存储

@@ -20,6 +20,12 @@ func (s TextState) Clone() TextState {
 	}
 }
 
+// TextNode 表示文本中的一个节点
+type TextNode struct {
+	Pos  interface{} // 这里应该使用 PositionID，但由于循环依赖问题，暂时使用 interface{}
+	Rune rune
+}
+
 // ApplyFact 应用语义事实
 func ApplyFact(state *TextState, fact semantic.BaseFact) {
 	// 这里需要根据实际的 Fact 类型进行处理
