@@ -27,7 +27,7 @@ type Macro struct {
 
 // MacroManager 宏管理器
 type MacroManager struct {
-	macros   map[string]*Macro
+	macros    map[string]*Macro
 	recording *Macro
 }
 
@@ -95,7 +95,7 @@ func (mm *MacroManager) PlayMacro(name string) []*intent.Intent {
 // New 创建新的解析器
 // NOTE: Resolver currently runs in semantic-only mode.
 // EngineAdapter will be injected in Phase-2.
-func New(_ EngineAdapter) *Resolver {
+func New(adapter EngineAdapter) *Resolver {
 	return &Resolver{
 		engine:       adapter,
 		macroManager: NewMacroManager(),

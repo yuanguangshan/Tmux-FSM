@@ -37,6 +37,13 @@ type TextRange struct {
 	End   Cursor
 }
 
+// MotionRange 定义 motion 操作的范围
+// 用于 text object 和 motion 计算
+type MotionRange struct {
+	Start Cursor
+	End   Cursor
+}
+
 // ResolvedOperationKind 定义解析后操作的类型
 type ResolvedOperationKind int
 

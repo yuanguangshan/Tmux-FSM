@@ -30,10 +30,10 @@ var kernelInstance *kernel.Kernel
 // TransactionManager 事务管理器
 // 负责管理编辑操作的历史记录，遵循Vim语义规则
 type TransactionManager struct {
-	current           *types.Transaction
-	nextID            types.TransactionID
-	history           []*types.Transaction  // 存储已提交的事务，用于 . repeat 和 undo
-	lastCommittedTx   *types.Transaction   // 最近提交的事务，用于 . repeat
+	current         *types.Transaction
+	nextID          types.TransactionID
+	history         []*types.Transaction // 存储已提交的事务，用于 . repeat 和 undo
+	lastCommittedTx *types.Transaction   // 最近提交的事务，用于 . repeat
 }
 
 // BeginTransaction 开始一个新的事务
@@ -108,7 +108,6 @@ func (tm *TransactionManager) LastCommittedTransaction() *types.Transaction {
 	return tm.lastCommittedTx
 }
 
-
 func main() {
 	serverMode := flag.Bool("server", false, "run as server")
 	socketPath := flag.String("socket", "/tmp/tmux-fsm.sock", "socket path")
@@ -134,10 +133,10 @@ func main() {
 
 	// 初始化新的编辑内核组件
 	cursorEngine := editor.NewCursorEngine(editor.NewSimpleBuffer()) // 创建光标引擎
-	newResolver := editor.NewResolver(cursorEngine)                  // 创建新的解析器
+	_ = cursorEngine                                                 // 暂时未使用
 
-	// 创建基于新解析器的执行器
-	resolverExecutor := kernel.NewResolverExecutor(newResolver)
+	// 创建基于新解析器的执行器（过渡性实现）
+	resolverExecutor := kernel.NewResolverExecutor()
 
 	// Initialize kernel with FSM engine and new resolver executor
 	kernelInstance = kernel.NewKernel(fsm.GetDefaultEngine(), resolverExecutor)
@@ -530,14 +529,14 @@ func (h *History) Redo(childIndex int) *types.Transaction {
 
 // Macro 宏定义，包含一系列事务
 type Macro struct {
-	Name       string
+	Name         string
 	Transactions []*types.Transaction
 }
 
 // MacroManager 宏管理器
 type MacroManager struct {
-	macros map[string]*Macro
-	activeMacro *Macro  // 当前正在录制的宏
+	macros      map[string]*Macro
+	activeMacro *Macro // 当前正在录制的宏
 }
 
 // NewMacroManager 创建新的宏管理器
@@ -550,7 +549,7 @@ func NewMacroManager() *MacroManager {
 // StartRecording 开始录制宏
 func (mm *MacroManager) StartRecording(name string) {
 	mm.activeMacro = &Macro{
-		Name: name,
+		Name:         name,
 		Transactions: make([]*types.Transaction, 0),
 	}
 }
