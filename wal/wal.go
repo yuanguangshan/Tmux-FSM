@@ -10,11 +10,12 @@ import (
 
 // SemanticEvent 语义事件
 type SemanticEvent struct {
-	ID       string             `json:"id"`
-	ParentID string             `json:"parent_id"`
-	Time     time.Time          `json:"time"`
-	Actor    string             `json:"actor"`
-	Fact     semantic.BaseFact  `json:"fact"`
+	ID            string             `json:"id"`
+	CausalParents []string           `json:"causal_parents"`
+	LocalParent   string             `json:"local_parent"`
+	Time          time.Time          `json:"time"`
+	Actor         string             `json:"actor"`
+	Fact          semantic.BaseFact  `json:"fact"`
 }
 
 // WAL Write-ahead Log

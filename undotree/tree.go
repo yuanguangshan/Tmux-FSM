@@ -13,7 +13,7 @@ type UndoNode struct {
 	Children []*UndoNode
 }
 
-// BuildUndoTree 构建撤销树
+// BuildUndoTree 构建撤销树（基于本地父事件）
 func BuildUndoTree(events []wal.SemanticEvent) *UndoNode {
 	nodes := make(map[string]*UndoNode)
 
@@ -24,13 +24,17 @@ func BuildUndoTree(events []wal.SemanticEvent) *UndoNode {
 
 	var root *UndoNode
 
-	// 建立父子关系
+	// 建立父子关系（使用本地父事件）
 	for _, n := range nodes {
-		if n.Event.ParentID == "" {
+		if n.Event.LocalParent == "" {
 			root = n
 			continue
 		}
-		p := nodes[n.Event.ParentID]
+		p, exists := nodes[n.Event.LocalParent]
+		if !exists {
+			// 如果本地父事件不存在，将其作为根节点
+			continue
+		}
 		n.Parent = p
 		p.Children = append(p.Children, n)
 	}
