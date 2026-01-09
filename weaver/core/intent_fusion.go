@@ -64,7 +64,6 @@
 package core
 
 import (
-	"fmt"
 	"log"
 )
 

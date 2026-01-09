@@ -134,7 +134,7 @@ func NewEventStore() *EventStore {
 func GenerateStableEventID(actor ActorID, timestamp time.Time, fact semantic.Fact) EventID {
 	// Create a stable ID based on actor, timestamp, and fact content
 	// This ensures that identical events get the same ID, maintaining consistency
-	content := fmt.Sprintf("%s_%d_%s", actor, timestamp.UnixNano(), fact.String())
+	content := fmt.Sprintf("%s_%d_%s_%d", actor, timestamp.UnixNano(), fact.Text(), fact.Kind())
 	hash := sha256.Sum256([]byte(content))
 	return EventID(fmt.Sprintf("%x", hash[:16])) // Use first 16 bytes for shorter ID
 }

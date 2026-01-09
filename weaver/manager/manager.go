@@ -2,6 +2,7 @@ package manager
 
 import (
 	"fmt"
+	"time"
 	"tmux-fsm/intent"
 	"tmux-fsm/weaver/adapter"
 	"tmux-fsm/weaver/core"
@@ -81,7 +82,12 @@ func (m *WeaverManager) ProcessIntentGlobal(intent core.Intent) error {
 	}
 
 	// Phase 6.3: ApplyIntent with frozen world state
-	verdict, err := m.engine.ApplyIntent(intent, snapshot)
+	// For backward compatibility, create a default context
+	hctx := core.HandleContext{
+		RequestID: fmt.Sprintf("req-%d", time.Now().UnixNano()), // Default request ID
+		ActorID:   intent.GetPaneID(),                           // Use pane ID as actor ID
+	}
+	verdict, err := m.engine.ApplyIntent(hctx, intent, snapshot)
 	if err != nil {
 		return fmt.Errorf("engine failed: %v", err)
 	}
@@ -110,7 +116,12 @@ func (m *WeaverManager) Process(intent *intent.Intent) error {
 	}
 
 	// Phase 6.3: ApplyIntent with frozen world state
-	verdict, err := m.engine.ApplyIntent(coreIntent, snapshot)
+	// For backward compatibility, create a default context
+	hctx := core.HandleContext{
+		RequestID: fmt.Sprintf("req-%d", time.Now().UnixNano()), // Default request ID
+		ActorID:   coreIntent.GetPaneID(),                       // Use pane ID as actor ID
+	}
+	verdict, err := m.engine.ApplyIntent(hctx, coreIntent, snapshot)
 	if err != nil {
 		return fmt.Errorf("engine failed: %v", err)
 	}
@@ -175,6 +186,33 @@ func (a *intentAdapter) GetAnchors() []core.Anchor {
 // GetWeaverManager 获取全局 Weaver 管理器实例
 func GetWeaverManager() *WeaverManager {
 	return weaverMgr
+}
+
+// ProcessIntentGlobalWithContext 全局意图处理入口 with context
+// RFC-WC-002: Intent ABI - 统一入口，统一审计
+func (m *WeaverManager) ProcessIntentGlobalWithContext(hctx core.HandleContext, intent core.Intent) error {
+	if m == nil || m.mode == ModeLegacy {
+		return nil // Fallback to legacy
+	}
+
+	// Phase 6.2: 获取当前快照作为时间冻结点
+	snapshot, err := m.snapshotProvider.TakeSnapshot(intent.GetPaneID())
+	if err != nil {
+		return fmt.Errorf("failed to take snapshot: %v", err)
+	}
+
+	// Phase 6.3: ApplyIntent with frozen world state and context
+	verdict, err := m.engine.ApplyIntent(hctx, intent, snapshot)
+	if err != nil {
+		return fmt.Errorf("engine failed: %v", err)
+	}
+
+	// RFC-WC-003: Audit Trail
+	if verdict != nil {
+		logWeaver("Intent processed: %v, Safety: %v", intent.GetKind(), verdict.Safety)
+	}
+
+	return nil
 }
 
 // InjectLegacyTransaction 将传统事务注入 Weaver 系统

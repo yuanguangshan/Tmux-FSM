@@ -86,10 +86,8 @@ type Transaction struct {
 	Skipped          bool          `json:"skipped"`
 	PostSnapshotHash string        `json:"post_snapshot_hash,omitempty"` // Phase 7: State after application
 	AllowPartial     bool          `json:"allow_partial,omitempty"`      // Phase 7: Explicit flag for fuzzy match
+	ProofHash        string        `json:"proof_hash,omitempty"`        // Anchor for proof verification
 }
-
-// TransactionID 事务 ID
-type TransactionID string
 
 // VerificationResult for verifier
 type VerificationResult struct {
@@ -196,6 +194,13 @@ const (
 	AnchorFuzzy
 	AnchorFailed
 )
+
+// HandleContext 用于传递请求上下文信息
+type HandleContext struct {
+	Ctx       interface{} // Using interface{} as context.Context might not be available here
+	RequestID string      // Unique identifier for this user request
+	ActorID   string      // User / pane / client identifier
+}
 
 // UndoEntry represents a single undo operation
 // Phase 12.0: Projection-level undo log

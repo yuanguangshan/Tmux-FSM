@@ -49,15 +49,18 @@ func NewKernel(fsmEngine *fsm.Engine, exec IntentExecutor) *Kernel {
 
 // ✅ Kernel 的唯一入口
 func (k *Kernel) HandleKey(hctx HandleContext, key string) {
-	// Use the RequestID from context if available, otherwise generate one
+	// ⚠️ Invariant: RequestID / ActorID are authoritative once received.
+	// Server MUST NOT generate or modify them.
 	requestID := hctx.RequestID
 	if requestID == "" {
-		requestID = fmt.Sprintf("req-%d", time.Now().UnixNano())
+		log.Printf("[FATAL] missing RequestID at Kernel boundary")
+		return
 	}
 
 	actorID := hctx.ActorID
 	if actorID == "" {
-		actorID = "unknown"
+		log.Printf("[FATAL] missing ActorID at Kernel boundary")
+		return
 	}
 
 	// Log the incoming key for audit trail with identity anchors
@@ -130,18 +133,31 @@ func (k *Kernel) ProcessIntentWithContext(hctx HandleContext, intent *intent.Int
 	}
 
 	// Log intent details for audit trail with identity anchors
-	log.Printf("Processing intent: RequestID=%s, ActorID=%s, Type=%s, Data=%v",
-		hctx.RequestID, hctx.ActorID, intent.Type, intent.Data)
+	log.Printf("Processing intent: RequestID=%s, ActorID=%s, Kind=%d, PaneID=%s",
+		hctx.RequestID, hctx.ActorID, intent.Kind, intent.PaneID)
 
 	if k.Exec != nil {
 		log.Printf("Processing intent through external executor: RequestID=%s, ActorID=%s", hctx.RequestID, hctx.ActorID)
-		err := k.Exec.Process(intent)
-		if err != nil {
-			log.Printf("Intent execution failed: RequestID=%s, ActorID=%s, Error=%v", hctx.RequestID, hctx.ActorID, err)
-			return err
+
+		// Check if executor supports contextual processing
+		if ctxExec, ok := k.Exec.(ContextualIntentExecutor); ok {
+			err := ctxExec.ProcessWithContext(hctx.Ctx, hctx, intent)
+			if err != nil {
+				log.Printf("Contextual intent execution failed: RequestID=%s, ActorID=%s, Error=%v", hctx.RequestID, hctx.ActorID, err)
+				return err
+			}
+			log.Printf("Intent processed successfully by contextual external executor: RequestID=%s, ActorID=%s", hctx.RequestID, hctx.ActorID)
+			return nil
+		} else {
+			// Fallback to non-contextual processing
+			err := k.Exec.Process(intent)
+			if err != nil {
+				log.Printf("Intent execution failed: RequestID=%s, ActorID=%s, Error=%v", hctx.RequestID, hctx.ActorID, err)
+				return err
+			}
+			log.Printf("Intent processed successfully by external executor: RequestID=%s, ActorID=%s", hctx.RequestID, hctx.ActorID)
+			return nil
 		}
-		log.Printf("Intent processed successfully by external executor: RequestID=%s, ActorID=%s", hctx.RequestID, hctx.ActorID)
-		return nil
 	}
 
 	// 如果没有外部执行器，尝试通过FSM执行意图

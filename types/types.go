@@ -30,4 +30,5 @@ type Transaction struct {
 	SafetyLevel      string            `json:"safety_level,omitempty"`       // exact, fuzzy
 	PreSnapshotHash  string            `json:"pre_snapshot_hash,omitempty"`  // Phase 8: World state before transaction
 	PostSnapshotHash string            `json:"post_snapshot_hash,omitempty"` // Phase 8: World state after transaction
+	ProofHash        string            `json:"proof_hash,omitempty"`        // Anchor for proof verification
 }

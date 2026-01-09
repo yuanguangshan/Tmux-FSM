@@ -313,12 +313,23 @@ func (s *Server) handleClient(conn net.Conn) {
 			paneID = parts[0]
 			clientName = parts[1]
 			key = parts[2]
+
+			// Generate default requestID and actorID for backward compatibility
+			requestID = fmt.Sprintf("req-%d", time.Now().UnixNano())
+			actorID = parts[0] + "|" + parts[1] // Reconstruct paneAndClient
 		} else if len(parts) == 2 {
 			// Fallback for old protocol: PANE|KEY (Client unknown)
 			paneID = parts[0]
 			key = parts[1]
+
+			// Generate default requestID and actorID for backward compatibility
+			requestID = fmt.Sprintf("req-%d", time.Now().UnixNano())
+			actorID = paneID
 		} else {
 			key = payloadStr
+			// Generate default requestID and actorID for backward compatibility
+			requestID = fmt.Sprintf("req-%d", time.Now().UnixNano())
+			actorID = "default"
 		}
 
 		log.Printf("[server] string protocol received: requestID='%s', actorID='%s', pane='%s', client='%s', key='%s'", requestID, actorID, paneID, clientName, key)

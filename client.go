@@ -96,8 +96,8 @@ func runClient(key, paneAndClient string) {
 		return
 	}
 
-	// Keep the original payload format for compatibility with server
-	payload := fmt.Sprintf("%s|%s", paneAndClient, key)
+	// ✅ 新权威协议: requestID|actorID|paneAndClient|key
+	payload := fmt.Sprintf("%s|%s|%s|%s", requestID, actorID, paneAndClient, key)
 	if _, err := conn.Write([]byte(payload)); err != nil {
 		log.Printf("Failed to send payload '%s': %v", payload, err)
 		return

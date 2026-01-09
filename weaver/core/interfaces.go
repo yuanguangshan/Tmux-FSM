@@ -5,7 +5,8 @@ package core
 type Engine interface {
 	// ApplyIntent 处理一个意图
 	// Phase 6.2: 接收 Time-Frozen Snapshot
-	ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, error)
+	// Phase X: 接收 HandleContext for RequestID/ActorID propagation
+	ApplyIntent(hctx HandleContext, intent Intent, snapshot Snapshot) (*Verdict, error)
 	GetHistory() History
 }
 
