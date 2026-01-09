@@ -1,75 +1,107 @@
 package undotree
 
 import (
-	"time"
-	"tmux-fsm/semantic"
+	"sort"
+
 	"tmux-fsm/wal"
 )
 
-// UndoNode 撤销树节点
+//
+// ─────────────────────────────────────────────────────────────
+//  Undo Node
+// ─────────────────────────────────────────────────────────────
+//
+
 type UndoNode struct {
-	Event    wal.SemanticEvent
+	Event    *wal.SemanticEvent
 	Parent   *UndoNode
 	Children []*UndoNode
 }
 
-// BuildUndoTree 构建撤销树（基于本地父事件）
+// IsRoot 判断是否为虚拟根
+func (n *UndoNode) IsRoot() bool {
+	return n.Event == nil
+}
+
+//
+// ─────────────────────────────────────────────────────────────
+//  Build Undo Tree
+// ─────────────────────────────────────────────────────────────
+//
+
 func BuildUndoTree(events []wal.SemanticEvent) *UndoNode {
+
+	root := &UndoNode{} // ✅ 虚拟根
 	nodes := make(map[string]*UndoNode)
 
-	// 创建所有节点
-	for _, e := range events {
-		nodes[e.ID] = &UndoNode{Event: e}
+	// 1️⃣ 创建节点
+	for i := range events {
+		e := &events[i]
+		nodes[e.ID] = &UndoNode{
+			Event: e,
+		}
 	}
 
-	var root *UndoNode
-
-	// 建立父子关系（使用本地父事件）
+	// 2️⃣ 建立父子关系（LocalParent）
 	for _, n := range nodes {
-		if n.Event.LocalParent == "" {
-			root = n
+		lp := n.Event.LocalParent
+
+		if lp == "" {
+			n.Parent = root
+			root.Children = append(root.Children, n)
 			continue
 		}
-		p, exists := nodes[n.Event.LocalParent]
-		if !exists {
-			// 如果本地父事件不存在，将其作为根节点
-			continue
+
+		if p, ok := nodes[lp]; ok {
+			n.Parent = p
+			p.Children = append(p.Children, n)
+		} else {
+			// ✅ 父缺失 → 挂到 root（WAL 截断 / 合并时常见）
+			n.Parent = root
+			root.Children = append(root.Children, n)
 		}
-		n.Parent = p
-		p.Children = append(p.Children, n)
 	}
+
+	// 3️⃣ 稳定排序（按时间 + ID）
+	sortTree(root)
 
 	return root
 }
 
-// Checkout 检出特定节点的状态
-func Checkout(node *UndoNode, initial TextState, decideFn func(semantic.Fact) []Transaction) (TextState, error) {
-	var path []wal.SemanticEvent
-	current := node
-	for current != nil {
-		path = append([]wal.SemanticEvent{current.Event}, path...) // prepend
-		current = current.Parent
-	}
+func sortTree(n *UndoNode) {
+	sort.Slice(n.Children, func(i, j int) bool {
+		ei := n.Children[i].Event
+		ej := n.Children[j].Event
 
-	state := initial
-	for _, e := range path {
-		// 将事件转换为事务并应用
-		fact := e.Fact
-		// 注意：这里需要根据实际的 Fact 类型进行转换
-		// 这里简化处理
-		_ = fact
-	}
+		if ei.Time.Equal(ej.Time) {
+			return ei.ID < ej.ID
+		}
+		return ei.Time.Before(ej.Time)
+	})
 
-	return state, nil
+	for _, c := range n.Children {
+		sortTree(c)
+	}
 }
 
-// TextState 文本状态（简化版）
-type TextState struct {
-	Text   string
-	Cursor int
-}
+//
+// ─────────────────────────────────────────────────────────────
+//  Path Utilities
+// ─────────────────────────────────────────────────────────────
+//
 
-// Transaction 事务接口（简化版）
-type Transaction interface {
-	Apply() error
+// PathToRoot 返回从 root → node 的事件路径（不含虚拟 root）
+func PathToRoot(n *UndoNode) []*wal.SemanticEvent {
+	var rev []*wal.SemanticEvent
+
+	for cur := n; cur != nil && !cur.IsRoot(); cur = cur.Parent {
+		rev = append(rev, cur.Event)
+	}
+
+	// reverse
+	for i, j := 0, len(rev)-1; i < j; i, j = i+1, j-1 {
+		rev[i], rev[j] = rev[j], rev[i]
+	}
+
+	return rev
 }
