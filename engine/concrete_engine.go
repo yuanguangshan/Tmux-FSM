@@ -1,29 +1,30 @@
 package engine
 
 import (
+	"tmux-fsm/editor"
 	"tmux-fsm/intent"
 )
 
 // ConcreteEngine 是 Engine 接口的具体实现
 type ConcreteEngine struct {
 	// 这里可以添加实际的编辑器状态
-	cursor Cursor
+	cursor editor.Cursor
 }
 
 // NewConcreteEngine 创建一个新的 ConcreteEngine 实例
 func NewConcreteEngine() *ConcreteEngine {
 	return &ConcreteEngine{
-		cursor: Cursor{Line: 0, Col: 0},
+		cursor: editor.Cursor{Row: 0, Col: 0},
 	}
 }
 
 // Cursor 返回当前光标位置
-func (e *ConcreteEngine) Cursor() Cursor {
+func (e *ConcreteEngine) Cursor() editor.Cursor {
 	return e.cursor
 }
 
 // ComputeMotion 计算运动产生的范围
-func (e *ConcreteEngine) ComputeMotion(m *intent.Motion) (Range, error) {
+func (e *ConcreteEngine) ComputeMotion(m *intent.Motion) (editor.MotionRange, error) {
 	switch m.Kind {
 	case intent.MotionRange:
 		if m.Range != nil && m.Range.Kind == intent.RangeTextObject {
@@ -44,14 +45,14 @@ func (e *ConcreteEngine) ComputeMotion(m *intent.Motion) (Range, error) {
 	}
 
 	// 默认返回当前位置的范围
-	return Range{
+	return editor.MotionRange{
 		Start: e.cursor,
 		End:   e.cursor,
 	}, nil
 }
 
 // computeTextObject 计算文本对象的范围
-func (e *ConcreteEngine) computeTextObject(textObj *intent.TextObject) (Range, error) {
+func (e *ConcreteEngine) computeTextObject(textObj *intent.TextObject) (editor.MotionRange, error) {
 	// 这里需要实际的文本分析逻辑
 	// 现在返回一个示例范围
 	start := e.cursor
@@ -81,14 +82,14 @@ func (e *ConcreteEngine) computeTextObject(textObj *intent.TextObject) (Range, e
 		}
 	}
 
-	return Range{
+	return editor.MotionRange{
 		Start: start,
 		End:   end,
 	}, nil
 }
 
 // computeWord 计算单词移动的范围
-func (e *ConcreteEngine) computeWord(count int) (Range, error) {
+func (e *ConcreteEngine) computeWord(count int) (editor.MotionRange, error) {
 	start := e.cursor
 	end := e.cursor
 
@@ -99,63 +100,63 @@ func (e *ConcreteEngine) computeWord(count int) (Range, error) {
 		end.Col += 5 // 示例：假设每个单词平均5个字符
 	}
 
-	return Range{
+	return editor.MotionRange{
 		Start: start,
 		End:   end,
 	}, nil
 }
 
 // computeLine 计算行移动的范围
-func (e *ConcreteEngine) computeLine(count int) (Range, error) {
+func (e *ConcreteEngine) computeLine(count int) (editor.MotionRange, error) {
 	start := e.cursor
 	end := e.cursor
 
 	// 移动到第 count 行
-	end.Line += count
+	end.Row += count
 
-	return Range{
+	return editor.MotionRange{
 		Start: start,
 		End:   end,
 	}, nil
 }
 
 // computeChar 计算字符移动的范围
-func (e *ConcreteEngine) computeChar(count int) (Range, error) {
+func (e *ConcreteEngine) computeChar(count int) (editor.MotionRange, error) {
 	start := e.cursor
 	end := e.cursor
 
 	// 移动 count 个字符
 	end.Col += count
 
-	return Range{
+	return editor.MotionRange{
 		Start: start,
 		End:   end,
 	}, nil
 }
 
 // computeGoto 计算跳转的范围
-func (e *ConcreteEngine) computeGoto(count int) (Range, error) {
+func (e *ConcreteEngine) computeGoto(count int) (editor.MotionRange, error) {
 	start := e.cursor
 	end := e.cursor
 
 	// 跳转到指定位置（如果 count > 0）
 	if count > 0 {
-		end.Line = count - 1 // 行号从0开始
+		end.Row = count - 1 // 行号从0开始
 		end.Col = 0
 	} else {
 		// 默认跳转到文件开头
-		end.Line = 0
+		end.Row = 0
 		end.Col = 0
 	}
 
-	return Range{
+	return editor.MotionRange{
 		Start: start,
 		End:   end,
 	}, nil
 }
 
 // computeFindMotion 计算查找运动的范围
-func (e *ConcreteEngine) computeFindMotion(find *intent.FindMotion, count int) (Range, error) {
+func (e *ConcreteEngine) computeFindMotion(find *intent.FindMotion, count int) (editor.MotionRange, error) {
 	start := e.cursor
 	end := e.cursor
 
@@ -191,9 +192,9 @@ func (e *ConcreteEngine) computeFindMotion(find *intent.FindMotion, count int) (
 
 					end.Col = clamp(target, 0, len(line)-1)
 
-					return Range{
+					return editor.MotionRange{
 						Start: start,
-						End:   Cursor{Line: start.Line, Col: end.Col},
+						End:   editor.Cursor{Row: start.Row, Col: end.Col},
 					}, nil
 				}
 			}
@@ -202,7 +203,7 @@ func (e *ConcreteEngine) computeFindMotion(find *intent.FindMotion, count int) (
 	}
 
 	// Vim 行为：找不到 → 光标不动
-	return Range{
+	return editor.MotionRange{
 		Start: start,
 		End:   start,
 	}, nil
@@ -220,25 +221,25 @@ func clamp(v, min, max int) int {
 }
 
 // MoveCursor 移动光标到指定范围
-func (e *ConcreteEngine) MoveCursor(r Range) error {
+func (e *ConcreteEngine) MoveCursor(r editor.MotionRange) error {
 	e.cursor = r.End
 	return nil
 }
 
 // DeleteRange 删除指定范围的内容
-func (e *ConcreteEngine) DeleteRange(r Range) error {
+func (e *ConcreteEngine) DeleteRange(r editor.MotionRange) error {
 	// 实际实现中需要与底层编辑器交互
 	return nil
 }
 
 // YankRange 复制指定范围的内容
-func (e *ConcreteEngine) YankRange(r Range) error {
+func (e *ConcreteEngine) YankRange(r editor.MotionRange) error {
 	// 实际实现中需要与底层编辑器交互
 	return nil
 }
 
 // ChangeRange 修改指定范围的内容
-func (e *ConcreteEngine) ChangeRange(r Range) error {
+func (e *ConcreteEngine) ChangeRange(r editor.MotionRange) error {
 	// 实际实现中需要与底层编辑器交互
 	return nil
 }

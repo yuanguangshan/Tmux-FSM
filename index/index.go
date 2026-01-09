@@ -200,7 +200,7 @@ func (idx *EventIndex) QueryWhoDeleted(content string) []crdt.ActorID {
 	// 查找删除操作
 	deleteEvents := idx.QueryByType(FactTypeDelete)
 
-	for _, eventID := range deleteEvents {
+	for range deleteEvents {
 		// 这里需要一个事件ID到事件的映射
 		// 由于简化实现，我们跳过这一步
 		// 在实际实现中，需要从存储中检索事件并检查其内容

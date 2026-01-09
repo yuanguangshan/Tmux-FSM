@@ -13,7 +13,7 @@ import (
 // 展示如何使用新的执行上下文系统
 
 func main() {
-	fmt.Println("=== Transaction Runner Demo ===\n")
+	fmt.Println("=== Transaction Runner Demo ===")
 
 	// 1. 创建 Stores
 	bufferStore := editor.NewSimpleBufferStore()

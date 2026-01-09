@@ -1,7 +1,7 @@
 package engine
 
 import (
-	"fmt"
+	"time"
 	"tmux-fsm/crdt"
 	"tmux-fsm/index"
 	"tmux-fsm/policy"
@@ -236,19 +236,12 @@ func (e *HeadlessEngine) GetAllSelections() map[selection.CursorID]selection.Sel
 
 // RegisterActor 注册参与者
 func (e *HeadlessEngine) RegisterActor(actorID crdt.ActorID, level policy.TrustLevel, name string) {
-	e.policyMgr.RegisterActor(actorID, level, name)
+	e.policyMgr.RegisterActor(policy.ActorInfo{ID: actorID, Level: level, Name: name})
 }
 
 // CheckPolicy 检查策略
 func (e *HeadlessEngine) CheckPolicy(event crdt.SemanticEvent) error {
-	actorInfo, exists := e.policyMgr.Actors[event.Actor]
-	if !exists {
-		return fmt.Errorf("unknown actor: %s", event.Actor)
-	}
-	ctx := policy.PolicyContext{
-		ActorInfo: actorInfo,
-	}
-	return e.policyMgr.Allow(event, ctx)
+	return e.policyMgr.AllowCommit(event.Actor, event)
 }
 
 // QueryByActor 按参与者查询

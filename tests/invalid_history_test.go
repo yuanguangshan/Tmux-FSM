@@ -8,7 +8,7 @@ import (
 )
 
 func loadExample(t *testing.T, path string) verifier.VerifyInput {
-	data, err := os.ReadFile(path)
+	_, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read file: %v", err)
 	}
