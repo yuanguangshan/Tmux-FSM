@@ -1,84 +1,123 @@
 package semantic
 
-// Anchor 描述文本位置的锚点
+//
+// ─────────────────────────────────────────────────────────────
+//  Anchor & Range
+// ─────────────────────────────────────────────────────────────
+//
+
+// Anchor 描述一个稳定的语义锚点
 type Anchor struct {
 	PaneID string
 	Line   int
 	Col    int
-	Hash   string
+	Hash   string // 用于弱一致性校验（可选）
 }
 
-// Motion 动作类型
-type Motion struct {
-	Kind  string
-	Count int
-}
-
-// Range 表示文本范围
+// Range 表示一个语义范围
 type Range struct {
 	Start Anchor
 	End   Anchor
-	Text  string
+	Text  string // 捕获时已知的文本
 }
 
-// Fact 表示一个语义事实
+//
+// ─────────────────────────────────────────────────────────────
+//  Motion
+// ─────────────────────────────────────────────────────────────
+//
+
+// MotionKind 动作类型（强类型）
+type MotionKind int
+
+const (
+	MotionWordForward MotionKind = iota
+	MotionLine
+)
+
+// Motion 描述一个语义动作
+type Motion struct {
+	Kind  MotionKind
+	Count int
+}
+
+//
+// ─────────────────────────────────────────────────────────────
+//  Fact Interface
+// ─────────────────────────────────────────────────────────────
+//
+
+// Fact 表示一个可逆的语义事实
 type Fact interface {
-	Kind() string
+	Kind() FactKind
 	Inverse() Fact
-	GetAnchor() Anchor
-	GetRange() Range
-	GetText() string
+
+	Anchor() Anchor
+	Range() (Range, bool)
+	Text() string
 }
 
-// BaseFact 基础事实结构
-type BaseFact struct {
-	kind   string
+//
+// ─────────────────────────────────────────────────────────────
+//  FactKind
+// ─────────────────────────────────────────────────────────────
+//
+
+type FactKind int
+
+const (
+	FactInsert FactKind = iota
+	FactDelete
+	FactReplace
+	FactMove
+)
+
+//
+// ─────────────────────────────────────────────────────────────
+//  BaseFact (immutable)
+// ─────────────────────────────────────────────────────────────
+//
+
+type baseFact struct {
+	kind   FactKind
 	anchor Anchor
-	rng    Range
+	rng    *Range
 	text   string
 }
 
-func (f *BaseFact) Kind() string {
+func (f baseFact) Kind() FactKind {
 	return f.kind
 }
 
-func (f *BaseFact) GetAnchor() Anchor {
+func (f baseFact) Anchor() Anchor {
 	return f.anchor
 }
 
-func (f *BaseFact) GetRange() Range {
-	return f.rng
+func (f baseFact) Range() (Range, bool) {
+	if f.rng == nil {
+		return Range{}, false
+	}
+	return *f.rng, true
 }
 
-func (f *BaseFact) GetText() string {
+func (f baseFact) Text() string {
 	return f.text
 }
 
-// DeleteFact 删除事实
-type DeleteFact struct {
-	BaseFact
-}
+//
+// ─────────────────────────────────────────────────────────────
+//  Insert
+// ─────────────────────────────────────────────────────────────
+//
 
-func (f *DeleteFact) Inverse() Fact {
-	return &InsertFact{
-		BaseFact: BaseFact{
-			kind:   "insert",
-			anchor: f.anchor,
-			rng:    f.rng,
-			text:   f.text,
-		},
-	}
-}
-
-// InsertFact 插入事实
 type InsertFact struct {
-	BaseFact
+	baseFact
 }
 
-func (f *InsertFact) Inverse() Fact {
-	return &DeleteFact{
-		BaseFact: BaseFact{
-			kind:   "delete",
+func (f InsertFact) Inverse() Fact {
+	return DeleteFact{
+		baseFact: baseFact{
+			kind:   FactDelete,
 			anchor: f.anchor,
 			rng:    f.rng,
 			text:   f.text,
@@ -86,16 +125,42 @@ func (f *InsertFact) Inverse() Fact {
 	}
 }
 
-// ReplaceFact 替换事实
+//
+// ─────────────────────────────────────────────────────────────
+//  Delete
+// ─────────────────────────────────────────────────────────────
+//
+
+type DeleteFact struct {
+	baseFact
+}
+
+func (f DeleteFact) Inverse() Fact {
+	return InsertFact{
+		baseFact: baseFact{
+			kind:   FactInsert,
+			anchor: f.anchor,
+			rng:    f.rng,
+			text:   f.text,
+		},
+	}
+}
+
+//
+// ─────────────────────────────────────────────────────────────
+//  Replace
+// ─────────────────────────────────────────────────────────────
+//
+
 type ReplaceFact struct {
-	BaseFact
+	baseFact
 	oldText string
 }
 
-func (f *ReplaceFact) Inverse() Fact {
-	return &ReplaceFact{
-		BaseFact: BaseFact{
-			kind:   "replace",
+func (f ReplaceFact) Inverse() Fact {
+	return ReplaceFact{
+		baseFact: baseFact{
+			kind:   FactReplace,
 			anchor: f.anchor,
 			rng:    f.rng,
 			text:   f.oldText,
@@ -104,96 +169,118 @@ func (f *ReplaceFact) Inverse() Fact {
 	}
 }
 
-// MoveFact 移动事实
+//
+// ─────────────────────────────────────────────────────────────
+//  Move
+// ─────────────────────────────────────────────────────────────
+//
+
 type MoveFact struct {
-	BaseFact
+	baseFact
 	from Anchor
 	to   Anchor
 }
 
-func (f *MoveFact) Inverse() Fact {
-	return &MoveFact{
-		BaseFact: BaseFact{
-			kind:   "move",
+func (f MoveFact) Inverse() Fact {
+	return MoveFact{
+		baseFact: baseFact{
+			kind:   FactMove,
 			anchor: f.anchor,
-			rng:    f.rng,
-			text:   f.text,
 		},
 		from: f.to,
 		to:   f.from,
 	}
 }
 
-// CaptureAnchor 纯语义锚点捕获（不产生副作用）
+//
+// ─────────────────────────────────────────────────────────────
+//  Capture (Pure Semantic)
+// ─────────────────────────────────────────────────────────────
+//
+
+// CaptureAnchor 捕获锚点（纯函数）
 func CaptureAnchor(a Anchor) Anchor {
 	return a
 }
 
-// CaptureRange 捕获一个范围（纯语义，不访问外部状态）
-func CaptureRange(anchor Anchor, motion Motion, text string) Range {
+// CaptureRange 捕获一个语义范围（不访问文本）
+func CaptureRange(anchor Anchor, motion Motion, knownText string) Range {
 	start := anchor
 	end := anchor
 
 	switch motion.Kind {
-	case "word_forward":
-		// 模拟单词前进的范围计算
-		end.Col += 5 // 模拟前进到下一个单词
-	case "line":
-		// 整行范围
+	case MotionWordForward:
+		end.Col += max(1, motion.Count) * 5 // 语义步进
+	case MotionLine:
 		end.Col = 1 << 30 // 语义行尾
 	}
 
 	return Range{
 		Start: start,
 		End:   end,
-		Text:  text, // 由上层提供的已知文本
+		Text:  knownText,
 	}
 }
 
-// CaptureDelete 捕获删除操作
-func CaptureDelete(rng Range) Fact {
-	return &DeleteFact{
-		BaseFact: BaseFact{
-			kind:   "delete",
-			anchor: rng.Start,
-			rng:    rng,
-			text:   rng.Text,
-		},
-	}
-}
+//
+// ─────────────────────────────────────────────────────────────
+//  Capture Facts
+// ─────────────────────────────────────────────────────────────
+//
 
-// CaptureInsert 捕获插入操作
 func CaptureInsert(anchor Anchor, text string) Fact {
-	return &InsertFact{
-		BaseFact: BaseFact{
-			kind:   "insert",
+	return InsertFact{
+		baseFact: baseFact{
+			kind:   FactInsert,
 			anchor: anchor,
 			text:   text,
 		},
 	}
 }
 
-// CaptureReplace 捕获替换操作
-func CaptureReplace(rng Range, text string) Fact {
-	return &ReplaceFact{
-		BaseFact: BaseFact{
-			kind:   "replace",
+func CaptureDelete(rng Range) Fact {
+	return DeleteFact{
+		baseFact: baseFact{
+			kind:   FactDelete,
 			anchor: rng.Start,
-			rng:    rng,
+			rng:    &rng,
+			text:   rng.Text,
+		},
+	}
+}
+
+func CaptureReplace(rng Range, text string) Fact {
+	return ReplaceFact{
+		baseFact: baseFact{
+			kind:   FactReplace,
+			anchor: rng.Start,
+			rng:    &rng,
 			text:   text,
 		},
 		oldText: rng.Text,
 	}
 }
 
-// CaptureMove 捕获移动操作
 func CaptureMove(from, to Anchor) Fact {
-	return &MoveFact{
-		BaseFact: BaseFact{
-			kind:   "move",
+	return MoveFact{
+		baseFact: baseFact{
+			kind:   FactMove,
 			anchor: from,
 		},
 		from: from,
 		to:   to,
 	}
+}
+
+//
+// ─────────────────────────────────────────────────────────────
+//  Helpers
+// ─────────────────────────────────────────────────────────────
+//
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
