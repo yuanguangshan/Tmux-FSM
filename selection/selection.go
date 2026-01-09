@@ -4,10 +4,16 @@ import (
 	"tmux-fsm/crdt"
 )
 
-// CursorID 光标ID类型
+//
+// ─────────────────────────────────────────────────────────────
+//  Types
+// ─────────────────────────────────────────────────────────────
+//
+
+// CursorID 光标 ID
 type CursorID string
 
-// Affinity 亲和性类型
+// Affinity 亲和性
 type Affinity int
 
 const (
@@ -16,7 +22,7 @@ const (
 	AffinityNeutral
 )
 
-// Selection 选择区域
+// Selection 表示一个选择区域（Anchor → Focus）
 type Selection struct {
 	Cursor   CursorID
 	Actor    crdt.ActorID
@@ -25,141 +31,164 @@ type Selection struct {
 	Affinity Affinity
 }
 
-// SetSelectionFact 设置选择区域的事实
+//
+// ─────────────────────────────────────────────────────────────
+//  Facts
+// ─────────────────────────────────────────────────────────────
+//
+
+// SetSelectionFact 设置选择区域（Ephemeral）
 type SetSelectionFact struct {
-	Cursor CursorID      `json:"cursor"`
-	Anchor crdt.PositionID `json:"anchor"`
-	Focus  crdt.PositionID `json:"focus"`
+	Cursor CursorID          `json:"cursor"`
+	Anchor crdt.PositionID  `json:"anchor"`
+	Focus  crdt.PositionID  `json:"focus"`
 }
 
-// EphemeralFact 临时事实接口（不进入快照）
+// EphemeralFact 标记接口（不进入 snapshot）
 type EphemeralFact interface {
 	IsEphemeral() bool
 }
 
-// IsEphemeral 表示这是一个临时事实
-func (f SetSelectionFact) IsEphemeral() bool {
+// IsEphemeral implements EphemeralFact
+func (SetSelectionFact) IsEphemeral() bool {
 	return true
 }
 
-// SelectionManager 选择区域管理器
+//
+// ─────────────────────────────────────────────────────────────
+//  Edit Operations (for transform)
+// ─────────────────────────────────────────────────────────────
+//
+
+type EditKind int
+
+const (
+	EditInsert EditKind = iota
+	EditDelete
+)
+
+// EditOp 描述一次文本编辑对 selection 的影响
+type EditOp struct {
+	Kind   EditKind
+	Pos    crdt.PositionID // insert position / delete start
+	EndPos crdt.PositionID // only for delete
+}
+
+//
+// ─────────────────────────────────────────────────────────────
+//  Selection Transform (Pure Functions)
+// ─────────────────────────────────────────────────────────────
+//
+
+// TransformSelection 根据编辑操作变换 selection（幂等）
+func TransformSelection(sel Selection, op EditOp) Selection {
+	switch op.Kind {
+	case EditInsert:
+		return transformForInsert(sel, op.Pos)
+	case EditDelete:
+		return transformForDelete(sel, op.Pos, op.EndPos)
+	default:
+		return sel
+	}
+}
+
+// 插入操作对 selection 的影响
+func transformForInsert(sel Selection, pos crdt.PositionID) Selection {
+	a := crdt.ComparePos(pos, sel.Anchor)
+	f := crdt.ComparePos(pos, sel.Focus)
+
+	// 插入在 selection 之前或之后 → 不变
+	if (a < 0 && f < 0) || (a > 0 && f > 0) {
+		return sel
+	}
+
+	// 插入正好在 Anchor / Focus，需看 Affinity
+	if a == 0 && sel.Affinity == AffinityBackward {
+		return sel
+	}
+	if f == 0 && sel.Affinity == AffinityForward {
+		return sel
+	}
+
+	// 插入在 selection 内部或中性边界 → 扩展 Focus
+	sel.Focus = pos
+	return sel
+}
+
+// 删除操作对 selection 的影响
+func transformForDelete(sel Selection, start, end crdt.PositionID) Selection {
+	newAnchor := sel.Anchor
+	newFocus := sel.Focus
+
+	// Anchor 被删除 → 吸附到 start
+	if crdt.ComparePos(sel.Anchor, start) >= 0 &&
+		crdt.ComparePos(sel.Anchor, end) <= 0 {
+		newAnchor = start
+	}
+
+	// Focus 被删除 → 吸附到 start
+	if crdt.ComparePos(sel.Focus, start) >= 0 &&
+		crdt.ComparePos(sel.Focus, end) <= 0 {
+		newFocus = start
+	}
+
+	sel.Anchor = newAnchor
+	sel.Focus = newFocus
+	return sel
+}
+
+//
+// ─────────────────────────────────────────────────────────────
+//  Selection Manager
+// ─────────────────────────────────────────────────────────────
+//
+
+// SelectionManager 管理当前所有 selection（可重建）
 type SelectionManager struct {
 	selections map[CursorID]Selection
 }
 
-// NewSelectionManager 创建新的选择区域管理器
+// NewSelectionManager 创建新的管理器
 func NewSelectionManager() *SelectionManager {
 	return &SelectionManager{
 		selections: make(map[CursorID]Selection),
 	}
 }
 
-// ApplySelection 应用选择区域变更
-func (sm *SelectionManager) ApplySelection(actor crdt.ActorID, fact SetSelectionFact) {
-	selection := Selection{
+// ApplySelection 应用 SetSelectionFact（覆盖式）
+func (sm *SelectionManager) ApplySelection(
+	actor crdt.ActorID,
+	fact SetSelectionFact,
+) {
+	sm.selections[fact.Cursor] = Selection{
 		Cursor:   fact.Cursor,
 		Actor:    actor,
 		Anchor:   fact.Anchor,
 		Focus:    fact.Focus,
 		Affinity: AffinityNeutral,
 	}
-	
-	sm.selections[fact.Cursor] = selection
 }
 
-// GetSelection 获取选择区域
-func (sm *SelectionManager) GetSelection(cursorID CursorID) (Selection, bool) {
-	selection, exists := sm.selections[cursorID]
-	return selection, exists
-}
-
-// GetAllSelections 获取所有选择区域
-func (sm *SelectionManager) GetAllSelections() map[CursorID]Selection {
-	result := make(map[CursorID]Selection)
+// ApplyEdit 将一次编辑作用到所有 selection
+func (sm *SelectionManager) ApplyEdit(op EditOp) {
 	for id, sel := range sm.selections {
-		result[id] = sel
-	}
-	return result
-}
-
-// UpdateForInsert 处理插入操作对选择区域的影响
-func (sm *SelectionManager) UpdateForInsert(pos crdt.PositionID) {
-	for cursorID, selection := range sm.selections {
-		// 如果插入位置在选择区域内，扩展选择区域
-		anchorComp := crdt.ComparePos(selection.Anchor, pos)
-		focusComp := crdt.ComparePos(selection.Focus, pos)
-		
-		// 如果插入在选择区域内
-		if (anchorComp <= 0 && focusComp >= 0) || (anchorComp >= 0 && focusComp <= 0) {
-			// 根据亲和性决定如何调整
-			if selection.Affinity == AffinityForward {
-				// 向前扩展
-				newFocus := pos
-				sm.selections[cursorID] = Selection{
-					Cursor:   selection.Cursor,
-					Actor:    selection.Actor,
-					Anchor:   selection.Anchor,
-					Focus:    newFocus,
-					Affinity: selection.Affinity,
-				}
-			}
-		} else if anchorComp > 0 {
-			// 如果插入在锚点之前，平移整个选择区域
-			newAnchor := pos
-			sm.selections[cursorID] = Selection{
-				Cursor:   selection.Cursor,
-				Actor:    selection.Actor,
-				Anchor:   newAnchor,
-				Focus:    selection.Focus,
-				Affinity: selection.Affinity,
-			}
-		} else if focusComp > 0 {
-			// 如果插入在焦点之前，平移焦点
-			newFocus := pos
-			sm.selections[cursorID] = Selection{
-				Cursor:   selection.Cursor,
-				Actor:    selection.Actor,
-				Anchor:   selection.Anchor,
-				Focus:    newFocus,
-				Affinity: selection.Affinity,
-			}
-		}
+		sm.selections[id] = TransformSelection(sel, op)
 	}
 }
 
-// UpdateForDelete 处理删除操作对选择区域的影响
-func (sm *SelectionManager) UpdateForDelete(startPos, endPos crdt.PositionID) {
-	for cursorID, selection := range sm.selections {
-		anchorCompStart := crdt.ComparePos(selection.Anchor, startPos)
-		anchorCompEnd := crdt.ComparePos(selection.Anchor, endPos)
-		focusCompStart := crdt.ComparePos(selection.Focus, startPos)
-		focusCompEnd := crdt.ComparePos(selection.Focus, endPos)
-		
-		// 如果锚点在删除范围内，将其吸附到最近的存活位置
-		if anchorCompStart >= 0 && anchorCompEnd <= 0 {
-			// 锚点在删除范围内，吸附到删除范围的开始
-			newAnchor := startPos
-			sm.selections[cursorID] = Selection{
-				Cursor:   selection.Cursor,
-				Actor:    selection.Actor,
-				Anchor:   newAnchor,
-				Focus:    selection.Focus,
-				Affinity: selection.Affinity,
-			}
-		}
-		
-		// 如果焦点在删除范围内，将其吸附到最近的存活位置
-		if focusCompStart >= 0 && focusCompEnd <= 0 {
-			// 焦点在删除范围内，吸附到删除范围的开始
-			newFocus := startPos
-			currentSel := sm.selections[cursorID]
-			sm.selections[cursorID] = Selection{
-				Cursor:   currentSel.Cursor,
-				Actor:    currentSel.Actor,
-				Anchor:   currentSel.Anchor,
-				Focus:    newFocus,
-				Affinity: currentSel.Affinity,
-			}
-		}
+// GetSelection 获取指定 cursor 的 selection
+func (sm *SelectionManager) GetSelection(
+	cursorID CursorID,
+) (Selection, bool) {
+	sel, ok := sm.selections[cursorID]
+	return sel, ok
+}
+
+// GetAllSelections 返回 selection 的快照（防止外部 mutate）
+func (sm *SelectionManager) GetAllSelections() map[CursorID]Selection {
+	out := make(map[CursorID]Selection, len(sm.selections))
+	for k, v := range sm.selections {
+		out[k] = v
 	}
+	return out
 }
