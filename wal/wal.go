@@ -2,91 +2,174 @@ package wal
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"time"
+
 	"tmux-fsm/semantic"
 )
 
-// SemanticEvent 语义事件
+//
+// ─────────────────────────────────────────────────────────────
+//  Semantic Event
+// ─────────────────────────────────────────────────────────────
+//
+
 type SemanticEvent struct {
-	ID            string             `json:"id"`
-	CausalParents []string           `json:"causal_parents"`
-	LocalParent   string             `json:"local_parent"`
-	Time          time.Time          `json:"time"`
-	Actor         string             `json:"actor"`
-	Fact          semantic.BaseFact  `json:"fact"`
+	ID            string            `json:"id"`
+	CausalParents []string          `json:"causal_parents"`
+	LocalParent   string            `json:"local_parent"`
+	Time          time.Time         `json:"time"`
+	Actor         string            `json:"actor"`
+	Fact          semantic.BaseFact `json:"fact"`
 }
 
-// WAL Write-ahead Log
+//
+// ─────────────────────────────────────────────────────────────
+//  WAL Record (Versioned)
+// ─────────────────────────────────────────────────────────────
+//
+
+type walRecord struct {
+	Version  int            `json:"v"`
+	Checksum string         `json:"checksum"`
+	Event    SemanticEvent `json:"event"`
+}
+
+const walVersion = 1
+
+//
+// ─────────────────────────────────────────────────────────────
+//  WAL
+// ─────────────────────────────────────────────────────────────
+//
+
 type WAL struct {
-	file *os.File
+	file   *os.File
 	writer *bufio.Writer
 }
 
-// NewWAL 创建新的 WAL
 func NewWAL(filename string) (*WAL, error) {
-	f, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	f, err := os.OpenFile(
+		filename,
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND,
+		0644,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	w := &WAL{
-		file: f,
-		writer: bufio.NewWriter(f),
-	}
-
-	return w, nil
+	return &WAL{
+		file:   f,
+		writer: bufio.NewWriterSize(f, 64*1024),
+	}, nil
 }
 
-// Append 向 WAL 追加事件
+//
+// ─────────────────────────────────────────────────────────────
+//  Append (Crash-Safe)
+// ─────────────────────────────────────────────────────────────
+//
+
 func (w *WAL) Append(event SemanticEvent) error {
-	data, err := json.Marshal(event)
+
+	evBytes, err := json.Marshal(event)
 	if err != nil {
 		return err
 	}
 
-	// 添加换行符分隔
-	data = append(data, '\n')
+	sum := sha256.Sum256(evBytes)
 
-	_, err = w.writer.Write(data)
+	rec := walRecord{
+		Version:  walVersion,
+		Checksum: hex.EncodeToString(sum[:]),
+		Event:    event,
+	}
+
+	line, err := json.Marshal(rec)
 	if err != nil {
 		return err
 	}
 
-	// 确保写入磁盘
-	return w.writer.Flush()
+	// 1️⃣ write line + newline
+	if _, err := w.writer.Write(append(line, '\n')); err != nil {
+		return err
+	}
+
+	// 2️⃣ flush userspace buffer
+	if err := w.writer.Flush(); err != nil {
+		return err
+	}
+
+	// 3️⃣ fsync —— 这是 WAL 的灵魂
+	return w.file.Sync()
 }
 
-// Close 关闭 WAL
+//
+// ─────────────────────────────────────────────────────────────
+//  Close
+// ─────────────────────────────────────────────────────────────
+//
+
 func (w *WAL) Close() error {
 	if w.writer != nil {
-		w.writer.Flush()
+		_ = w.writer.Flush()
 	}
 	return w.file.Close()
 }
 
-// LoadFromWAL 从 WAL 加载事件
+//
+// ─────────────────────────────────────────────────────────────
+//  Load (Resilient)
+// ─────────────────────────────────────────────────────────────
+//
+
 func LoadFromWAL(filename string) ([]SemanticEvent, error) {
+
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
+	reader := bufio.NewReaderSize(f, 64*1024)
+
 	var events []SemanticEvent
-	scanner := bufio.NewScanner(f)
+	lineNo := 0
 
-	for scanner.Scan() {
-		var event SemanticEvent
-		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
-			return nil, err
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return events, err
 		}
-		events = append(events, event)
-	}
+		lineNo++
 
-	if err := scanner.Err(); err != nil {
-		return nil, err
+		var rec walRecord
+		if err := json.Unmarshal(line, &rec); err != nil {
+			// ✅ 遇到坏行，直接停止（最后一条可能未写完）
+			break
+		}
+
+		if rec.Version != walVersion {
+			return events, errors.New("unsupported wal version")
+		}
+
+		evBytes, _ := json.Marshal(rec.Event)
+		sum := sha256.Sum256(evBytes)
+
+		if hex.EncodeToString(sum[:]) != rec.Checksum {
+			// ✅ 校验失败，停止回放
+			break
+		}
+
+		events = append(events, rec.Event)
 	}
 
 	return events, nil
