@@ -5,13 +5,19 @@ import (
 	"tmux-fsm/semantic"
 )
 
-// TextState 文本状态
+//
+// ─────────────────────────────────────────────────────────────
+//  Text State
+// ─────────────────────────────────────────────────────────────
+//
+
+// TextState 表示文本 + 光标的最小可重放状态
 type TextState struct {
 	Text   string
 	Cursor int
 }
 
-// Clone 克隆状态
+// Clone 返回值拷贝（Replay 入口使用）
 func (s TextState) Clone() TextState {
 	return TextState{
 		Text:   s.Text,
@@ -19,43 +25,92 @@ func (s TextState) Clone() TextState {
 	}
 }
 
-// TextNode 表示文本中的一个节点
-type TextNode struct {
-	Pos  interface{} // 这里应该使用 PositionID，但由于循环依赖问题，暂时使用 interface{}
-	Rune rune
+//
+// ─────────────────────────────────────────────────────────────
+//  Internal Helpers
+// ─────────────────────────────────────────────────────────────
+//
+
+func clampCursor(pos, textLen int) int {
+	if pos < 0 {
+		return 0
+	}
+	if pos > textLen {
+		return textLen
+	}
+	return pos
 }
 
-// ApplyFact 应用语义事实
+//
+// ─────────────────────────────────────────────────────────────
+//  Apply Semantic Fact
+// ─────────────────────────────────────────────────────────────
+//
+
+// ApplyFact 将一个 semantic.BaseFact 应用到文本状态
+//
+// ⚠️ replay 层不负责“合法性判断”
+//    默认 Fact 已通过 policy / semantic 校验
 func ApplyFact(state *TextState, fact semantic.BaseFact) {
-	// 这里需要根据实际的 Fact 类型进行处理
-	// 由于 BaseFact 的字段是私有的，我们需要通过方法访问
 	switch fact.Kind() {
+
 	case "insert":
 		anchor := fact.GetAnchor()
 		text := fact.GetText()
-		if anchor.Col >= 0 && anchor.Col <= len(state.Text) {
-			state.Text = state.Text[:anchor.Col] + text + state.Text[anchor.Col:]
-			state.Cursor = anchor.Col + len(text)
+
+		col := clampCursor(anchor.Col, len(state.Text))
+		if text == "" {
+			return
 		}
+
+		state.Text =
+			state.Text[:col] +
+				text +
+				state.Text[col:]
+
+		state.Cursor = col + len(text)
+
 	case "delete":
 		rng := fact.GetRange()
-		if rng.Start.Col >= 0 && rng.End.Col <= len(state.Text) && rng.Start.Col < rng.End.Col {
-			state.Text = state.Text[:rng.Start.Col] + state.Text[rng.End.Col:]
-			state.Cursor = rng.Start.Col
+
+		start := clampCursor(rng.Start.Col, len(state.Text))
+		end := clampCursor(rng.End.Col, len(state.Text))
+
+		if start >= end {
+			return
 		}
+
+		state.Text =
+			state.Text[:start] +
+				state.Text[end:]
+
+		state.Cursor = start
+
 	case "move":
-		// 更新光标位置
 		anchor := fact.GetAnchor()
-		state.Cursor = anchor.Col
+		state.Cursor = clampCursor(anchor.Col, len(state.Text))
+
+	default:
+		// 未识别的 Fact —— replay 层选择忽略
+		return
 	}
 }
 
-// Replay 重放事件
+//
+// ─────────────────────────────────────────────────────────────
+//  Replay
+// ─────────────────────────────────────────────────────────────
+//
+
+// Replay 对一组语义事件进行重放
+//
+// filter == nil 表示不过滤
 func Replay(
 	initial TextState,
 	events []crdt.SemanticEvent,
 	filter func(crdt.SemanticEvent) bool,
 ) TextState {
+
 	state := initial.Clone()
 
 	for _, e := range events {
@@ -68,19 +123,28 @@ func Replay(
 	return state
 }
 
-// UndoCheckout 撤销检出
+//
+// ─────────────────────────────────────────────────────────────
+//  Undo / Checkout
+// ─────────────────────────────────────────────────────────────
+//
+
+// UndoCheckout 从全局事件集中，
+// 以 target 为撤销目标，
+// 重放“我视角下”的文本状态
 func UndoCheckout(
 	target crdt.EventID,
 	global map[crdt.EventID]crdt.SemanticEvent,
 	me crdt.ActorID,
 	initial TextState,
 ) TextState {
-	// 1. 全局 CRDT 决议
-	sorted := crdt.TopoSortByCausality(global)
 
-	// 2. 创建撤销过滤器
+	// 1️⃣ 全局因果排序（CRDT 层负责）
+	ordered := crdt.TopoSortByCausality(global)
+
+	// 2️⃣ 构造撤销过滤器（CRDT 层负责）
 	filter := crdt.UndoFilter(me, target, global)
 
-	// 3. 重放
-	return Replay(initial, sorted, filter)
+	// 3️⃣ 纯 replay
+	return Replay(initial, ordered, filter)
 }
