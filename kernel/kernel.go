@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"tmux-fsm/fsm"
 	"tmux-fsm/intent"
@@ -47,6 +48,9 @@ func NewKernel(fsmEngine *fsm.Engine, exec IntentExecutor) *Kernel {
 func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 	_ = hctx // ✅ 现在不用，但接口已经锁死
 
+	// Log the incoming key for audit trail
+	log.Printf("Handling key: %s", key)
+
 	// 通过Grammar路径生成intent（新的权威执行路径）
 	var decision *Decision
 
@@ -55,21 +59,29 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 		decision = k.Decide(key)
 
 		if decision != nil {
+			// Log decision details for audit trail
+			log.Printf("Decision made for key '%s': Kind=%s, Intent=%v",
+				key, decision.Kind, decision.Intent)
+
 			switch decision.Kind {
 			case DecisionIntent:
+				log.Printf("Processing intent for key '%s'", key)
 				k.ProcessIntent(decision.Intent)
 				return
 
 			case DecisionFSM:
+				log.Printf("Executing FSM decision for key '%s'", key)
 				k.Execute(decision)
 				return
 
 			case DecisionNone:
 				// FSM 吃了 key，合法等待
+				log.Printf("FSM consumed key '%s', valid wait state", key)
 				return
 
 			case DecisionLegacy:
 				// 明确：Grammar/FSM 不处理，才允许 legacy
+				log.Printf("Key '%s' falls back to legacy handling", key)
 				break
 			}
 		}
@@ -89,14 +101,37 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 
 // ProcessIntent 处理意图
 func (k *Kernel) ProcessIntent(intent *intent.Intent) error {
+	if intent == nil {
+		log.Printf("ProcessIntent called with nil intent")
+		return fmt.Errorf("intent is nil")
+	}
+
+	// Log intent details for audit trail
+	log.Printf("Processing intent: Type=%s, Data=%v", intent.Type, intent.Data)
+
 	if k.Exec != nil {
-		return k.Exec.Process(intent)
+		log.Printf("Processing intent through external executor")
+		err := k.Exec.Process(intent)
+		if err != nil {
+			log.Printf("Intent execution failed: %v", err)
+			return err
+		}
+		log.Printf("Intent processed successfully by external executor")
+		return nil
 	}
 
 	// 如果没有外部执行器，尝试通过FSM执行意图
-	if k.FSM != nil && intent != nil {
-		return k.FSM.DispatchIntent(intent)
+	if k.FSM != nil {
+		log.Printf("Processing intent through FSM")
+		err := k.FSM.DispatchIntent(intent)
+		if err != nil {
+			log.Printf("FSM dispatch failed: %v", err)
+			return err
+		}
+		log.Printf("Intent dispatched successfully through FSM")
+		return nil
 	}
 
-	return nil
+	log.Printf("No executor available for intent: %v", intent)
+	return fmt.Errorf("no executor available for intent")
 }

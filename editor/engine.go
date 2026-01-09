@@ -3,6 +3,7 @@ package editor
 import (
 	"errors"
 	"fmt"
+	"log"
 )
 
 // SimpleBuffer 简单的缓冲区实现
@@ -109,37 +110,96 @@ func (sb *SimpleBuffer) DeleteRange(start, end Cursor) (string, error) {
 // ApplyResolvedOperation 应用解析后的操作
 // 严格按照预定义的操作类型执行，无任何语义判断
 func ApplyResolvedOperation(ctx *ExecutionContext, op ResolvedOperation) error {
+	// Log the operation for audit trail
+	log.Printf("Executing operation: Kind=%s, BufferID=%s, WindowID=%s, Anchor=%v",
+		op.Kind, op.BufferID, op.WindowID, op.Anchor)
+
+	// Stronger validation of operation parameters
+	if op.BufferID == "" {
+		err := errors.New("operation requires a valid buffer ID")
+		log.Printf("Validation error: %v", err)
+		return err
+	}
+
 	buf := ctx.Buffers.Get(op.BufferID)
 	if buf == nil {
-		return fmt.Errorf("buffer %s not found", op.BufferID)
+		err := fmt.Errorf("buffer %s not found", op.BufferID)
+		log.Printf("Execution error: %v", err)
+		return err
+	}
+
+	// Validate cursor position for insert operations
+	if op.Kind == OpInsert {
+		if op.Anchor.Row < 0 || op.Anchor.Row >= buf.LineCount() {
+			err := fmt.Errorf("insert position out of bounds: row %d, total rows %d", op.Anchor.Row, buf.LineCount())
+			log.Printf("Validation error: %v", err)
+			return err
+		}
+		if op.Anchor.Col < 0 || op.Anchor.Col > buf.LineLength(op.Anchor.Row) {
+			err := fmt.Errorf("insert position out of bounds: col %d, line length %d", op.Anchor.Col, buf.LineLength(op.Anchor.Row))
+			log.Printf("Validation error: %v", err)
+			return err
+		}
+	}
+
+	// Validate range for delete operations
+	if op.Kind == OpDelete && op.Range != nil {
+		if op.Range.Start.Row < 0 || op.Range.Start.Row >= buf.LineCount() ||
+		   op.Range.End.Row < 0 || op.Range.End.Row >= buf.LineCount() {
+			err := fmt.Errorf("delete range out of bounds: start row %d, end row %d, total rows %d",
+				op.Range.Start.Row, op.Range.End.Row, buf.LineCount())
+			log.Printf("Validation error: %v", err)
+			return err
+		}
 	}
 
 	switch op.Kind {
 	case OpInsert:
+		log.Printf("Applying insert operation: text='%s' at %v", op.Text, op.Anchor)
 		if op.DeleteBeforeInsert && op.Range != nil {
-			_, err := buf.DeleteRange(op.Range.Start, op.Range.End)
+			deletedText, err := buf.DeleteRange(op.Range.Start, op.Range.End)
 			if err != nil {
+				log.Printf("Failed to delete before insert: %v", err)
 				return err
 			}
+			log.Printf("Deleted text before insert: '%s'", deletedText)
 		}
-		return buf.InsertAt(op.Anchor, op.Text)
+		err := buf.InsertAt(op.Anchor, op.Text)
+		if err != nil {
+			log.Printf("Failed to insert text: %v", err)
+			return err
+		}
+		log.Printf("Successfully inserted text: '%s' at %v", op.Text, op.Anchor)
+		return nil
 
 	case OpDelete:
 		if op.Range == nil {
-			return errors.New("delete operation requires a range")
+			err := errors.New("delete operation requires a range")
+			log.Printf("Validation error: %v", err)
+			return err
 		}
-		_, err := buf.DeleteRange(op.Range.Start, op.Range.End)
-		return err
+		deletedText, err := buf.DeleteRange(op.Range.Start, op.Range.End)
+		if err != nil {
+			log.Printf("Failed to delete range: %v", err)
+			return err
+		}
+		log.Printf("Successfully deleted text: '%s' from range %v to %v", deletedText, op.Range.Start, op.Range.End)
+		return nil
 
 	case OpMove:
 		win := ctx.Windows.Get(op.WindowID)
 		if win != nil {
+			log.Printf("Moving cursor from %v to %v", win.Cursor, op.Anchor)
 			win.Cursor = op.Anchor
+		} else {
+			log.Printf("Window %s not found for move operation", op.WindowID)
 		}
 		return nil
 
 	default:
-		return errors.New("unsupported operation kind")
+		err := errors.New("unsupported operation kind")
+		log.Printf("Execution error: %v", err)
+		return err
 	}
 }
 

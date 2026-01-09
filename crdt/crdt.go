@@ -1,6 +1,8 @@
 package crdt
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"sort"
 	"time"
 	"tmux-fsm/semantic"
@@ -25,6 +27,9 @@ type SemanticEvent struct {
 	ID    EventID   `json:"id"`
 	Actor ActorID   `json:"actor"`
 	Time  time.Time `json:"time"`
+
+	// Version control for event integrity
+	Version int `json:"version"` // Event version for tracking changes
 
 	// 因果一致性（CRDT 用）
 	CausalParents []EventID `json:"causal_parents"`
@@ -125,9 +130,39 @@ func NewEventStore() *EventStore {
 	}
 }
 
+// GenerateStableEventID generates a stable, unique event ID based on content
+func GenerateStableEventID(actor ActorID, timestamp time.Time, fact semantic.Fact) EventID {
+	// Create a stable ID based on actor, timestamp, and fact content
+	// This ensures that identical events get the same ID, maintaining consistency
+	content := fmt.Sprintf("%s_%d_%s", actor, timestamp.UnixNano(), fact.String())
+	hash := sha256.Sum256([]byte(content))
+	return EventID(fmt.Sprintf("%x", hash[:16])) // Use first 16 bytes for shorter ID
+}
+
+// CreateSemanticEvent creates a new semantic event with proper versioning and timestamps
+func CreateSemanticEvent(actor ActorID, fact semantic.Fact, causalParents []EventID, localParent EventID) SemanticEvent {
+	timestamp := time.Now()
+	version := 1 // Start with version 1 for new events
+
+	return SemanticEvent{
+		ID:            GenerateStableEventID(actor, timestamp, fact),
+		Actor:         actor,
+		Time:          timestamp,
+		Version:       version,
+		CausalParents: causalParents,
+		LocalParent:   localParent,
+		Fact:          fact,
+	}
+}
+
 // Merge 合并事件（网络/WAL/Sync）
 func (s *EventStore) Merge(e SemanticEvent) {
-	if _, ok := s.Events[e.ID]; ok {
+	if existing, ok := s.Events[e.ID]; ok {
+		// Check if this is a newer version of the same event
+		if e.Version > existing.Version {
+			// Update with newer version
+			s.Events[e.ID] = e
+		}
 		return // 幂等
 	}
 	s.Events[e.ID] = e
