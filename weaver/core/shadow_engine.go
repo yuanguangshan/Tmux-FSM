@@ -9,28 +9,44 @@ import (
 // ShadowEngine 核心执行引擎
 // 负责处理 Intent，生成并应用 Transaction，维护 History
 type ShadowEngine struct {
-	planner    Planner
-	history    History
-	resolver   AnchorResolver
-	projection Projection
-	reality    RealityReader
+	planner     Planner
+	history     History
+	resolver    AnchorResolver
+	projection  Projection
+	reality     RealityReader
+	proofBuilder *ProofBuilder
 }
 
 func NewShadowEngine(planner Planner, resolver AnchorResolver, projection Projection, reality RealityReader) *ShadowEngine {
 	return &ShadowEngine{
-		planner:    planner,
-		history:    NewInMemoryHistory(100),
-		resolver:   resolver,
-		projection: projection,
-		reality:    reality,
+		planner:     planner,
+		history:     NewInMemoryHistory(100),
+		resolver:    resolver,
+		projection:  projection,
+		reality:     reality,
+		proofBuilder: NewProofBuilder(),
 	}
 }
 
 func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, error) {
-	log.Printf("Applying intent: Kind=%d, PaneID=%s, SnapshotHash=%s",
-		intent.GetKind(), intent.GetPaneID(), intent.GetSnapshotHash())
+	// Generate a RequestID for this user input
+	requestID := fmt.Sprintf("req-%d", time.Now().UnixNano())
+	actorID := intent.GetPaneID()
 
-	var audit []AuditEntry
+	log.Printf("Applying intent: RequestID=%s, Kind=%d, PaneID=%s, SnapshotHash=%s",
+		requestID, intent.GetKind(), intent.GetPaneID(), intent.GetSnapshotHash())
+
+	// Initialize AuditRecord v2
+	auditRecord := &AuditRecord{
+		Version:       "v2",
+		RequestID:     requestID,
+		ActorID:       actorID,
+		TimestampUTC:  time.Now().Unix(),
+		IntentKind:    fmt.Sprintf("%d", intent.GetKind()),
+		DecisionPath:  "Intent",
+		Entries:       []AuditEntryV2{},
+		Result:        AuditResult{Status: "Pending", WorldDrift: false},
+	}
 
 	// Phase 6.3: Temporal Adjudication (World Drift Check)
 	// Engine owns the authority to reject execution if current reality != intent's expectation.
@@ -39,18 +55,60 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 		if err == nil {
 			if string(current.Hash) != intent.GetSnapshotHash() {
 				log.Printf("World drift detected: expected %s, got %s", intent.GetSnapshotHash(), string(current.Hash))
-				audit = append(audit, AuditEntry{Step: "Adjudicate", Result: "Rejected: World Drift detected"})
+
+				// Add audit entry
+				auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+					Phase:   "Adjudicate",
+					Action:  "Reject",
+					Outcome: "Rejected",
+					Detail:  "World drift detected",
+					Meta:    map[string]string{"expected": intent.GetSnapshotHash(), "actual": string(current.Hash)},
+					At:      time.Now().Unix(),
+				})
+
+				// Update result
+				auditRecord.Result = AuditResult{
+					Status:      "Rejected",
+					WorldDrift:  true,
+					DriftReason: string(DriftSnapshotMismatch),
+					Error:       "World drift detected",
+				}
+
 				return &Verdict{
 					Kind:    VerdictRejected,
 					Safety:  SafetyUnsafe,
 					Message: "World drift detected",
-					Audit:   audit,
-				}, ErrWorldDrift
+					Audit:   convertAuditRecordToLegacy(auditRecord),
+				}, &WorldDriftError{
+					Reason:   DriftSnapshotMismatch,
+					Expected: intent.GetSnapshotHash(),
+					Actual:   string(current.Hash),
+					Message:  "World drift detected",
+				}
 			}
 			log.Printf("Time consistency verified for intent in pane %s", intent.GetPaneID())
-			audit = append(audit, AuditEntry{Step: "Adjudicate", Result: "Success: Time consistency verified"})
+
+			// Add audit entry
+			auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+				Phase:   "Adjudicate",
+				Action:  "Verify",
+				Outcome: "Success",
+				Detail:  "Time consistency verified",
+				Meta:    map[string]string{"pane": intent.GetPaneID()},
+				At:      time.Now().Unix(),
+			})
 		} else {
 			log.Printf("Could not read current reality for pane %s: %v", intent.GetPaneID(), err)
+
+			// Add audit entry
+			auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+				Phase:   "Adjudicate",
+				Action:  "Verify",
+				Outcome: "Warning",
+				Detail:  fmt.Sprintf("Could not read current reality: %v", err),
+				Meta:    map[string]string{"pane": intent.GetPaneID()},
+				At:      time.Now().Unix(),
+			})
 		}
 		// If Reality check fails (IO error), we might proceed with warning or fail fast.
 		// For now, assume if we can't read reality, it's a structural error but not necessarily drift.
@@ -60,11 +118,11 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 	kind := intent.GetKind()
 	if kind == IntentUndo {
 		log.Printf("Processing undo intent for pane %s", intent.GetPaneID())
-		return e.performUndo()
+		return e.performUndoWithRequestID(requestID, auditRecord)
 	}
 	if kind == IntentRedo {
 		log.Printf("Processing redo intent for pane %s", intent.GetPaneID())
-		return e.performRedo()
+		return e.performRedoWithRequestID(requestID, auditRecord)
 	}
 
 	// 2. Plan: Generate Facts
@@ -72,11 +130,36 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 	facts, inverseFacts, err := e.planner.Build(intent, snapshot)
 	if err != nil {
 		log.Printf("Failed to plan facts for intent in pane %s: %v", intent.GetPaneID(), err)
-		audit = append(audit, AuditEntry{Step: "Plan", Result: fmt.Sprintf("Error: %v", err)})
-		return &Verdict{Kind: VerdictBlocked, Audit: audit}, err
+
+		// Add audit entry
+		auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+			Phase:   "Plan",
+			Action:  "Build",
+			Outcome: "Failure",
+			Detail:  fmt.Sprintf("Failed to plan facts: %v", err),
+			Meta:    map[string]string{"pane": intent.GetPaneID()},
+			At:      time.Now().Unix(),
+		})
+
+		// Update result
+		auditRecord.Result = AuditResult{
+			Status: "Rejected",
+			Error:  fmt.Sprintf("Failed to plan facts: %v", err),
+		}
+
+		return &Verdict{Kind: VerdictBlocked, Audit: convertAuditRecordToLegacy(auditRecord)}, err
 	}
 	log.Printf("Successfully planned %d facts for intent in pane %s", len(facts), intent.GetPaneID())
-	audit = append(audit, AuditEntry{Step: "Plan", Result: "Success"})
+
+	// Add audit entry
+	auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+		Phase:   "Plan",
+		Action:  "Build",
+		Outcome: "Success",
+		Detail:  fmt.Sprintf("Successfully planned %d facts", len(facts)),
+		Meta:    map[string]string{"count": fmt.Sprintf("%d", len(facts)), "pane": intent.GetPaneID()},
+		At:      time.Now().Unix(),
+	})
 
 	// [Phase 5.1] 4. Resolve: 定位权移交
 	// [Phase 5.4] 包含 Reconciliation 检查
@@ -85,11 +168,36 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 	resolvedFacts, err := e.resolver.ResolveFacts(facts, intent.GetSnapshotHash())
 	if err != nil {
 		log.Printf("Failed to resolve facts for intent in pane %s: %v", intent.GetPaneID(), err)
-		audit = append(audit, AuditEntry{Step: "Resolve", Result: fmt.Sprintf("Error: %v", err)})
-		return &Verdict{Kind: VerdictBlocked, Audit: audit}, err
+
+		// Add audit entry
+		auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+			Phase:   "Resolve",
+			Action:  "Resolve",
+			Outcome: "Failure",
+			Detail:  fmt.Sprintf("Failed to resolve facts: %v", err),
+			Meta:    map[string]string{"pane": intent.GetPaneID()},
+			At:      time.Now().Unix(),
+		})
+
+		// Update result
+		auditRecord.Result = AuditResult{
+			Status: "Rejected",
+			Error:  fmt.Sprintf("Failed to resolve facts: %v", err),
+		}
+
+		return &Verdict{Kind: VerdictBlocked, Audit: convertAuditRecordToLegacy(auditRecord)}, err
 	}
 	log.Printf("Successfully resolved %d facts for intent in pane %s", len(resolvedFacts), intent.GetPaneID())
-	audit = append(audit, AuditEntry{Step: "Resolve", Result: "Success"})
+
+	// Add audit entry
+	auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+		Phase:   "Resolve",
+		Action:  "Resolve",
+		Outcome: "Success",
+		Detail:  fmt.Sprintf("Successfully resolved %d facts", len(resolvedFacts)),
+		Meta:    map[string]string{"count": fmt.Sprintf("%d", len(resolvedFacts)), "pane": intent.GetPaneID()},
+		At:      time.Now().Unix(),
+	})
 
 	// [Phase 7] Determine overall safety
 	safety := SafetyExact
@@ -102,12 +210,34 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 
 	if safety == SafetyFuzzy && !intent.IsPartialAllowed() {
 		log.Printf("Fuzzy resolution disallowed by policy for intent in pane %s", intent.GetPaneID())
+
+		// Add audit entry
+		auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+			Phase:   "Policy",
+			Action:  "Validate",
+			Outcome: "Rejected",
+			Detail:  "Fuzzy resolution disallowed by policy",
+			Meta:    map[string]string{"safety": fmt.Sprintf("%d", safety), "partial_allowed": fmt.Sprintf("%t", intent.IsPartialAllowed())},
+			At:      time.Now().Unix(),
+		})
+
+		// Update result
+		auditRecord.Result = AuditResult{
+			Status: "Rejected",
+			Error:  "Fuzzy resolution disallowed by policy",
+		}
+
 		return &Verdict{
 			Kind:    VerdictRejected,
 			Safety:  SafetyUnsafe,
 			Message: "Fuzzy resolution disallowed by policy",
-			Audit:   audit,
-		}, ErrWorldDrift // Or a new error like ErrSafetyViolation
+			Audit:   convertAuditRecordToLegacy(auditRecord),
+		}, &WorldDriftError{
+			Reason:   DriftSnapshotMismatch,
+			Expected: intent.GetSnapshotHash(),
+			Actual:   intent.GetSnapshotHash(), // Not actually a snapshot mismatch, but using for policy violation
+			Message:  "Fuzzy resolution disallowed by policy",
+		}
 	}
 
 	// [Phase 7] Inverse Fact Enrichment:
@@ -143,6 +273,16 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 			}
 		}
 		log.Printf("Generated %d inverse facts for intent in pane %s", len(inverseFacts), intent.GetPaneID())
+
+		// Add audit entry
+		auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+			Phase:   "Prepare",
+			Action:  "Generate",
+			Outcome: "Success",
+			Detail:  fmt.Sprintf("Generated %d inverse facts", len(inverseFacts)),
+			Meta:    map[string]string{"count": fmt.Sprintf("%d", len(inverseFacts)), "pane": intent.GetPaneID()},
+			At:      time.Now().Unix(),
+		})
 	}
 
 	// 3. Create Transaction
@@ -158,6 +298,9 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 		AllowPartial: intent.IsPartialAllowed(),
 	}
 
+	// Update audit record with transaction ID
+	auditRecord.TransactionID = string(txID)
+
 	// [Phase 9] Capture PreSnapshot for verification
 	preSnapshot := snapshot
 
@@ -165,11 +308,36 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 	log.Printf("Projecting %d resolved facts for intent in pane %s", len(resolvedFacts), intent.GetPaneID())
 	if _, err := e.projection.Apply(nil, resolvedFacts); err != nil {
 		log.Printf("Failed to project facts for intent in pane %s: %v", intent.GetPaneID(), err)
-		audit = append(audit, AuditEntry{Step: "Project", Result: fmt.Sprintf("Error: %v", err)})
-		return &Verdict{Kind: VerdictBlocked, Audit: audit}, err
+
+		// Add audit entry
+		auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+			Phase:   "Project",
+			Action:  "Apply",
+			Outcome: "Failure",
+			Detail:  fmt.Sprintf("Failed to project facts: %v", err),
+			Meta:    map[string]string{"count": fmt.Sprintf("%d", len(resolvedFacts)), "pane": intent.GetPaneID()},
+			At:      time.Now().Unix(),
+		})
+
+		// Update result
+		auditRecord.Result = AuditResult{
+			Status: "Rejected",
+			Error:  fmt.Sprintf("Failed to project facts: %v", err),
+		}
+
+		return &Verdict{Kind: VerdictBlocked, Audit: convertAuditRecordToLegacy(auditRecord)}, err
 	}
 	log.Printf("Successfully projected facts for intent in pane %s", intent.GetPaneID())
-	audit = append(audit, AuditEntry{Step: "Project", Result: "Success"})
+
+	// Add audit entry
+	auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+		Phase:   "Project",
+		Action:  "Apply",
+		Outcome: "Success",
+		Detail:  fmt.Sprintf("Successfully projected %d facts", len(resolvedFacts)),
+		Meta:    map[string]string{"count": fmt.Sprintf("%d", len(resolvedFacts)), "pane": intent.GetPaneID()},
+		At:      time.Now().Unix(),
+	})
 	tx.Applied = true
 
 	// [Phase 7] Capture PostSnapshotHash for Undo verification
@@ -180,9 +348,28 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 		if err == nil {
 			tx.PostSnapshotHash = string(postSnap.Hash)
 			log.Printf("Captured post-snapshot hash %s for transaction %s", tx.PostSnapshotHash, txID)
-			audit = append(audit, AuditEntry{Step: "Record", Result: fmt.Sprintf("PostHash: %s", tx.PostSnapshotHash)})
+
+			// Add audit entry
+			auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+				Phase:   "Record",
+				Action:  "Capture",
+				Outcome: "Success",
+				Detail:  fmt.Sprintf("Captured post-snapshot hash: %s", tx.PostSnapshotHash),
+				Meta:    map[string]string{"hash": tx.PostSnapshotHash, "tx": string(txID)},
+				At:      time.Now().Unix(),
+			})
 		} else {
 			log.Printf("Failed to capture post-snapshot for transaction %s: %v", txID, err)
+
+			// Add audit entry
+			auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+				Phase:   "Record",
+				Action:  "Capture",
+				Outcome: "Failure",
+				Detail:  fmt.Sprintf("Failed to capture post-snapshot: %v", err),
+				Meta:    map[string]string{"tx": string(txID)},
+				At:      time.Now().Unix(),
+			})
 		}
 	}
 
@@ -191,12 +378,31 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 		verification := e.projection.Verify(preSnapshot, resolvedFacts, postSnap)
 		if !verification.OK {
 			log.Printf("Projection verification failed for transaction %s: %s", txID, verification.Message)
-			audit = append(audit, AuditEntry{Step: "Verify", Result: fmt.Sprintf("Verification failed: %s", verification.Message)})
+
+			// Add audit entry
+			auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+				Phase:   "Verify",
+				Action:  "Validate",
+				Outcome: "Failure",
+				Detail:  fmt.Sprintf("Verification failed: %s", verification.Message),
+				Meta:    map[string]string{"tx": string(txID), "message": verification.Message},
+				At:      time.Now().Unix(),
+			})
+
 			// For now, we still consider this applied but log the verification issue
 			log.Printf("[WEAVER] Projection verification failed: %s", verification.Message)
 		} else {
 			log.Printf("Projection verification succeeded for transaction %s", txID)
-			audit = append(audit, AuditEntry{Step: "Verify", Result: "Success: Projection matched expectations"})
+
+			// Add audit entry
+			auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+				Phase:   "Verify",
+				Action:  "Validate",
+				Outcome: "Success",
+				Detail:  "Projection matched expectations",
+				Meta:    map[string]string{"tx": string(txID)},
+				At:      time.Now().Unix(),
+			})
 		}
 	}
 
@@ -204,6 +410,32 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 	if len(facts) > 0 {
 		log.Printf("Pushing transaction %s to history for pane %s", txID, intent.GetPaneID())
 		e.history.Push(tx)
+
+		// Add audit entry
+		auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+			Phase:   "History",
+			Action:  "Push",
+			Outcome: "Success",
+			Detail:  fmt.Sprintf("Transaction %s pushed to history", txID),
+			Meta:    map[string]string{"tx": string(txID), "pane": intent.GetPaneID()},
+			At:      time.Now().Unix(),
+		})
+	}
+
+	// Update final result
+	auditRecord.Result = AuditResult{
+		Status:     "Committed",
+		WorldDrift: false,
+	}
+
+	// Generate proof for this transaction
+	if e.proofBuilder != nil {
+		proof := e.proofBuilder.BuildProof(tx, auditRecord)
+		log.Printf("Generated proof for transaction %s: PreState=%s, PostState=%s, Facts=%s, Audit=%s",
+			txID, proof.PreStateHash, proof.PostStateHash, proof.FactsHash, proof.AuditHash)
+
+		// Store proof with transaction metadata if needed
+		// For now, we're just logging it as proof of concept
 	}
 
 	log.Printf("Successfully applied intent for pane %s, transaction %s", intent.GetPaneID(), txID)
@@ -212,16 +444,72 @@ func (e *ShadowEngine) ApplyIntent(intent Intent, snapshot Snapshot) (*Verdict, 
 		Message:     "Applied via Smart Projection",
 		Transaction: tx,
 		Safety:      safety,
-		Audit:       audit,
+		Audit:       convertAuditRecordToLegacy(auditRecord),
 	}, nil
 }
 
+// Helper function to convert AuditRecord to legacy AuditEntry format
+func convertAuditRecordToLegacy(record *AuditRecord) []AuditEntry {
+	var legacy []AuditEntry
+
+	for _, entry := range record.Entries {
+		legacy = append(legacy, AuditEntry{
+			Step:   fmt.Sprintf("[%s] %s", entry.Phase, entry.Action),
+			Result: fmt.Sprintf("%s: %s", entry.Outcome, entry.Detail),
+		})
+	}
+
+	// Add a summary entry for the result
+	legacy = append(legacy, AuditEntry{
+		Step:   "FinalResult",
+		Result: fmt.Sprintf("%s (Drift: %t)", record.Result.Status, record.Result.WorldDrift),
+	})
+
+	return legacy
+}
+
 func (e *ShadowEngine) performUndo() (*Verdict, error) {
-	log.Printf("Starting undo operation")
+	// Generate a RequestID for this undo operation
+	requestID := fmt.Sprintf("req-%d", time.Now().UnixNano())
+
+	// Create a minimal audit record for this operation
+	auditRecord := &AuditRecord{
+		Version:       "v2",
+		RequestID:     requestID,
+		ActorID:       "system", // Undo is system-triggered
+		TimestampUTC:  time.Now().Unix(),
+		IntentKind:    "Undo",
+		DecisionPath:  "System",
+		Entries:       []AuditEntryV2{},
+		Result:        AuditResult{Status: "Pending", WorldDrift: false},
+	}
+
+	return e.performUndoWithRequestID(requestID, auditRecord)
+}
+
+// performUndoWithRequestID performs undo with a specific RequestID and audit record
+func (e *ShadowEngine) performUndoWithRequestID(requestID string, auditRecord *AuditRecord) (*Verdict, error) {
+	log.Printf("Starting undo operation: RequestID=%s", requestID)
 	tx := e.history.PopUndo()
 	if tx == nil {
 		log.Printf("No transaction to undo")
-		return &Verdict{Kind: VerdictSkipped, Message: "Nothing to undo"}, nil
+
+		// Add audit entry
+		auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+			Phase:   "Undo",
+			Action:  "Pop",
+			Outcome: "NoOp",
+			Detail:  "Nothing to undo",
+			Meta:    map[string]string{"request_id": requestID},
+			At:      time.Now().Unix(),
+		})
+
+		// Update result
+		auditRecord.Result = AuditResult{
+			Status: "Skipped",
+		}
+
+		return &Verdict{Kind: VerdictSkipped, Message: "Nothing to undo", Audit: convertAuditRecordToLegacy(auditRecord)}, nil
 	}
 
 	log.Printf("Attempting to undo transaction %s for pane %s", tx.ID, tx.Intent.GetPaneID())
@@ -231,19 +519,51 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 		current, err := e.reality.ReadCurrent(tx.Intent.GetPaneID())
 		if err == nil && string(current.Hash) != tx.PostSnapshotHash {
 			log.Printf("World drift detected during undo: expected %s, got %s", tx.PostSnapshotHash, string(current.Hash))
+
+			// Add audit entry
+			auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+				Phase:   "Adjudicate",
+				Action:  "Verify",
+				Outcome: "Rejected",
+				Detail:  "World drift detected during undo",
+				Meta:    map[string]string{"expected": tx.PostSnapshotHash, "actual": string(current.Hash), "tx": string(tx.ID)},
+				At:      time.Now().Unix(),
+			})
+
+			// Update result
+			auditRecord.Result = AuditResult{
+				Status:      "Rejected",
+				WorldDrift:  true,
+				DriftReason: string(DriftUndoMismatch),
+				Error:       "World drift: cannot undo safely",
+			}
+
 			// Put it back to undo stack since we didn't apply it
 			e.history.PushBack(tx)
 			return &Verdict{
 				Kind:    VerdictRejected,
 				Message: "World drift: cannot undo safely",
 				Safety:  SafetyUnsafe,
-			}, ErrWorldDrift
+				Audit:   convertAuditRecordToLegacy(auditRecord),
+			}, &WorldDriftError{
+				Reason:   DriftUndoMismatch,
+				Expected: tx.PostSnapshotHash,
+				Actual:   string(current.Hash),
+				Message:  "World drift: cannot undo safely",
+			}
 		}
 		log.Printf("Undo context verified for transaction %s", tx.ID)
-	}
 
-	var audit []AuditEntry
-	audit = append(audit, AuditEntry{Step: "Adjudicate", Result: "Undo context verified"})
+		// Add audit entry
+		auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+			Phase:   "Adjudicate",
+			Action:  "Verify",
+			Outcome: "Success",
+			Detail:  "Undo context verified",
+			Meta:    map[string]string{"tx": string(tx.ID)},
+			At:      time.Now().Unix(),
+		})
+	}
 
 	// [Phase 5.1] Resolve InverseFacts
 	// [Phase 6.3] Use recorded PostHash if available (passed as expectedHash)
@@ -251,16 +571,54 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 	resolvedFacts, err := e.resolver.ResolveFacts(tx.InverseFacts, tx.PostSnapshotHash)
 	if err != nil {
 		log.Printf("Failed to resolve inverse facts for undo of transaction %s: %v", tx.ID, err)
+
+		// Add audit entry
+		auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+			Phase:   "Resolve",
+			Action:  "Resolve",
+			Outcome: "Failure",
+			Detail:  fmt.Sprintf("Failed to resolve inverse facts: %v", err),
+			Meta:    map[string]string{"count": fmt.Sprintf("%d", len(tx.InverseFacts)), "tx": string(tx.ID)},
+			At:      time.Now().Unix(),
+		})
+
 		e.history.PushBack(tx)
+
+		// Update result
+		auditRecord.Result = AuditResult{
+			Status: "Rejected",
+			Error:  fmt.Sprintf("Failed to resolve inverse facts: %v", err),
+		}
+
 		return nil, err
 	}
 	log.Printf("Successfully resolved %d inverse facts for undo of transaction %s", len(resolvedFacts), tx.ID)
-	audit = append(audit, AuditEntry{Step: "Resolve", Result: fmt.Sprintf("Success: %d facts", len(resolvedFacts))})
+
+	// Add audit entry
+	auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+		Phase:   "Resolve",
+		Action:  "Resolve",
+		Outcome: "Success",
+		Detail:  fmt.Sprintf("Successfully resolved %d inverse facts", len(resolvedFacts)),
+		Meta:    map[string]string{"count": fmt.Sprintf("%d", len(resolvedFacts)), "tx": string(tx.ID)},
+		At:      time.Now().Unix(),
+	})
 
 	// [Phase 9] Capture PreSnapshot for verification
 	preSnapshot, err := e.reality.ReadCurrent(tx.Intent.GetPaneID())
 	if err != nil {
 		log.Printf("Failed to capture pre-snapshot for undo of transaction %s: %v", tx.ID, err)
+
+		// Add audit entry
+		auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+			Phase:   "Verify",
+			Action:  "Capture",
+			Outcome: "Warning",
+			Detail:  fmt.Sprintf("Failed to capture pre-snapshot: %v", err),
+			Meta:    map[string]string{"tx": string(tx.ID)},
+			At:      time.Now().Unix(),
+		})
+
 		preSnapshot = Snapshot{} // fallback
 	}
 
@@ -271,11 +629,38 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 	}
 	if _, err := e.projection.Apply(nil, resolvedFacts); err != nil {
 		log.Printf("Failed to apply inverse facts for undo of transaction %s: %v", tx.ID, err)
+
+		// Add audit entry
+		auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+			Phase:   "Project",
+			Action:  "Apply",
+			Outcome: "Failure",
+			Detail:  fmt.Sprintf("Failed to apply inverse facts: %v", err),
+			Meta:    map[string]string{"count": fmt.Sprintf("%d", len(resolvedFacts)), "tx": string(tx.ID)},
+			At:      time.Now().Unix(),
+		})
+
 		e.history.PushBack(tx)
+
+		// Update result
+		auditRecord.Result = AuditResult{
+			Status: "Rejected",
+			Error:  fmt.Sprintf("Failed to apply inverse facts: %v", err),
+		}
+
 		return nil, err
 	}
 	log.Printf("Successfully applied inverse facts for undo of transaction %s", tx.ID)
-	audit = append(audit, AuditEntry{Step: "Project", Result: "Success"})
+
+	// Add audit entry
+	auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+		Phase:   "Project",
+		Action:  "Apply",
+		Outcome: "Success",
+		Detail:  fmt.Sprintf("Successfully applied %d inverse facts", len(resolvedFacts)),
+		Meta:    map[string]string{"count": fmt.Sprintf("%d", len(resolvedFacts)), "tx": string(tx.ID)},
+		At:      time.Now().Unix(),
+	})
 
 	// [Phase 9] Verify undo operation
 	if e.projection != nil && e.reality != nil {
@@ -284,14 +669,43 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 			verification := e.projection.Verify(preSnapshot, resolvedFacts, postSnap)
 			if !verification.OK {
 				log.Printf("Undo verification failed for transaction %s: %s", tx.ID, verification.Message)
-				audit = append(audit, AuditEntry{Step: "Verify", Result: fmt.Sprintf("Undo verification failed: %s", verification.Message)})
+
+				// Add audit entry
+				auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+					Phase:   "Verify",
+					Action:  "Validate",
+					Outcome: "Failure",
+					Detail:  fmt.Sprintf("Undo verification failed: %s", verification.Message),
+					Meta:    map[string]string{"tx": string(tx.ID), "message": verification.Message},
+					At:      time.Now().Unix(),
+				})
+
 				log.Printf("[WEAVER] Undo projection verification failed: %s", verification.Message)
 			} else {
 				log.Printf("Undo verification succeeded for transaction %s", tx.ID)
-				audit = append(audit, AuditEntry{Step: "Verify", Result: "Success: Undo projection matched expectations"})
+
+				// Add audit entry
+				auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+					Phase:   "Verify",
+					Action:  "Validate",
+					Outcome: "Success",
+					Detail:  "Undo projection matched expectations",
+					Meta:    map[string]string{"tx": string(tx.ID)},
+					At:      time.Now().Unix(),
+				})
 			}
 		} else {
 			log.Printf("Failed to read post-snapshot for undo verification of transaction %s: %v", tx.ID, err)
+
+			// Add audit entry
+			auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+				Phase:   "Verify",
+				Action:  "Validate",
+				Outcome: "Warning",
+				Detail:  fmt.Sprintf("Failed to read post-snapshot: %v", err),
+				Meta:    map[string]string{"tx": string(tx.ID)},
+				At:      time.Now().Unix(),
+			})
 		}
 	}
 
@@ -299,21 +713,82 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 	log.Printf("Moving transaction %s from undo to redo stack", tx.ID)
 	e.history.AddRedo(tx)
 
+	// Add audit entry
+	auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+		Phase:   "History",
+		Action:  "Move",
+		Outcome: "Success",
+		Detail:  fmt.Sprintf("Transaction %s moved from undo to redo", tx.ID),
+		Meta:    map[string]string{"tx": string(tx.ID)},
+		At:      time.Now().Unix(),
+	})
+
+	// Update final result
+	auditRecord.Result = AuditResult{
+		Status: "Committed",
+	}
+
+	// Update audit record with transaction ID
+	auditRecord.TransactionID = string(tx.ID)
+
+	// Generate proof for this undo transaction
+	if e.proofBuilder != nil {
+		proof := e.proofBuilder.BuildProof(tx, auditRecord)
+		log.Printf("Generated proof for undo transaction %s: PreState=%s, PostState=%s, Facts=%s, Audit=%s",
+			tx.ID, proof.PreStateHash, proof.PostStateHash, proof.FactsHash, proof.AuditHash)
+	}
+
 	log.Printf("Successfully undone transaction %s", tx.ID)
 	return &Verdict{
 		Kind:        VerdictApplied,
 		Message:     fmt.Sprintf("Undone tx: %s", tx.ID),
 		Transaction: tx,
-		Audit:       audit,
+		Audit:       convertAuditRecordToLegacy(auditRecord),
 	}, nil
 }
 
 func (e *ShadowEngine) performRedo() (*Verdict, error) {
-	log.Printf("Starting redo operation")
+	// Generate a RequestID for this redo operation
+	requestID := fmt.Sprintf("req-%d", time.Now().UnixNano())
+
+	// Create a minimal audit record for this operation
+	auditRecord := &AuditRecord{
+		Version:       "v2",
+		RequestID:     requestID,
+		ActorID:       "system", // Redo is system-triggered
+		TimestampUTC:  time.Now().Unix(),
+		IntentKind:    "Redo",
+		DecisionPath:  "System",
+		Entries:       []AuditEntryV2{},
+		Result:        AuditResult{Status: "Pending", WorldDrift: false},
+	}
+
+	return e.performRedoWithRequestID(requestID, auditRecord)
+}
+
+// performRedoWithRequestID performs redo with a specific RequestID and audit record
+func (e *ShadowEngine) performRedoWithRequestID(requestID string, auditRecord *AuditRecord) (*Verdict, error) {
+	log.Printf("Starting redo operation: RequestID=%s", requestID)
 	tx := e.history.PopRedo()
 	if tx == nil {
 		log.Printf("No transaction to redo")
-		return &Verdict{Kind: VerdictSkipped, Message: "Nothing to redo"}, nil
+
+		// Add audit entry
+		auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+			Phase:   "Redo",
+			Action:  "Pop",
+			Outcome: "NoOp",
+			Detail:  "Nothing to redo",
+			Meta:    map[string]string{"request_id": requestID},
+			At:      time.Now().Unix(),
+		})
+
+		// Update result
+		auditRecord.Result = AuditResult{
+			Status: "Skipped",
+		}
+
+		return &Verdict{Kind: VerdictSkipped, Message: "Nothing to redo", Audit: convertAuditRecordToLegacy(auditRecord)}, nil
 	}
 
 	log.Printf("Attempting to redo transaction %s for pane %s", tx.ID, tx.Intent.GetPaneID())
@@ -324,14 +799,49 @@ func (e *ShadowEngine) performRedo() (*Verdict, error) {
 		current, err := e.reality.ReadCurrent(tx.Intent.GetPaneID())
 		if err == nil && string(current.Hash) != preHash {
 			log.Printf("World drift detected during redo: expected %s, got %s", preHash, string(current.Hash))
+
+			// Add audit entry
+			auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+				Phase:   "Adjudicate",
+				Action:  "Verify",
+				Outcome: "Rejected",
+				Detail:  "World drift detected during redo",
+				Meta:    map[string]string{"expected": preHash, "actual": string(current.Hash), "tx": string(tx.ID)},
+				At:      time.Now().Unix(),
+			})
+
+			// Update result
+			auditRecord.Result = AuditResult{
+				Status:      "Rejected",
+				WorldDrift:  true,
+				DriftReason: string(DriftRedoMismatch),
+				Error:       "World drift: cannot redo safely",
+			}
+
 			e.history.AddRedo(tx)
 			return &Verdict{
 				Kind:    VerdictRejected,
 				Message: "World drift: cannot redo safely",
 				Safety:  SafetyUnsafe,
-			}, ErrWorldDrift
+				Audit:   convertAuditRecordToLegacy(auditRecord),
+			}, &WorldDriftError{
+				Reason:   DriftRedoMismatch,
+				Expected: preHash,
+				Actual:   string(current.Hash),
+				Message:  "World drift: cannot redo safely",
+			}
 		}
 		log.Printf("Redo context verified for transaction %s", tx.ID)
+
+		// Add audit entry
+		auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+			Phase:   "Adjudicate",
+			Action:  "Verify",
+			Outcome: "Success",
+			Detail:  "Redo context verified",
+			Meta:    map[string]string{"tx": string(tx.ID)},
+			At:      time.Now().Unix(),
+		})
 	}
 
 	// [Phase 5.1] Resolve Facts
@@ -339,15 +849,54 @@ func (e *ShadowEngine) performRedo() (*Verdict, error) {
 	resolvedFacts, err := e.resolver.ResolveFacts(tx.Facts, preHash)
 	if err != nil {
 		log.Printf("Failed to resolve facts for redo of transaction %s: %v", tx.ID, err)
+
+		// Add audit entry
+		auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+			Phase:   "Resolve",
+			Action:  "Resolve",
+			Outcome: "Failure",
+			Detail:  fmt.Sprintf("Failed to resolve facts: %v", err),
+			Meta:    map[string]string{"count": fmt.Sprintf("%d", len(tx.Facts)), "tx": string(tx.ID)},
+			At:      time.Now().Unix(),
+		})
+
 		e.history.AddRedo(tx)
+
+		// Update result
+		auditRecord.Result = AuditResult{
+			Status: "Rejected",
+			Error:  fmt.Sprintf("Failed to resolve facts: %v", err),
+		}
+
 		return nil, err
 	}
 	log.Printf("Successfully resolved %d facts for redo of transaction %s", len(resolvedFacts), tx.ID)
+
+	// Add audit entry
+	auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+		Phase:   "Resolve",
+		Action:  "Resolve",
+		Outcome: "Success",
+		Detail:  fmt.Sprintf("Successfully resolved %d facts", len(resolvedFacts)),
+		Meta:    map[string]string{"count": fmt.Sprintf("%d", len(resolvedFacts)), "tx": string(tx.ID)},
+		At:      time.Now().Unix(),
+	})
 
 	// [Phase 9] Capture PreSnapshot for verification
 	preSnapshot, err := e.reality.ReadCurrent(tx.Intent.GetPaneID())
 	if err != nil {
 		log.Printf("Failed to capture pre-snapshot for redo of transaction %s: %v", tx.ID, err)
+
+		// Add audit entry
+		auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+			Phase:   "Verify",
+			Action:  "Capture",
+			Outcome: "Warning",
+			Detail:  fmt.Sprintf("Failed to capture pre-snapshot: %v", err),
+			Meta:    map[string]string{"tx": string(tx.ID)},
+			At:      time.Now().Unix(),
+		})
+
 		preSnapshot = Snapshot{} // fallback
 	}
 
@@ -355,10 +904,38 @@ func (e *ShadowEngine) performRedo() (*Verdict, error) {
 	log.Printf("Projecting %d resolved facts for redo of transaction %s", len(resolvedFacts), tx.ID)
 	if _, err := e.projection.Apply(nil, resolvedFacts); err != nil {
 		log.Printf("Failed to apply facts for redo of transaction %s: %v", tx.ID, err)
+
+		// Add audit entry
+		auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+			Phase:   "Project",
+			Action:  "Apply",
+			Outcome: "Failure",
+			Detail:  fmt.Sprintf("Failed to apply facts: %v", err),
+			Meta:    map[string]string{"count": fmt.Sprintf("%d", len(resolvedFacts)), "tx": string(tx.ID)},
+			At:      time.Now().Unix(),
+		})
+
 		e.history.AddRedo(tx)
+
+		// Update result
+		auditRecord.Result = AuditResult{
+			Status: "Rejected",
+			Error:  fmt.Sprintf("Failed to apply facts: %v", err),
+		}
+
 		return nil, err
 	}
 	log.Printf("Successfully applied facts for redo of transaction %s", tx.ID)
+
+	// Add audit entry
+	auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+		Phase:   "Project",
+		Action:  "Apply",
+		Outcome: "Success",
+		Detail:  fmt.Sprintf("Successfully applied %d facts", len(resolvedFacts)),
+		Meta:    map[string]string{"count": fmt.Sprintf("%d", len(resolvedFacts)), "tx": string(tx.ID)},
+		At:      time.Now().Unix(),
+	})
 
 	// [Phase 9] Verify redo operation
 	if e.projection != nil && e.reality != nil {
@@ -367,13 +944,43 @@ func (e *ShadowEngine) performRedo() (*Verdict, error) {
 			verification := e.projection.Verify(preSnapshot, resolvedFacts, postSnap)
 			if !verification.OK {
 				log.Printf("Redo verification failed for transaction %s: %s", tx.ID, verification.Message)
+
+				// Add audit entry
+				auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+					Phase:   "Verify",
+					Action:  "Validate",
+					Outcome: "Failure",
+					Detail:  fmt.Sprintf("Redo verification failed: %s", verification.Message),
+					Meta:    map[string]string{"tx": string(tx.ID), "message": verification.Message},
+					At:      time.Now().Unix(),
+				})
+
 				log.Printf("[WEAVER] Redo projection verification failed: %s", verification.Message)
 			} else {
 				log.Printf("Redo verification succeeded for transaction %s", tx.ID)
-				// Verification successful
+
+				// Add audit entry
+				auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+					Phase:   "Verify",
+					Action:  "Validate",
+					Outcome: "Success",
+					Detail:  "Redo projection matched expectations",
+					Meta:    map[string]string{"tx": string(tx.ID)},
+					At:      time.Now().Unix(),
+				})
 			}
 		} else {
 			log.Printf("Failed to read post-snapshot for redo verification of transaction %s: %v", tx.ID, err)
+
+			// Add audit entry
+			auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+				Phase:   "Verify",
+				Action:  "Validate",
+				Outcome: "Warning",
+				Detail:  fmt.Sprintf("Failed to read post-snapshot: %v", err),
+				Meta:    map[string]string{"tx": string(tx.ID)},
+				At:      time.Now().Unix(),
+			})
 		}
 	}
 
@@ -381,11 +988,30 @@ func (e *ShadowEngine) performRedo() (*Verdict, error) {
 	log.Printf("Moving transaction %s from redo back to undo stack", tx.ID)
 	e.history.PushBack(tx)
 
+	// Add audit entry
+	auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+		Phase:   "History",
+		Action:  "Move",
+		Outcome: "Success",
+		Detail:  fmt.Sprintf("Transaction %s moved from redo back to undo", tx.ID),
+		Meta:    map[string]string{"tx": string(tx.ID)},
+		At:      time.Now().Unix(),
+	})
+
+	// Update final result
+	auditRecord.Result = AuditResult{
+		Status: "Committed",
+	}
+
+	// Update audit record with transaction ID
+	auditRecord.TransactionID = string(tx.ID)
+
 	log.Printf("Successfully redone transaction %s", tx.ID)
 	return &Verdict{
 		Kind:        VerdictApplied,
 		Message:     fmt.Sprintf("Redone tx: %s", tx.ID),
 		Transaction: tx,
+		Audit:       convertAuditRecordToLegacy(auditRecord),
 	}, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 	"tmux-fsm/fsm"
 	"tmux-fsm/intent"
 	"tmux-fsm/intent/builder"
@@ -31,7 +32,9 @@ type Kernel struct {
 
 // ✅ Kernel 的唯一上下文入口（现在先很薄，未来可扩展）
 type HandleContext struct {
-	Ctx context.Context
+	Ctx       context.Context
+	RequestID string  // Unique identifier for this user request
+	ActorID   string  // User / pane / client identifier
 }
 
 func NewKernel(fsmEngine *fsm.Engine, exec IntentExecutor) *Kernel {
@@ -46,10 +49,19 @@ func NewKernel(fsmEngine *fsm.Engine, exec IntentExecutor) *Kernel {
 
 // ✅ Kernel 的唯一入口
 func (k *Kernel) HandleKey(hctx HandleContext, key string) {
-	_ = hctx // ✅ 现在不用，但接口已经锁死
+	// Use the RequestID from context if available, otherwise generate one
+	requestID := hctx.RequestID
+	if requestID == "" {
+		requestID = fmt.Sprintf("req-%d", time.Now().UnixNano())
+	}
 
-	// Log the incoming key for audit trail
-	log.Printf("Handling key: %s", key)
+	actorID := hctx.ActorID
+	if actorID == "" {
+		actorID = "unknown"
+	}
+
+	// Log the incoming key for audit trail with identity anchors
+	log.Printf("Handling key: RequestID=%s, ActorID=%s, Key=%s", requestID, actorID, key)
 
 	// 通过Grammar路径生成intent（新的权威执行路径）
 	var decision *Decision
@@ -60,28 +72,28 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 
 		if decision != nil {
 			// Log decision details for audit trail
-			log.Printf("Decision made for key '%s': Kind=%s, Intent=%v",
-				key, decision.Kind, decision.Intent)
+			log.Printf("Decision made for key '%s': RequestID=%s, ActorID=%s, Kind=%s, Intent=%v",
+				key, requestID, actorID, decision.Kind, decision.Intent)
 
 			switch decision.Kind {
 			case DecisionIntent:
-				log.Printf("Processing intent for key '%s'", key)
-				k.ProcessIntent(decision.Intent)
+				log.Printf("Processing intent for key '%s': RequestID=%s, ActorID=%s", key, requestID, actorID)
+				k.ProcessIntentWithContext(hctx, decision.Intent)
 				return
 
 			case DecisionFSM:
-				log.Printf("Executing FSM decision for key '%s'", key)
+				log.Printf("Executing FSM decision for key '%s': RequestID=%s, ActorID=%s", key, requestID, actorID)
 				k.Execute(decision)
 				return
 
 			case DecisionNone:
 				// FSM 吃了 key，合法等待
-				log.Printf("FSM consumed key '%s', valid wait state", key)
+				log.Printf("FSM consumed key '%s', valid wait state: RequestID=%s, ActorID=%s", key, requestID, actorID)
 				return
 
 			case DecisionLegacy:
 				// 明确：Grammar/FSM 不处理，才允许 legacy
-				log.Printf("Key '%s' falls back to legacy handling", key)
+				log.Printf("Key '%s' falls back to legacy handling: RequestID=%s, ActorID=%s", key, requestID, actorID)
 				break
 			}
 		}
@@ -92,7 +104,7 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 		// 只有在 DecisionLegacy 情况下才记录为未覆盖
 		// DecisionNone 是合法的等待状态，不应计入未覆盖
 		if decision != nil && decision.Kind == DecisionLegacy {
-			log.Printf("[GRAMMAR COVERAGE] key '%s' not handled by Grammar", key)
+			log.Printf("[GRAMMAR COVERAGE] key '%s' not handled by Grammar: RequestID=%s, ActorID=%s", key, requestID, actorID)
 			k.ShadowStats.Total++
 			k.ShadowStats.Mismatched++ // 记录为未覆盖
 		}
@@ -101,37 +113,49 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 
 // ProcessIntent 处理意图
 func (k *Kernel) ProcessIntent(intent *intent.Intent) error {
+	// Create a default context with generated IDs for backward compatibility
+	hctx := HandleContext{
+		Ctx:       context.Background(),
+		RequestID: fmt.Sprintf("req-%d", time.Now().UnixNano()),
+		ActorID:   "unknown",
+	}
+	return k.ProcessIntentWithContext(hctx, intent)
+}
+
+// ProcessIntentWithContext 处理意图 with context containing identity anchors
+func (k *Kernel) ProcessIntentWithContext(hctx HandleContext, intent *intent.Intent) error {
 	if intent == nil {
-		log.Printf("ProcessIntent called with nil intent")
+		log.Printf("ProcessIntent called with nil intent: RequestID=%s, ActorID=%s", hctx.RequestID, hctx.ActorID)
 		return fmt.Errorf("intent is nil")
 	}
 
-	// Log intent details for audit trail
-	log.Printf("Processing intent: Type=%s, Data=%v", intent.Type, intent.Data)
+	// Log intent details for audit trail with identity anchors
+	log.Printf("Processing intent: RequestID=%s, ActorID=%s, Type=%s, Data=%v",
+		hctx.RequestID, hctx.ActorID, intent.Type, intent.Data)
 
 	if k.Exec != nil {
-		log.Printf("Processing intent through external executor")
+		log.Printf("Processing intent through external executor: RequestID=%s, ActorID=%s", hctx.RequestID, hctx.ActorID)
 		err := k.Exec.Process(intent)
 		if err != nil {
-			log.Printf("Intent execution failed: %v", err)
+			log.Printf("Intent execution failed: RequestID=%s, ActorID=%s, Error=%v", hctx.RequestID, hctx.ActorID, err)
 			return err
 		}
-		log.Printf("Intent processed successfully by external executor")
+		log.Printf("Intent processed successfully by external executor: RequestID=%s, ActorID=%s", hctx.RequestID, hctx.ActorID)
 		return nil
 	}
 
 	// 如果没有外部执行器，尝试通过FSM执行意图
 	if k.FSM != nil {
-		log.Printf("Processing intent through FSM")
+		log.Printf("Processing intent through FSM: RequestID=%s, ActorID=%s", hctx.RequestID, hctx.ActorID)
 		err := k.FSM.DispatchIntent(intent)
 		if err != nil {
-			log.Printf("FSM dispatch failed: %v", err)
+			log.Printf("FSM dispatch failed: RequestID=%s, ActorID=%s, Error=%v", hctx.RequestID, hctx.ActorID, err)
 			return err
 		}
-		log.Printf("Intent dispatched successfully through FSM")
+		log.Printf("Intent dispatched successfully through FSM: RequestID=%s, ActorID=%s", hctx.RequestID, hctx.ActorID)
 		return nil
 	}
 
-	log.Printf("No executor available for intent: %v", intent)
+	log.Printf("No executor available for intent: RequestID=%s, ActorID=%s, Intent=%v", hctx.RequestID, hctx.ActorID, intent)
 	return fmt.Errorf("no executor available for intent")
 }

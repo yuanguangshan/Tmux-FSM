@@ -39,6 +39,15 @@ func isServerRunning() bool {
 }
 
 func runClient(key, paneAndClient string) {
+	// Generate a RequestID for this client request
+	requestID := fmt.Sprintf("req-%d", time.Now().UnixNano())
+
+	// Get the actor ID from the paneAndClient string
+	actorID := paneAndClient
+	if actorID == "" || actorID == "|" {
+		actorID = "default|default"
+	}
+
 	// 添加参数验证和修复
 	if paneAndClient == "" || paneAndClient == "|" {
 		// 尝试获取当前pane和client
@@ -56,6 +65,8 @@ func runClient(key, paneAndClient string) {
 			paneAndClient = parts[0] + "|default"
 		}
 	}
+
+	log.Printf("Client sending request: RequestID=%s, ActorID=%s, Key=%s", requestID, actorID, key)
 
 	// Retry mechanism with logging
 	maxRetries := 3
@@ -85,6 +96,7 @@ func runClient(key, paneAndClient string) {
 		return
 	}
 
+	// Keep the original payload format for compatibility with server
 	payload := fmt.Sprintf("%s|%s", paneAndClient, key)
 	if _, err := conn.Write([]byte(payload)); err != nil {
 		log.Printf("Failed to send payload '%s': %v", payload, err)
@@ -101,4 +113,6 @@ func runClient(key, paneAndClient string) {
 	if resp != "ok" && resp != "" {
 		fmt.Println(resp)
 	}
+
+	log.Printf("Client request completed: RequestID=%s, ActorID=%s", requestID, actorID)
 }

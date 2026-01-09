@@ -119,10 +119,73 @@ const (
 	VerdictBlocked // Phase 5.4: Blocked by Reconciliation
 )
 
-// AuditEntry 审计条目
+// AuditEntry 审计条目 (v1 - legacy)
 type AuditEntry struct {
 	Step   string `json:"step"`
 	Result string `json:"result"`
+}
+
+// AuditRecord v2 - 完整的审计记录
+type AuditRecord struct {
+	Version       string         `json:"version"`
+	RequestID     string         `json:"request_id"`
+	TransactionID string         `json:"transaction_id"`
+	ActorID       string         `json:"actor_id"`
+	TimestampUTC  int64          `json:"timestamp_utc"` // Unix timestamp
+
+	IntentKind    string         `json:"intent_kind"`
+	DecisionPath  string         `json:"decision_path"`
+
+	Entries       []AuditEntryV2 `json:"entries"`
+	Result        AuditResult    `json:"result"`
+}
+
+// AuditEntryV2 - 结构化的审计条目 (v2)
+type AuditEntryV2 struct {
+	Phase   string            `json:"phase"`
+	Action  string            `json:"action"`
+	Outcome string            `json:"outcome"`
+	Detail  string            `json:"detail"`
+	Meta    map[string]string `json:"meta"`
+	At      int64             `json:"at"` // Unix timestamp
+}
+
+// AuditResult - 审计结果
+type AuditResult struct {
+	Status      string `json:"status"`       // Committed / Rejected / RolledBack
+	WorldDrift  bool   `json:"world_drift"`
+	DriftReason string `json:"drift_reason,omitempty"`
+	Error       string `json:"error,omitempty"`
+}
+
+// DriftReason - 漂移原因类型
+type DriftReason string
+
+const (
+	DriftSnapshotMismatch DriftReason = "snapshot_mismatch"
+	DriftUndoMismatch     DriftReason = "undo_mismatch"
+	DriftRedoMismatch     DriftReason = "redo_mismatch"
+)
+
+// WorldDriftError - 带原因的世界漂移错误
+type WorldDriftError struct {
+	Reason   DriftReason
+	Expected string
+	Actual   string
+	Message  string
+}
+
+func (e *WorldDriftError) Error() string {
+	return e.Message
+}
+
+// Proof - 证明对象
+type Proof struct {
+	TransactionID string `json:"transaction_id"`
+	PreStateHash  string `json:"pre_state_hash"`
+	PostStateHash string `json:"post_state_hash"`
+	FactsHash     string `json:"facts_hash"`
+	AuditHash     string `json:"audit_hash"`
 }
 
 // AnchorResolution Anchor 解析结果

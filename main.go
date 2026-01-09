@@ -289,10 +289,27 @@ func (s *Server) handleClient(conn net.Conn) {
 	payloadStr := string(rawData[:n])
 	if strings.Contains(payloadStr, "|") {
 		// 这是字符串协议格式
-		parts := strings.SplitN(payloadStr, "|", 3)
-		var paneID, clientName, key string
+		// Try parsing the new format: "requestID|actorID|paneAndClient|key"
+		parts := strings.SplitN(payloadStr, "|", 4)
+		var requestID, actorID, paneID, clientName, key string
 
-		if len(parts) == 3 {
+		if len(parts) == 4 {
+			// New format: requestID|actorID|paneAndClient|key
+			requestID = parts[0]
+			actorID = parts[1]
+			paneAndClient := parts[2]
+			key = parts[3]
+
+			// Parse paneAndClient to extract paneID and clientName
+			paneParts := strings.SplitN(paneAndClient, "|", 2)
+			if len(paneParts) >= 1 {
+				paneID = paneParts[0]
+			}
+			if len(paneParts) == 2 {
+				clientName = paneParts[1]
+			}
+		} else if len(parts) == 3 {
+			// Original format: pane|client|key
 			paneID = parts[0]
 			clientName = parts[1]
 			key = parts[2]
@@ -304,7 +321,7 @@ func (s *Server) handleClient(conn net.Conn) {
 			key = payloadStr
 		}
 
-		log.Printf("[server] string protocol received: pane='%s', client='%s', key='%s'", paneID, clientName, key)
+		log.Printf("[server] string protocol received: requestID='%s', actorID='%s', pane='%s', client='%s', key='%s'", requestID, actorID, paneID, clientName, key)
 
 		// 处理特殊命令
 		switch key {
@@ -321,9 +338,13 @@ func (s *Server) handleClient(conn net.Conn) {
 			return
 		}
 
-		// 使用 kernel 处理按键
+		// 使用 kernel 处理按键 with context containing identity anchors
 		if kernelInstance != nil {
-			hctx := kernel.HandleContext{Ctx: context.Background()}
+			hctx := kernel.HandleContext{
+				Ctx:       context.Background(),
+				RequestID: requestID,
+				ActorID:   actorID,
+			}
 			kernelInstance.HandleKey(hctx, key)
 		}
 
