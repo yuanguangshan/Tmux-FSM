@@ -20,8 +20,8 @@ const (
 
 // TextObjectMotion 定义文本对象运动
 type TextObjectMotion struct {
-	Kind     TextObjectKind
-	Inner    bool // true for 'i', false for 'a'
+	Kind  TextObjectKind
+	Inner bool // true for 'i', false for 'a'
 }
 
 // TextObjectRangeCalculator 计算文本对象范围的接口
@@ -180,7 +180,7 @@ func (calc *ConcreteTextObjectCalculator) calculateDelimitedRange(open, close ru
 
 	// 从当前行开始搜索
 	startPos, endPos := findDelimitedRange(calc.Buffer, open, close, cursor, inner)
-	
+
 	if startPos.Row == -1 || endPos.Row == -1 {
 		return nil, errors.New("delimited range not found")
 	}
@@ -196,7 +196,7 @@ func findDelimitedRange(buffer Buffer, open, close rune, cursor Cursor, inner bo
 	// 从当前光标位置开始查找匹配的定界符
 	currentRow := cursor.Row
 	currentCol := cursor.Col
-	
+
 	// 首先尝试在当前行查找
 	for row := currentRow; row < buffer.LineCount(); row++ {
 		lineLen := buffer.LineLength(row)
@@ -204,7 +204,7 @@ func findDelimitedRange(buffer Buffer, open, close rune, cursor Cursor, inner bo
 		if row == currentRow {
 			startCol = currentCol
 		}
-		
+
 		for col := startCol; col < lineLen; col++ {
 			r := buffer.RuneAt(row, col)
 			if r == open {
@@ -222,7 +222,7 @@ func findDelimitedRange(buffer Buffer, open, close rune, cursor Cursor, inner bo
 			}
 		}
 	}
-	
+
 	// 如果没找到，返回无效位置
 	return Cursor{Row: -1, Col: -1}, Cursor{Row: -1, Col: -1}
 }
@@ -232,14 +232,14 @@ func findMatchingDelimiter(buffer Buffer, open, close rune, startPos Cursor) Cur
 	stack := 0
 	currentRow := startPos.Row
 	currentCol := startPos.Col + 1 // 从开定界符的下一个位置开始
-	
+
 	for row := currentRow; row < buffer.LineCount(); row++ {
 		lineLen := buffer.LineLength(row)
 		startCol := 0
 		if row == currentRow {
 			startCol = currentCol
 		}
-		
+
 		for col := startCol; col < lineLen; col++ {
 			r := buffer.RuneAt(row, col)
 			if r == open {
@@ -254,7 +254,7 @@ func findMatchingDelimiter(buffer Buffer, open, close rune, startPos Cursor) Cur
 		}
 		currentCol = 0 // 从下一行开始时，列从0开始
 	}
-	
+
 	// 没有找到匹配的闭定界符
 	return Cursor{Row: -1, Col: -1}
 }
@@ -268,7 +268,7 @@ func (calc *ConcreteTextObjectCalculator) calculateQuoteRange(quote rune, inner 
 	// 从当前光标位置开始查找引号
 	currentRow := cursor.Row
 	currentCol := cursor.Col
-	
+
 	// 首先检查光标位置是否在引号内或旁边
 	for row := currentRow; row < calc.Buffer.LineCount(); row++ {
 		lineLen := calc.Buffer.LineLength(row)
@@ -276,7 +276,7 @@ func (calc *ConcreteTextObjectCalculator) calculateQuoteRange(quote rune, inner 
 		if row == currentRow {
 			startCol = currentCol
 		}
-		
+
 		for col := startCol; col < lineLen; col++ {
 			r := calc.Buffer.RuneAt(row, col)
 			if r == quote {
@@ -300,7 +300,7 @@ func (calc *ConcreteTextObjectCalculator) calculateQuoteRange(quote rune, inner 
 			}
 		}
 	}
-	
+
 	return nil, errors.New("quote range not found")
 }
 
@@ -427,7 +427,7 @@ func findSentenceStart(buffer Buffer, row, col int) (int, int) {
 		if r == row {
 			startCol = col
 		}
-		
+
 		for c := startCol; c >= 0; c-- {
 			runeVal := buffer.RuneAt(r, c)
 			if runeVal == '.' || runeVal == '!' || runeVal == '?' {
@@ -437,7 +437,7 @@ func findSentenceStart(buffer Buffer, row, col int) (int, int) {
 			}
 		}
 	}
-	
+
 	// 如果没找到，返回文件开始
 	return 0, 0
 }
@@ -451,7 +451,7 @@ func findSentenceEnd(buffer Buffer, row, col int) (int, int) {
 		if r == row {
 			startCol = col
 		}
-		
+
 		for c := startCol; c < lineLen; c++ {
 			runeVal := buffer.RuneAt(r, c)
 			if runeVal == '.' || runeVal == '!' || runeVal == '?' {
@@ -460,7 +460,7 @@ func findSentenceEnd(buffer Buffer, row, col int) (int, int) {
 			}
 		}
 	}
-	
+
 	// 如果没找到，返回文件结束
 	endRow := buffer.LineCount() - 1
 	endCol := buffer.LineLength(endRow)
@@ -475,7 +475,7 @@ func getNextNonWhitespace(buffer Buffer, row, col int) (int, int) {
 		if r == row {
 			startCol = col
 		}
-		
+
 		for c := startCol; c < lineLen; c++ {
 			runeVal := buffer.RuneAt(r, c)
 			if !isWhitespace(runeVal) {
@@ -483,7 +483,7 @@ func getNextNonWhitespace(buffer Buffer, row, col int) (int, int) {
 			}
 		}
 	}
-	
+
 	// 如果没找到，返回当前位置
 	return row, col
 }
@@ -498,7 +498,7 @@ func ParseTextObject(textObjectStr string) (*TextObjectMotion, error) {
 	objType := textObjectStr[1:2]
 
 	inner := modifier == "i"
-	
+
 	var kind TextObjectKind
 	switch objType {
 	case "w":

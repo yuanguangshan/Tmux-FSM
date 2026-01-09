@@ -8,8 +8,8 @@ type Intent struct {
 	Count        int                    `json:"count"`
 	Meta         map[string]interface{} `json:"meta,omitempty"`
 	PaneID       string                 `json:"pane_id"`
-	SnapshotHash string                 `json:"snapshot_hash"` // Phase 6.2
-	AllowPartial bool                   `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
+	SnapshotHash string                 `json:"snapshot_hash"`     // Phase 6.2
+	AllowPartial bool                   `json:"allow_partial"`     // Phase 7: Explicit permission for fuzzy resolution
 	Anchors      []Anchor               `json:"anchors,omitempty"` // Phase 11.0: Support for multi-cursor / multi-selection
 }
 

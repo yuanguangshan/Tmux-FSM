@@ -33,7 +33,7 @@ func New(k *kernel.Kernel) *Server {
 // Listen starts the server and listens for connections
 func (s *Server) Listen() error {
 	fmt.Printf("Server starting (v3-merged) at %s...\n", socketPath)
-	
+
 	// 检查是否已有服务在运行 (且能响应)
 	if conn, err := net.DialTimeout("unix", socketPath, 1*time.Second); err == nil {
 		conn.Close()
@@ -45,13 +45,13 @@ func (s *Server) Listen() error {
 	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
 		fmt.Printf("Warning: Failed to remove old socket: %v\n", err)
 	}
-	
+
 	listener, err := net.Listen("unix", socketPath)
 	if err != nil {
 		return fmt.Errorf("CRITICAL: Failed to start server: %v", err)
 	}
 	s.listener = listener
-	
+
 	defer listener.Close()
 	if err := os.Chmod(socketPath, 0666); err != nil {
 		fmt.Printf("Warning: Failed to chmod socket: %v\n", err)
@@ -208,7 +208,7 @@ func Shutdown() error {
 		return fmt.Errorf("daemon not running to stop: %v", err)
 	}
 	defer conn.Close()
-	
+
 	// Send a special command to signal shutdown
 	conn.Write([]byte("__SHUTDOWN__"))
 	return nil
@@ -250,6 +250,6 @@ func RunClient(key, paneAndClient string) error {
 	if resp != "ok" && resp != "" {
 		fmt.Println(resp)
 	}
-	
+
 	return nil
 }

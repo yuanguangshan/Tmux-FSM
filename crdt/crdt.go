@@ -15,16 +15,16 @@ type ActorID string
 // PositionID CRDT 位置ID
 type PositionID struct {
 	Path  []uint32 `json:"path"`
-	Actor ActorID    `json:"actor"`
-	Epoch int      `json:"epoch"`  // 每次分叉/reset +1
+	Actor ActorID  `json:"actor"`
+	Epoch int      `json:"epoch"` // 每次分叉/reset +1
 }
 
 // SemanticEvent 修正后的语义事件结构
 type SemanticEvent struct {
 	// 全局唯一、幂等基础
-	ID     EventID `json:"id"`
-	Actor  ActorID `json:"actor"`
-	Time   time.Time `json:"time"`
+	ID    EventID   `json:"id"`
+	Actor ActorID   `json:"actor"`
+	Time  time.Time `json:"time"`
 
 	// 因果一致性（CRDT 用）
 	CausalParents []EventID `json:"causal_parents"`
@@ -39,7 +39,7 @@ type SemanticEvent struct {
 	// ✅ 不同步、不合并
 
 	// 不可变语义
-	Fact semantic.BaseFact `json:"fact"`
+	Fact semantic.Fact `json:"fact"`
 }
 
 // ComparePos 比较两个位置
@@ -255,18 +255,18 @@ func BuildLocalChain(events []SemanticEvent) []SemanticEvent {
 // UndoFilter 创建撤销过滤器
 func UndoFilter(me ActorID, undoPoint EventID, events map[EventID]SemanticEvent) func(SemanticEvent) bool {
 	disabled := make(map[EventID]bool)
-	
+
 	// 从撤销点向上追踪，标记需要禁用的事件
 	current := undoPoint
 	for current != "" {
 		disabled[current] = true
-		
+
 		// 找到当前事件
 		event, exists := events[current]
 		if !exists {
 			break
 		}
-		
+
 		// 移动到父事件
 		current = event.LocalParent
 	}

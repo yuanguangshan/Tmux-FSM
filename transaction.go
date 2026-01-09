@@ -29,8 +29,8 @@ func ChainInverse(a, b Transaction) Transaction {
 					return b.Apply()
 				},
 				inverse: func() Transaction { return ChainInverse(a, b) },
-				kind: "chained_apply",
-				tags: []string{"chained"},
+				kind:    "chained_apply",
+				tags:    []string{"chained"},
 			}
 		},
 		kind: "chained_inverse",
@@ -83,10 +83,10 @@ func (t FuncTx) Merge(next Transaction) Transaction {
 	// 确保合并后的事务的逆操作是正确的
 	// merged.Inverse() 应该等价于 Inverse(next) 再 Inverse(self)
 	return FuncTx{
-		apply: func() error { return merged.Apply() },
+		apply:   func() error { return merged.Apply() },
 		inverse: func() Transaction { return ChainInverse(t.inverse(), next.Inverse()) },
-		kind: merged.Kind(),
-		tags: merged.Tags(),
+		kind:    merged.Kind(),
+		tags:    merged.Tags(),
 		mergeFn: nil, // 合并后的事务不再支持进一步合并
 	}
 }

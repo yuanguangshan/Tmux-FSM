@@ -21,6 +21,14 @@ type Range struct {
 	Text  string // 捕获时已知的文本
 }
 
+// ContainsFact 检查一个事实是否包含在当前范围内
+// TODO: 实现实际的逻辑
+func (r Range) ContainsFact(fact Fact) bool {
+	// 这是一个占位符实现，需要根据实际的语义定义来判断
+	// 例如，比较 fact 的 Anchor 和 Range 是否落在 r.Start 和 r.End 之间
+	return true
+}
+
 //
 // ─────────────────────────────────────────────────────────────
 //  Motion

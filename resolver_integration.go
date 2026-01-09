@@ -39,14 +39,14 @@ type ResolvedOperation struct {
 
 // Resolver 负责解析意图到具体操作
 type Resolver struct {
-	engine *CursorEngine
+	engine         *CursorEngine
 	textObjectCalc *ConcreteTextObjectCalculator
 }
 
 // NewResolver 创建新的解析器
 func NewResolver(engine *CursorEngine) *Resolver {
 	return &Resolver{
-		engine: engine,
+		engine:         engine,
 		textObjectCalc: NewConcreteTextObjectCalculator(engine.Buffer),
 	}
 }

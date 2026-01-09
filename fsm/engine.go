@@ -50,7 +50,10 @@ func (ea *EngineAdapter) ExitVisualMode() {
 func (ea *EngineAdapter) GetCurrentCursor() interface{} {
 	// 获取当前光标位置（通过 tmux 命令）
 	// 这里需要实际从 tmux 获取光标位置
-	return struct{Line int; Col int}{Line: 0, Col: 0} // 简化实现
+	return struct {
+		Line int
+		Col  int
+	}{Line: 0, Col: 0} // 简化实现
 }
 
 func (ea *EngineAdapter) ComputeMotion(m *intent.Motion) (interface{}, error) {
@@ -125,12 +128,12 @@ func (ea *EngineAdapter) ChangeWithMotion(motion intent.MotionKind, count int) e
 
 // Engine FSM 引擎结构体
 type Engine struct {
-	Active       string
-	Keymap       *Keymap
-	layerTimer   *time.Timer
-	count        int              // 用于存储数字计数
-	emitters     []RawTokenEmitter // 用于向外部发送token的多个接收者
-	visualMode   intent.VisualMode // 视觉模式状态
+	Active     string
+	Keymap     *Keymap
+	layerTimer *time.Timer
+	count      int               // 用于存储数字计数
+	emitters   []RawTokenEmitter // 用于向外部发送token的多个接收者
+	visualMode intent.VisualMode // 视觉模式状态
 }
 
 // FSMStatus FSM 状态信息，用于UI更新
@@ -163,7 +166,6 @@ func (e *Engine) emitInternal(token RawToken) {
 
 // 全局默认引擎实例
 var defaultEngine *Engine
-
 
 // NewEngine 创建新的 FSM 引擎实例（显式注入 Keymap）
 func NewEngine(km *Keymap) *Engine {
@@ -264,7 +266,6 @@ func (e *Engine) Reset() {
 	e.emitInternal(RawToken{Kind: TokenSystem, Value: "reset"})
 }
 
-
 // Reload 重新加载keymap并重置FSM（Invariant 8: Reload = atomic rebuild）
 func Reload(configPath string) error {
 	// Load + Validate
@@ -329,9 +330,6 @@ func (e *Engine) resetLayerTimeout(ms int) {
 	}
 }
 
-
-
-
 // RunAction 执行动作
 func (e *Engine) RunAction(name string) {
 	switch name {
@@ -382,13 +380,11 @@ func (e *Engine) RunAction(name string) {
 	}
 }
 
-
 func tmux(cmd string) {
 	// Use GlobalBackend to execute the command
 	// 由于循环导入问题，这里暂时使用占位符
 	// 实际执行应该由上层处理
 }
-
 
 // DispatchIntent 分发意图给解析器
 func (e *Engine) DispatchIntent(i *intent.Intent) error {

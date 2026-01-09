@@ -34,14 +34,14 @@ func hashBytes(b []byte) Hash {
 
 // CanonicalSemanticEvent 必须是确定性可序列化的
 type CanonicalSemanticEvent struct {
-	Actor         crdt.ActorID      `json:"actor"`
-	CausalParents []crdt.EventID    `json:"causal_parents"`
-	Fact          semantic.BaseFact `json:"fact"`
+	Actor         crdt.ActorID   `json:"actor"`
+	CausalParents []crdt.EventID `json:"causal_parents"`
+	Fact          semantic.Fact  `json:"fact"`
 }
 
 // Fact 是“已签名、可验证”的最小单元
 type Fact struct {
-	ID        Hash                    `json:"id"`
+	ID        Hash                   `json:"id"`
 	Actor     crdt.ActorID           `json:"actor"`
 	Parents   []Hash                 `json:"parents"`
 	Timestamp int64                  `json:"timestamp"`
@@ -224,7 +224,7 @@ func (v *Verifier) checkPolicy(f Fact, state replay.TextState) error {
 	actor := string(f.Actor)
 	if len(actor) >= 2 && actor[:2] == "ai" {
 		switch f.Payload.Fact.Kind() {
-		case "insert", "delete", "move":
+		case semantic.FactInsert, semantic.FactDelete, semantic.FactMove:
 			return nil
 		default:
 			return errors.New("ai operation not allowed")

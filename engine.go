@@ -53,8 +53,8 @@ type CharClass int
 
 const (
 	ClassWhitespace CharClass = iota
-	ClassWord       // 字母 + 数字 + _
-	ClassPunct      // 其他
+	ClassWord                 // 字母 + 数字 + _
+	ClassPunct                // 其他
 )
 
 // motionHandler 定义运动处理器类型
@@ -71,8 +71,8 @@ var motionTable = map[MotionKind]motionHandler{
 
 // ConcreteBuffer 是 Buffer 接口的具体实现
 type ConcreteBuffer struct {
-	Lines []Line
-	Content [][]rune  // 每行的实际内容
+	Lines   []Line
+	Content [][]rune // 每行的实际内容
 }
 
 func (cb *ConcreteBuffer) LineCount() int {

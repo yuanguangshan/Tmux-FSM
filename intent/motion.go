@@ -11,6 +11,17 @@ const (
 	MotionFind
 )
 
+// Direction for character-wise and line-wise motions
+type Direction int
+
+const (
+	DirectionNone Direction = iota
+	DirectionLeft
+	DirectionRight
+	DirectionUp
+	DirectionDown
+)
+
 type FindDirection int
 
 const (
@@ -25,8 +36,9 @@ type FindMotion struct {
 }
 
 type Motion struct {
-	Kind  MotionKind
-	Count int
-	Find  *FindMotion      // 只有 Kind == MotionFind 时非空
-	Range *RangeMotion     // 只有 Kind == MotionRange 时非空
+	Kind      MotionKind
+	Count     int
+	Direction Direction    // For up, down, left, right
+	Find      *FindMotion  // 只有 Kind == MotionFind 时非空
+	Range     *RangeMotion // 只有 Kind == MotionRange 时非空
 }

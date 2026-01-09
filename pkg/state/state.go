@@ -13,14 +13,14 @@ import (
 // Transaction 事务结构（简化版）
 // TODO: Phase-3 undo/redo transaction log
 type Transaction struct {
-	ID               int                    `json:"id"`
-	Records          []interface{}          `json:"records"`
-	CreatedAt        string                 `json:"created_at"`
-	Applied          bool                   `json:"applied"`
-	Skipped          bool                   `json:"skipped"`
-	SafetyLevel      string                 `json:"safety_level,omitempty"`
-	PreSnapshotHash  string                 `json:"pre_snapshot_hash,omitempty"`
-	PostSnapshotHash string                 `json:"post_snapshot_hash,omitempty"`
+	ID               int           `json:"id"`
+	Records          []interface{} `json:"records"`
+	CreatedAt        string        `json:"created_at"`
+	Applied          bool          `json:"applied"`
+	Skipped          bool          `json:"skipped"`
+	SafetyLevel      string        `json:"safety_level,omitempty"`
+	PreSnapshotHash  string        `json:"pre_snapshot_hash,omitempty"`
+	PostSnapshotHash string        `json:"post_snapshot_hash,omitempty"`
 }
 
 // FSMState represents the state of the FSM
@@ -40,9 +40,9 @@ type FSMState struct {
 
 // StateManager manages the global state
 type StateManager struct {
-	mutex       sync.Mutex
-	state       FSMState
-	backend     Backend
+	mutex   sync.Mutex
+	state   FSMState
+	backend Backend
 }
 
 // Backend interface for interacting with tmux
@@ -65,7 +65,7 @@ func NewStateManager(backend Backend) *StateManager {
 func (sm *StateManager) LoadState() FSMState {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
-	
+
 	// Use backend to read tmux options
 	out, err := sm.backend.GetUserOption("@tmux_fsm_state")
 	var state FSMState
@@ -81,7 +81,7 @@ func (sm *StateManager) LoadState() FSMState {
 func (sm *StateManager) SaveStateRaw(data []byte) {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
-	
+
 	// Use backend to save state
 	// This implies SetUserOption needs to be able to set arbitrary keys.
 	if err := sm.backend.SetUserOption("@tmux_fsm_state", string(data)); err != nil {

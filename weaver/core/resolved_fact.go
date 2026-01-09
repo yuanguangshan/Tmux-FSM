@@ -4,8 +4,8 @@ package core
 // 它是 Resolver 解析后的结果，Projection 只认这个
 type ResolvedAnchor struct {
 	PaneID string
-	LineID LineID  // Stable line identifier (Phase 9)
-	Line   int     // Fallback line number for compatibility
+	LineID LineID // Stable line identifier (Phase 9)
+	Line   int    // Fallback line number for compatibility
 	Start  int
 	End    int
 }

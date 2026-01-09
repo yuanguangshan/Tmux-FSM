@@ -2,8 +2,8 @@ package types
 
 import (
 	"time"
-	"tmux-fsm/weaver/core"
 	"tmux-fsm/editor"
+	"tmux-fsm/weaver/core"
 )
 
 // TransactionID 事务ID类型
@@ -12,7 +12,7 @@ type TransactionID uint64
 // OperationRecord 操作记录，基于ResolvedOperation
 type OperationRecord struct {
 	ResolvedOp editor.ResolvedOperation `json:"resolved_operation"`
-	Fact       core.Fact               `json:"fact"`
+	Fact       core.Fact                `json:"fact"`
 }
 
 // Transaction 事务
@@ -24,10 +24,10 @@ type OperationRecord struct {
 // Transaction is an immutable description of intent resolution.
 // It does not track execution state and does not contain inverse operations.
 type Transaction struct {
-	ID               TransactionID      `json:"id"`
-	Records          []OperationRecord  `json:"records"`
-	CreatedAt        time.Time          `json:"created_at"`
-	SafetyLevel      string             `json:"safety_level,omitempty"`       // exact, fuzzy
-	PreSnapshotHash  string             `json:"pre_snapshot_hash,omitempty"`  // Phase 8: World state before transaction
-	PostSnapshotHash string             `json:"post_snapshot_hash,omitempty"` // Phase 8: World state after transaction
+	ID               TransactionID     `json:"id"`
+	Records          []OperationRecord `json:"records"`
+	CreatedAt        time.Time         `json:"created_at"`
+	SafetyLevel      string            `json:"safety_level,omitempty"`       // exact, fuzzy
+	PreSnapshotHash  string            `json:"pre_snapshot_hash,omitempty"`  // Phase 8: World state before transaction
+	PostSnapshotHash string            `json:"post_snapshot_hash,omitempty"` // Phase 8: World state after transaction
 }

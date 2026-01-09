@@ -1,31 +1,35 @@
 package kernel
 
+import (
+	"log"
+)
+
+// Execute a decision made by the kernel.
 func (k *Kernel) Execute(decision *Decision) {
 	if decision == nil {
-		panic("kernel.Execute called with nil decision")
+		log.Println("kernel.Execute called with nil decision")
+		return
 	}
 
 	if k.Exec == nil {
+		log.Println("kernel.Execute called with nil executor")
 		return
 	}
 
 	switch decision.Kind {
-	case DecisionNone:
-		return // 刻意不作为
+	case DecisionNone, DecisionLegacy:
+		return // Do nothing intentionally.
 
-	case DecisionFSM:
+	case DecisionIntent:
+		// This is a full-fledged intent from the grammar.
+		// Process it via the standard execution path.
 		if decision.Intent == nil {
-			panic("FSM decision without intent")
-		}
-		_ = k.Exec.Process(decision.Intent)
-
-	case DecisionLegacy:
-		if decision.Intent == nil {
-			panic("Legacy decision without intent")
+			log.Println("DecisionIntent without an intent")
+			return
 		}
 		_ = k.Exec.Process(decision.Intent)
 
 	default:
-		panic("unknown decision kind")
+		log.Printf("Unknown or unhandled decision kind: %v", decision.Kind)
 	}
 }

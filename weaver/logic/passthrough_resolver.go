@@ -89,7 +89,7 @@ func (r *PassthroughResolver) ResolveFacts(facts []core.Fact, expectedHash strin
 			Payload: payload,
 			Meta:    f.Meta,
 			Safety:  safety,
-			LineID:  ra.LineID,        // Phase 9: Include stable LineID
+			LineID:  ra.LineID, // Phase 9: Include stable LineID
 		})
 	}
 
@@ -172,7 +172,7 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 	case core.AnchorAtCursor:
 		return core.ResolvedAnchor{
 			PaneID: a.PaneID,
-			LineID: "",        // 空 LineID，明确表示不稳定
+			LineID: "", // 空 LineID，明确表示不稳定
 			Line:   row,
 			Start:  col,
 			End:    col,
@@ -186,7 +186,7 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 		}
 		return core.ResolvedAnchor{
 			PaneID: a.PaneID,
-			LineID: "",        // 空 LineID，明确表示不稳定
+			LineID: "", // 空 LineID，明确表示不稳定
 			Line:   row,
 			Start:  start,
 			End:    end,
@@ -196,7 +196,7 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 		// use lineText already captured
 		return core.ResolvedAnchor{
 			PaneID: a.PaneID,
-			LineID: "",        // 空 LineID，明确表示不稳定
+			LineID: "", // 空 LineID，明确表示不稳定
 			Line:   row,
 			Start:  0,
 			End:    len(lineText) - 1,
@@ -207,7 +207,7 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 		if m, ok := a.Ref.(map[string]int); ok {
 			return core.ResolvedAnchor{
 				PaneID: a.PaneID,
-				LineID: "",        // 空 LineID，明确表示不稳定
+				LineID: "", // 空 LineID，明确表示不稳定
 				Line:   m["line"],
 				Start:  m["start"],
 				End:    m["end"],
@@ -219,7 +219,7 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 		// Fallback for unknown kinds (e.g. Selection? if not implemented)
 		return core.ResolvedAnchor{
 			PaneID: a.PaneID,
-			LineID: "",        // 空 LineID，明确表示不稳定
+			LineID: "", // 空 LineID，明确表示不稳定
 			Line:   row,
 			Start:  col,
 			End:    col,

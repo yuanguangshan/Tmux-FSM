@@ -12,8 +12,8 @@ import (
 // Grammar ONLY produces intent.GrammarIntent.
 // Promotion happens exclusively in Kernel via intent.Promote.
 type Grammar struct {
-	count             int
-	pendingOp         *intentPkg.OperatorKind
+	count     int
+	pendingOp *intentPkg.OperatorKind
 	// 新增状态用于处理复杂 motion
 	pendingMotion *MotionPendingInfo
 	textObj       TextObjPending
@@ -21,18 +21,18 @@ type Grammar struct {
 
 // MotionPendingInfo 用于处理需要两个按键的 motion
 type MotionPendingInfo struct {
-	Kind        intentPkg.MotionKind
-	FindDir     intentPkg.FindDirection
-	FindTill    bool
+	Kind     intentPkg.MotionKind
+	FindDir  intentPkg.FindDirection
+	FindTill bool
 }
 
 const (
 	MPNone = iota
-	MPG      // g_
-	MPF      // f{c}
-	MPT      // t{c}
-	MPBigF   // F{c}
-	MPBigT   // T{c}
+	MPG    // g_
+	MPF    // f{c}
+	MPT    // t{c}
+	MPBigF // F{c}
+	MPBigT // T{c}
 )
 
 // TextObjPending 用于处理文本对象
@@ -220,9 +220,6 @@ func parseModeSwitch(key string) string {
 	}
 }
 
-
-
-
 // ---------- helpers ----------
 
 func (g *Grammar) reset() {
@@ -232,9 +229,6 @@ func (g *Grammar) reset() {
 	g.textObj = TOPNone
 }
 
-
-
-
 // makeMoveGrammarIntent 创建移动 Grammar 意图
 func makeMoveGrammarIntent(m intentPkg.MotionKind, count int, key string) *intentPkg.GrammarIntent {
 	motion := &intentPkg.Motion{
@@ -242,12 +236,22 @@ func makeMoveGrammarIntent(m intentPkg.MotionKind, count int, key string) *inten
 		Count: count,
 	}
 
-	// 特殊处理某些按键，设置更精确的 Motion 类型
+	// 为基础移动键设置精确的 Direction 或 Range
 	switch key {
-	case "$":
-		motion.Kind = intentPkg.MotionLine
+	case "h":
+		motion.Direction = intentPkg.DirectionLeft
+	case "l":
+		motion.Direction = intentPkg.DirectionRight
+	case "k":
+		motion.Direction = intentPkg.DirectionUp
+	case "j":
+		motion.Direction = intentPkg.DirectionDown
 	case "0", "^":
-		motion.Kind = intentPkg.MotionLine
+		motion.Kind = intentPkg.MotionRange
+		motion.Range = &intentPkg.RangeMotion{Kind: intentPkg.RangeLineStart}
+	case "$":
+		motion.Kind = intentPkg.MotionRange
+		motion.Range = &intentPkg.RangeMotion{Kind: intentPkg.RangeLineEnd}
 	case "G", "gg":
 		motion.Kind = intentPkg.MotionGoto
 	case "H", "M", "L":
@@ -268,12 +272,22 @@ func makeOpMotionGrammarIntent(op intentPkg.OperatorKind, m intentPkg.MotionKind
 		Count: count,
 	}
 
-	// 特殊处理某些按键，设置更精确的 Motion 类型
+	// 为基础移动键设置精确的 Direction 或 Range
 	switch key {
-	case "$":
-		motion.Kind = intentPkg.MotionLine
+	case "h":
+		motion.Direction = intentPkg.DirectionLeft
+	case "l":
+		motion.Direction = intentPkg.DirectionRight
+	case "k":
+		motion.Direction = intentPkg.DirectionUp
+	case "j":
+		motion.Direction = intentPkg.DirectionDown
 	case "0", "^":
-		motion.Kind = intentPkg.MotionLine
+		motion.Kind = intentPkg.MotionRange
+		motion.Range = &intentPkg.RangeMotion{Kind: intentPkg.RangeLineStart}
+	case "$":
+		motion.Kind = intentPkg.MotionRange
+		motion.Range = &intentPkg.RangeMotion{Kind: intentPkg.RangeLineEnd}
 	case "G", "gg":
 		motion.Kind = intentPkg.MotionGoto
 	case "H", "M", "L":
@@ -480,8 +494,8 @@ func makeFindGrammarIntent(pending *MotionPendingInfo, op *intentPkg.OperatorKin
 	}
 
 	motion := &intentPkg.Motion{
-		Kind: intentPkg.MotionFind,
-		Find: findMotion,
+		Kind:  intentPkg.MotionFind,
+		Find:  findMotion,
 		Count: count,
 	}
 
@@ -532,7 +546,6 @@ func motionTypeToString(info *MotionPendingInfo) string {
 
 	return ""
 }
-
 
 // ---------- key parsing (Grammar owns Vim) ----------
 

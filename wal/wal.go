@@ -20,12 +20,12 @@ import (
 //
 
 type SemanticEvent struct {
-	ID            string            `json:"id"`
-	CausalParents []string          `json:"causal_parents"`
-	LocalParent   string            `json:"local_parent"`
-	Time          time.Time         `json:"time"`
-	Actor         string            `json:"actor"`
-	Fact          semantic.BaseFact `json:"fact"`
+	ID            string        `json:"id"`
+	CausalParents []string      `json:"causal_parents"`
+	LocalParent   string        `json:"local_parent"`
+	Time          time.Time     `json:"time"`
+	Actor         string        `json:"actor"`
+	Fact          semantic.Fact `json:"fact"`
 }
 
 //
@@ -35,8 +35,8 @@ type SemanticEvent struct {
 //
 
 type walRecord struct {
-	Version  int            `json:"v"`
-	Checksum string         `json:"checksum"`
+	Version  int           `json:"v"`
+	Checksum string        `json:"checksum"`
 	Event    SemanticEvent `json:"event"`
 }
 

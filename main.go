@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -273,10 +274,67 @@ func (s *Server) handleClient(conn net.Conn) {
 
 	log.Printf("[server] client connected: %s", conn.RemoteAddr())
 
-	var in intent.Intent
-	dec := json.NewDecoder(conn)
+	// 首先尝试读取原始数据以确定协议类型
+	buf := make([]byte, 4096)
+	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+	n, err := conn.Read(buf)
+	if err != nil || n == 0 {
+		log.Printf("[server] failed to read from connection: %v", err)
+		return
+	}
 
-	if err := dec.Decode(&in); err != nil {
+	rawData := buf[:n]
+
+	// 检查是否是字符串协议格式 "pane|client|key"
+	payloadStr := string(rawData[:n])
+	if strings.Contains(payloadStr, "|") {
+		// 这是字符串协议格式
+		parts := strings.SplitN(payloadStr, "|", 3)
+		var paneID, clientName, key string
+
+		if len(parts) == 3 {
+			paneID = parts[0]
+			clientName = parts[1]
+			key = parts[2]
+		} else if len(parts) == 2 {
+			// Fallback for old protocol: PANE|KEY (Client unknown)
+			paneID = parts[0]
+			key = parts[1]
+		} else {
+			key = payloadStr
+		}
+
+		log.Printf("[server] string protocol received: pane='%s', client='%s', key='%s'", paneID, clientName, key)
+
+		// 处理特殊命令
+		switch key {
+		case "__PING__":
+			conn.Write([]byte("PONG"))
+			return
+		case "__SHUTDOWN__":
+			// 这种情况下不应该在这里处理，但为了完整性
+			conn.Write([]byte("SHUTDOWN"))
+			return
+		case "__CLEAR_STATE__":
+			fsm.Reset() // 重置新架构层级
+			conn.Write([]byte("ok"))
+			return
+		}
+
+		// 使用 kernel 处理按键
+		if kernelInstance != nil {
+			hctx := kernel.HandleContext{Ctx: context.Background()}
+			kernelInstance.HandleKey(hctx, key)
+		}
+
+		conn.Write([]byte("ok"))
+		return
+	}
+
+	// 否则是 JSON 协议格式
+	var in intent.Intent
+	decoder := json.NewDecoder(strings.NewReader(payloadStr))
+	if err := decoder.Decode(&in); err != nil {
 		log.Printf("[server] decode intent error: %v", err)
 		return
 	}
@@ -347,62 +405,6 @@ func (s *Server) handleSignals(ctx context.Context, ln net.Listener) {
 	}
 
 	_ = ln.Close()
-}
-
-// intentAdapter 适配 intent.Intent 到 core.Intent
-type intentAdapter struct {
-	intent intent.Intent
-}
-
-func (a *intentAdapter) GetKind() core.IntentKind {
-	return core.IntentKind(a.intent.Kind)
-}
-
-func (a *intentAdapter) GetTarget() core.SemanticTarget {
-	return core.SemanticTarget{
-		Kind:      int(a.intent.Target.Kind),
-		Direction: a.intent.Target.Direction,
-		Scope:     a.intent.Target.Scope,
-		Value:     a.intent.Target.Value,
-	}
-}
-
-func (a *intentAdapter) GetCount() int {
-	return a.intent.Count
-}
-
-func (a *intentAdapter) GetMeta() map[string]interface{} {
-	return a.intent.Meta
-}
-
-func (a *intentAdapter) GetPaneID() string {
-	return a.intent.GetPaneID()
-}
-
-func (a *intentAdapter) GetSnapshotHash() string {
-	return a.intent.GetSnapshotHash()
-}
-
-func (a *intentAdapter) IsPartialAllowed() bool {
-	return a.intent.IsPartialAllowed()
-}
-
-func (a *intentAdapter) GetAnchors() []core.Anchor {
-	// 将 intent.Anchor 转换为 core.Anchor
-	anchors := a.intent.Anchors
-	coreAnchors := make([]core.Anchor, len(anchors))
-	for i, anchor := range anchors {
-		coreAnchors[i] = core.Anchor{
-			PaneID: anchor.PaneID,
-			Kind:   core.AnchorKind(anchor.Kind),
-			Ref:    anchor.Ref,
-			Hash:   anchor.Hash,
-			LineID: core.LineID(anchor.LineID),
-			Start:  anchor.Start,
-			End:    anchor.End,
-		}
-	}
-	return coreAnchors
 }
 
 // RepeatLastTransaction 重复执行最近提交的事务
@@ -614,7 +616,7 @@ func ProcessIntentGlobal(intent intent.Intent) error {
 	}
 
 	// 使用 weaver manager 处理意图
-	err := weaverMgr.ProcessIntentGlobal(&intentAdapter{intent: intent})
+	err := weaverMgr.Process(&intent)
 	if err != nil && transMgr != nil {
 		// 如果处理过程中出现错误，回滚事务
 		transMgr.AbortTransaction()

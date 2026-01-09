@@ -8,12 +8,12 @@ import (
 type TextObjectKind string
 
 const (
-	TextObjectInnerParen   TextObjectKind = "inner_paren"
-	TextObjectAroundParen  TextObjectKind = "around_paren"
-	TextObjectInnerQuote   TextObjectKind = "inner_quote"
-	TextObjectAroundQuote  TextObjectKind = "around_quote"
-	TextObjectInnerWord    TextObjectKind = "inner_word"
-	TextObjectAroundWord   TextObjectKind = "around_word"
+	TextObjectInnerParen  TextObjectKind = "inner_paren"
+	TextObjectAroundParen TextObjectKind = "around_paren"
+	TextObjectInnerQuote  TextObjectKind = "inner_quote"
+	TextObjectAroundQuote TextObjectKind = "around_quote"
+	TextObjectInnerWord   TextObjectKind = "inner_word"
+	TextObjectAroundWord  TextObjectKind = "around_word"
 )
 
 // TextObjectBuilder 文本对象构建器
