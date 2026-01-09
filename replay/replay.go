@@ -47,16 +47,14 @@ func clampCursor(pos, textLen int) int {
 // ─────────────────────────────────────────────────────────────
 //
 
-// ApplyFact 将一个 semantic.BaseFact 应用到文本状态
-//
-// ⚠️ replay 层不负责“合法性判断”
-//    默认 Fact 已通过 policy / semantic 校验
-func ApplyFact(state *TextState, fact semantic.BaseFact) {
+// ApplyFact 将一个 semantic.Fact 应用到文本状态
+// ...
+func ApplyFact(state *TextState, fact semantic.Fact) {
 	switch fact.Kind() {
 
-	case "insert":
-		anchor := fact.GetAnchor()
-		text := fact.GetText()
+	case semantic.FactInsert:
+		anchor := fact.Anchor()
+		text := fact.Text()
 
 		col := clampCursor(anchor.Col, len(state.Text))
 		if text == "" {
@@ -70,8 +68,11 @@ func ApplyFact(state *TextState, fact semantic.BaseFact) {
 
 		state.Cursor = col + len(text)
 
-	case "delete":
-		rng := fact.GetRange()
+	case semantic.FactDelete:
+		rng, ok := fact.Range()
+		if !ok {
+			return // Fact does not have a range, cannot delete
+		}
 
 		start := clampCursor(rng.Start.Col, len(state.Text))
 		end := clampCursor(rng.End.Col, len(state.Text))
@@ -86,8 +87,8 @@ func ApplyFact(state *TextState, fact semantic.BaseFact) {
 
 		state.Cursor = start
 
-	case "move":
-		anchor := fact.GetAnchor()
+	case semantic.FactMove:
+		anchor := fact.Anchor()
 		state.Cursor = clampCursor(anchor.Col, len(state.Text))
 
 	default:

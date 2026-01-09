@@ -39,9 +39,9 @@ type Selection struct {
 
 // SetSelectionFact 设置选择区域（Ephemeral）
 type SetSelectionFact struct {
-	Cursor CursorID          `json:"cursor"`
-	Anchor crdt.PositionID  `json:"anchor"`
-	Focus  crdt.PositionID  `json:"focus"`
+	Cursor CursorID        `json:"cursor"`
+	Anchor crdt.PositionID `json:"anchor"`
+	Focus  crdt.PositionID `json:"focus"`
 }
 
 // EphemeralFact 标记接口（不进入 snapshot）

@@ -407,62 +407,6 @@ func (s *Server) handleSignals(ctx context.Context, ln net.Listener) {
 	_ = ln.Close()
 }
 
-// intentAdapter 适配 intent.Intent 到 core.Intent
-type intentAdapter struct {
-	intent intent.Intent
-}
-
-func (a *intentAdapter) GetKind() core.IntentKind {
-	return core.IntentKind(a.intent.Kind)
-}
-
-func (a *intentAdapter) GetTarget() core.SemanticTarget {
-	return core.SemanticTarget{
-		Kind:      int(a.intent.Target.Kind),
-		Direction: a.intent.Target.Direction,
-		Scope:     a.intent.Target.Scope,
-		Value:     a.intent.Target.Value,
-	}
-}
-
-func (a *intentAdapter) GetCount() int {
-	return a.intent.Count
-}
-
-func (a *intentAdapter) GetMeta() map[string]interface{} {
-	return a.intent.Meta
-}
-
-func (a *intentAdapter) GetPaneID() string {
-	return a.intent.GetPaneID()
-}
-
-func (a *intentAdapter) GetSnapshotHash() string {
-	return a.intent.GetSnapshotHash()
-}
-
-func (a *intentAdapter) IsPartialAllowed() bool {
-	return a.intent.IsPartialAllowed()
-}
-
-func (a *intentAdapter) GetAnchors() []core.Anchor {
-	// 将 intent.Anchor 转换为 core.Anchor
-	anchors := a.intent.Anchors
-	coreAnchors := make([]core.Anchor, len(anchors))
-	for i, anchor := range anchors {
-		coreAnchors[i] = core.Anchor{
-			PaneID: anchor.PaneID,
-			Kind:   core.AnchorKind(anchor.Kind),
-			Ref:    anchor.Ref,
-			Hash:   anchor.Hash,
-			LineID: core.LineID(anchor.LineID),
-			Start:  anchor.Start,
-			End:    anchor.End,
-		}
-	}
-	return coreAnchors
-}
-
 // RepeatLastTransaction 重复执行最近提交的事务
 // 这是 . repeat 功能的核心实现
 func RepeatLastTransaction(ctx *editor.ExecutionContext, tm *TransactionManager) error {
@@ -672,7 +616,7 @@ func ProcessIntentGlobal(intent intent.Intent) error {
 	}
 
 	// 使用 weaver manager 处理意图
-	err := weaverMgr.ProcessIntentGlobal(&intentAdapter{intent: intent})
+	err := weaverMgr.Process(&intent)
 	if err != nil && transMgr != nil {
 		// 如果处理过程中出现错误，回滚事务
 		transMgr.AbortTransaction()

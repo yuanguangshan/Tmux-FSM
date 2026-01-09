@@ -38,7 +38,7 @@ type FindMotion struct {
 type Motion struct {
 	Kind      MotionKind
 	Count     int
-	Direction Direction      // For up, down, left, right
-	Find      *FindMotion      // 只有 Kind == MotionFind 时非空
-	Range     *RangeMotion     // 只有 Kind == MotionRange 时非空
+	Direction Direction    // For up, down, left, right
+	Find      *FindMotion  // 只有 Kind == MotionFind 时非空
+	Range     *RangeMotion // 只有 Kind == MotionRange 时非空
 }

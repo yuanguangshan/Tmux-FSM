@@ -72,9 +72,9 @@ func (t *InsertTx) Apply() error { return nil }
 func (t *InsertTx) Inverse() Transaction {
 	return &DeleteTx{Pos: t.Pos, Len: len(t.Text)}
 }
-func (t *InsertTx) Kind() string { return "insert" }
-func (t *InsertTx) Tags() []string { return []string{"insert"} }
-func (t *InsertTx) CanMerge(next Transaction) bool { return false }
+func (t *InsertTx) Kind() string                       { return "insert" }
+func (t *InsertTx) Tags() []string                     { return []string{"insert"} }
+func (t *InsertTx) CanMerge(next Transaction) bool     { return false }
 func (t *InsertTx) Merge(next Transaction) Transaction { return next }
 
 // DeleteTx 删除事务
@@ -87,9 +87,9 @@ func (t *DeleteTx) Apply() error { return nil }
 func (t *DeleteTx) Inverse() Transaction {
 	return &InsertTx{Pos: t.Pos, Text: ""} // 简化实现
 }
-func (t *DeleteTx) Kind() string { return "delete" }
-func (t *DeleteTx) Tags() []string { return []string{"delete"} }
-func (t *DeleteTx) CanMerge(next Transaction) bool { return false }
+func (t *DeleteTx) Kind() string                       { return "delete" }
+func (t *DeleteTx) Tags() []string                     { return []string{"delete"} }
+func (t *DeleteTx) CanMerge(next Transaction) bool     { return false }
 func (t *DeleteTx) Merge(next Transaction) Transaction { return next }
 
 // MoveCursorTx 移动光标事务
@@ -102,23 +102,23 @@ func (t *MoveCursorTx) Inverse() Transaction {
 	// 简化实现
 	return &MoveCursorTx{To: 0}
 }
-func (t *MoveCursorTx) Kind() string { return "move" }
-func (t *MoveCursorTx) Tags() []string { return []string{"move"} }
-func (t *MoveCursorTx) CanMerge(next Transaction) bool { return false }
+func (t *MoveCursorTx) Kind() string                       { return "move" }
+func (t *MoveCursorTx) Tags() []string                     { return []string{"move"} }
+func (t *MoveCursorTx) CanMerge(next Transaction) bool     { return false }
 func (t *MoveCursorTx) Merge(next Transaction) Transaction { return next }
 
 // TestTxInverseProperty 测试事务与其逆操作的性质
 func TestTxInverseProperty(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
-	
+
 	for i := 0; i < 100; i++ {
 		// 随机生成初始状态
 		initialText := randomString(rand.Intn(20))
-		s0 := TextState{Text: initialText, Cursor: rand.Intn(len(initialText)+1)}
-		
+		s0 := TextState{Text: initialText, Cursor: rand.Intn(len(initialText) + 1)}
+
 		// 创建一个随机事务
 		tx := randomTransaction(len(s0.Text))
-		
+
 		// 应用事务
 		s1, err := s0.Apply(tx)
 		if err != nil {

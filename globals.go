@@ -33,7 +33,7 @@ var (
 	stateMu     sync.Mutex
 	globalState FSMState
 	transMgr    *TransactionManager
-	txJournal   *TxJournal  // 新增：事务日志
+	txJournal   *TxJournal // 新增：事务日志
 	socketPath  = "/tmp/tmux-fsm.sock"
 )
 
@@ -91,21 +91,21 @@ func updateStatusBar(state FSMState, clientName string) {
 	// if activeLayer != "NAV" && activeLayer != "" {
 	// 	modeMsg = activeLayer // Override with FSM layer if active
 	// } else {
-		// Translate legacy FSM modes for display
-		switch modeMsg {
-		case "VISUAL_CHAR":
-			modeMsg = "VISUAL"
-		case "VISUAL_LINE":
-			modeMsg = "V-LINE"
-		case "OPERATOR_PENDING":
-			modeMsg = "PENDING"
-		case "REGISTER_SELECT":
-			modeMsg = "REGISTER"
-		case "MOTION_PENDING":
-			modeMsg = "MOTION"
-		case "SEARCH":
-			modeMsg = "SEARCH"
-		}
+	// Translate legacy FSM modes for display
+	switch modeMsg {
+	case "VISUAL_CHAR":
+		modeMsg = "VISUAL"
+	case "VISUAL_LINE":
+		modeMsg = "V-LINE"
+	case "OPERATOR_PENDING":
+		modeMsg = "PENDING"
+	case "REGISTER_SELECT":
+		modeMsg = "REGISTER"
+	case "MOTION_PENDING":
+		modeMsg = "MOTION"
+	case "SEARCH":
+		modeMsg = "SEARCH"
+	}
 	// }
 
 	if state.Operator != "" {

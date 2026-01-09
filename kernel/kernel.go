@@ -33,7 +33,6 @@ type HandleContext struct {
 	Ctx context.Context
 }
 
-
 func NewKernel(fsmEngine *fsm.Engine, exec IntentExecutor) *Kernel {
 	return &Kernel{
 		FSM:           fsmEngine,
@@ -43,7 +42,6 @@ func NewKernel(fsmEngine *fsm.Engine, exec IntentExecutor) *Kernel {
 		ShadowIntent:  true,
 	}
 }
-
 
 // ✅ Kernel 的唯一入口
 func (k *Kernel) HandleKey(hctx HandleContext, key string) {
@@ -58,6 +56,10 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 
 		if decision != nil {
 			switch decision.Kind {
+			case DecisionIntent:
+				k.ProcessIntent(decision.Intent)
+				return
+
 			case DecisionFSM:
 				k.Execute(decision)
 				return
@@ -98,4 +100,3 @@ func (k *Kernel) ProcessIntent(intent *intent.Intent) error {
 
 	return nil
 }
-

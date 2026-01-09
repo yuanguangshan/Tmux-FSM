@@ -52,14 +52,13 @@ const (
 	FactMove
 )
 
-
 // Anchor 描述“我们想要操作的目标”，而不是“它在哪里”
 // Phase 5.3: 纯语义 Anchor
 type Anchor struct {
 	PaneID string     `json:"pane_id"`
 	Kind   AnchorKind `json:"kind"`
 	Ref    any        `json:"ref,omitempty"`
-	Hash   string     `json:"hash,omitempty"` // Phase 5.4: Reconciliation Expectation
+	Hash   string     `json:"hash,omitempty"`    // Phase 5.4: Reconciliation Expectation
 	LineID LineID     `json:"line_id,omitempty"` // Phase 9: Stable line identifier
 	Start  int        `json:"start,omitempty"`   // Phase 11: Start position in line
 	End    int        `json:"end,omitempty"`     // Phase 11: End position in line
@@ -94,10 +93,10 @@ type TransactionID string
 
 // VerificationResult for verifier
 type VerificationResult struct {
-    OK      bool
-    Safety  SafetyLevel
-    Diffs   []SnapshotDiff
-    Message string
+	OK      bool
+	Safety  SafetyLevel
+	Diffs   []SnapshotDiff
+	Message string
 }
 
 // Verdict 裁决结果（可审计输出）

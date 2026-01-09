@@ -86,11 +86,11 @@ func TestGrammarFfTt(t *testing.T) {
 		t.Fatal("Expected intent for 'fa'")
 	}
 	if intent.Motion == nil ||
-	   intent.Motion.Kind != intentPkg.MotionFind ||
-	   intent.Motion.Find == nil ||
-	   intent.Motion.Find.Char != 'a' ||
-	   intent.Motion.Find.Direction != intentPkg.FindForward ||
-	   intent.Motion.Find.Till {
+		intent.Motion.Kind != intentPkg.MotionFind ||
+		intent.Motion.Find == nil ||
+		intent.Motion.Find.Char != 'a' ||
+		intent.Motion.Find.Direction != intentPkg.FindForward ||
+		intent.Motion.Find.Till {
 		t.Errorf("Expected forward find motion for 'fa', got %+v", intent.Motion)
 	}
 
@@ -102,11 +102,11 @@ func TestGrammarFfTt(t *testing.T) {
 		t.Fatal("Expected intent for 'tb'")
 	}
 	if intent.Motion == nil ||
-	   intent.Motion.Kind != intentPkg.MotionFind ||
-	   intent.Motion.Find == nil ||
-	   intent.Motion.Find.Char != 'b' ||
-	   intent.Motion.Find.Direction != intentPkg.FindForward ||
-	   !intent.Motion.Find.Till {
+		intent.Motion.Kind != intentPkg.MotionFind ||
+		intent.Motion.Find == nil ||
+		intent.Motion.Find.Char != 'b' ||
+		intent.Motion.Find.Direction != intentPkg.FindForward ||
+		!intent.Motion.Find.Till {
 		t.Errorf("Expected forward till motion for 'tb', got %+v", intent.Motion)
 	}
 
@@ -118,11 +118,11 @@ func TestGrammarFfTt(t *testing.T) {
 		t.Fatal("Expected intent for 'Fc'")
 	}
 	if intent.Motion == nil ||
-	   intent.Motion.Kind != intentPkg.MotionFind ||
-	   intent.Motion.Find == nil ||
-	   intent.Motion.Find.Char != 'c' ||
-	   intent.Motion.Find.Direction != intentPkg.FindBackward ||
-	   intent.Motion.Find.Till {
+		intent.Motion.Kind != intentPkg.MotionFind ||
+		intent.Motion.Find == nil ||
+		intent.Motion.Find.Char != 'c' ||
+		intent.Motion.Find.Direction != intentPkg.FindBackward ||
+		intent.Motion.Find.Till {
 		t.Errorf("Expected backward find motion for 'Fc', got %+v", intent.Motion)
 	}
 
@@ -134,11 +134,11 @@ func TestGrammarFfTt(t *testing.T) {
 		t.Fatal("Expected intent for 'Td'")
 	}
 	if intent.Motion == nil ||
-	   intent.Motion.Kind != intentPkg.MotionFind ||
-	   intent.Motion.Find == nil ||
-	   intent.Motion.Find.Char != 'd' ||
-	   intent.Motion.Find.Direction != intentPkg.FindBackward ||
-	   !intent.Motion.Find.Till {
+		intent.Motion.Kind != intentPkg.MotionFind ||
+		intent.Motion.Find == nil ||
+		intent.Motion.Find.Char != 'd' ||
+		intent.Motion.Find.Direction != intentPkg.FindBackward ||
+		!intent.Motion.Find.Till {
 		t.Errorf("Expected backward till motion for 'Td', got %+v", intent.Motion)
 	}
 }
@@ -153,10 +153,10 @@ func TestGrammarTextObject(t *testing.T) {
 		t.Fatal("expected intent for 'iw'")
 	}
 	if intent.Motion == nil ||
-	   intent.Motion.Kind != intentPkg.MotionRange ||
-	   intent.Motion.Range == nil ||
-	   intent.Motion.Range.TextObject == nil ||
-	   intent.Motion.Range.TextObject.Object != intentPkg.Word {
+		intent.Motion.Kind != intentPkg.MotionRange ||
+		intent.Motion.Range == nil ||
+		intent.Motion.Range.TextObject == nil ||
+		intent.Motion.Range.TextObject.Object != intentPkg.Word {
 		t.Errorf("expected word text object motion, got %+v", intent.Motion)
 	}
 
@@ -169,8 +169,8 @@ func TestGrammarTextObject(t *testing.T) {
 		t.Fatal("expected intent for 'diw'")
 	}
 	if intent.Op == nil ||
-	   intent.Motion == nil ||
-	   intent.Motion.Kind != intentPkg.MotionRange {
+		intent.Motion == nil ||
+		intent.Motion.Kind != intentPkg.MotionRange {
 		t.Errorf("expected operator + text object motion, got %+v", intent)
 	}
 }

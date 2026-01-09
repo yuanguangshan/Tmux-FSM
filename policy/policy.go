@@ -17,11 +17,11 @@ import (
 type TrustLevel int
 
 const (
-	TrustSystem TrustLevel = iota // GC / snapshot / rebalance
-	TrustUser                     // 人类
-	TrustDevice                   // 同一用户的多端
-	TrustAI                       // 只能 proposal
-	TrustExternal                 // 插件 / import（默认只读）
+	TrustSystem   TrustLevel = iota // GC / snapshot / rebalance
+	TrustUser                       // 人类
+	TrustDevice                     // 同一用户的多端
+	TrustAI                         // 只能 proposal
+	TrustExternal                   // 插件 / import（默认只读）
 )
 
 //
@@ -46,10 +46,11 @@ type ActorInfo struct {
 type OpKind string
 
 const (
-	OpInsert OpKind = "insert"
-	OpDelete OpKind = "delete"
-	OpMove   OpKind = "move"
-	OpFormat OpKind = "format"
+	OpInsert  OpKind = "insert"
+	OpDelete  OpKind = "delete"
+	OpMove    OpKind = "move"
+	OpReplace OpKind = "replace" // Added OpReplace
+	OpFormat  OpKind = "format"
 )
 
 //
@@ -81,7 +82,7 @@ func (s Scope) allowsOp(op OpKind) bool {
 //
 
 type AIDraft struct {
-	Fact semantic.BaseFact
+	Fact semantic.Fact
 }
 
 //
@@ -173,7 +174,7 @@ func (p *DefaultPolicy) AllowAIDraft(
 		return errors.New("actor is not AI")
 	}
 
-	op := OpKind(draft.Fact.Kind())
+	op := factKindToOpKind(draft.Fact.Kind())
 
 	// 1️⃣ 操作类型检查
 	if !scope.allowsOp(op) {
@@ -215,4 +216,20 @@ func (p *DefaultPolicy) ValidateAIProposal(
 	}
 
 	return nil
+}
+
+// factKindToOpKind 将 semantic.FactKind 转换为 policy.OpKind
+func factKindToOpKind(kind semantic.FactKind) OpKind {
+	switch kind {
+	case semantic.FactInsert:
+		return OpInsert
+	case semantic.FactDelete:
+		return OpDelete
+	case semantic.FactMove:
+		return OpMove
+	case semantic.FactReplace:
+		return OpReplace
+	default:
+		return OpKind("unknown")
+	}
 }

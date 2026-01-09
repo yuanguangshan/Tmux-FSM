@@ -1172,13 +1172,13 @@ func performPhysicalToggleCase(targetPane string) {
 func convertFactToCoreFact(mainFact Fact) core.Fact {
 	// 创建一个锚点转换
 	anchor := core.Anchor{
-		PaneID:   mainFact.Target.Anchor.PaneID,
-		Kind:     core.AnchorKind(mainFact.Target.Anchor.LineHint), // 简单转换，实际实现中可能需要更复杂的映射
-		Ref:      mainFact.Target.Anchor.LineHash, // 使用LineHash作为参考
-		Hash:     mainFact.Target.Anchor.LineHash,
-		LineID:   core.LineID(fmt.Sprintf("%d", mainFact.Target.Anchor.LineHint)),
-		Start:    mainFact.Target.StartOffset,
-		End:      mainFact.Target.EndOffset,
+		PaneID: mainFact.Target.Anchor.PaneID,
+		Kind:   core.AnchorKind(mainFact.Target.Anchor.LineHint), // 简单转换，实际实现中可能需要更复杂的映射
+		Ref:    mainFact.Target.Anchor.LineHash,                  // 使用LineHash作为参考
+		Hash:   mainFact.Target.Anchor.LineHash,
+		LineID: core.LineID(fmt.Sprintf("%d", mainFact.Target.Anchor.LineHint)),
+		Start:  mainFact.Target.StartOffset,
+		End:    mainFact.Target.EndOffset,
 	}
 
 	// 确定FactKind
@@ -1191,7 +1191,7 @@ func convertFactToCoreFact(mainFact Fact) core.Fact {
 	case "replace":
 		factKind = core.FactReplace
 	case "undo":
-		factKind = core.FactMove  // 使用FactMove作为占位符，实际实现中可能需要其他处理
+		factKind = core.FactMove // 使用FactMove作为占位符，实际实现中可能需要其他处理
 	default:
 		factKind = core.FactNone
 	}

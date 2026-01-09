@@ -50,14 +50,14 @@ type Engine interface {
 
 // Snapshot 快照
 type Snapshot struct {
-	At    crdt.EventID    `json:"at"`
+	At    crdt.EventID     `json:"at"`
 	State replay.TextState `json:"state"`
 }
 
 // HeadlessEngine 无头引擎实现
 type HeadlessEngine struct {
-	store      *crdt.EventStore
-	snapshots  map[crdt.EventID]*Snapshot
+	store        *crdt.EventStore
+	snapshots    map[crdt.EventID]*Snapshot
 	currentState replay.TextState
 	selectionMgr *selection.SelectionManager
 	policyMgr    *policy.DefaultPolicy
@@ -67,22 +67,22 @@ type HeadlessEngine struct {
 // Apply 应用事件
 func (e *HeadlessEngine) Apply(event crdt.SemanticEvent) error {
 	e.store.Merge(event)
-	
+
 	// 更新当前状态
 	sortedEvents := e.store.TopoSort()
 	e.currentState = replay.Replay(
-		replay.TextState{}, 
-		sortedEvents, 
+		replay.TextState{},
+		sortedEvents,
 		nil, // 不使用过滤器
 	)
-	
+
 	return nil
 }
 
 // Replay 重放至指定事件
 func (e *HeadlessEngine) Replay(upTo crdt.EventID) replay.TextState {
 	allEvents := e.store.TopoSort()
-	
+
 	// 找到 upTo 事件的索引
 	var eventsToReplay []crdt.SemanticEvent
 	for _, event := range allEvents {
@@ -91,10 +91,10 @@ func (e *HeadlessEngine) Replay(upTo crdt.EventID) replay.TextState {
 			break
 		}
 	}
-	
+
 	return replay.Replay(
-		replay.TextState{}, 
-		eventsToReplay, 
+		replay.TextState{},
+		eventsToReplay,
 		nil,
 	)
 }
@@ -105,13 +105,13 @@ func (e *HeadlessEngine) Snapshot() *Snapshot {
 		At:    "", // 需要设置为最新的事件ID
 		State: e.currentState,
 	}
-	
+
 	// 获取最新的事件ID
 	allEvents := e.store.TopoSort()
 	if len(allEvents) > 0 {
 		snapshot.At = allEvents[len(allEvents)-1].ID
 	}
-	
+
 	e.snapshots[snapshot.At] = snapshot
 	return snapshot
 }
@@ -125,7 +125,7 @@ func (e *HeadlessEngine) Append(event crdt.SemanticEvent) crdt.EventID {
 // WALSince 获取指定事件之后的日志
 func (e *HeadlessEngine) WALSince(id crdt.EventID) []wal.SemanticEvent {
 	allEvents := e.store.TopoSort()
-	
+
 	var result []wal.SemanticEvent
 	found := false
 	for _, event := range allEvents {
@@ -143,16 +143,16 @@ func (e *HeadlessEngine) WALSince(id crdt.EventID) []wal.SemanticEvent {
 				Actor:         string(event.Actor),
 				Fact:          event.Fact,
 			}
-			
+
 			// 填充 CausalParents
 			for _, parent := range event.CausalParents {
 				walEvent.CausalParents = append(walEvent.CausalParents, string(parent))
 			}
-			
+
 			result = append(result, walEvent)
 		}
 	}
-	
+
 	return result
 }
 
@@ -164,7 +164,7 @@ func (e *HeadlessEngine) AllocatePosition(after, before *crdt.PositionID) crdt.P
 	} else if before != nil {
 		actor = string(before.Actor)
 	}
-	
+
 	return crdt.AllocateBetween(after, before, crdt.ActorID(actor))
 }
 
@@ -182,16 +182,16 @@ func (e *HeadlessEngine) Compact(stable crdt.EventID) {
 // KnownHeads 获取已知头部
 func (e *HeadlessEngine) KnownHeads() map[crdt.ActorID]crdt.EventID {
 	heads := make(map[crdt.ActorID]crdt.EventID)
-	
+
 	allEvents := e.store.TopoSort()
-	
+
 	// 按参与者分组，找到每个参与者的最新事件
 	for _, event := range allEvents {
 		if current, exists := heads[event.Actor]; !exists || event.ID > current {
 			heads[event.Actor] = event.ID
 		}
 	}
-	
+
 	return heads
 }
 
