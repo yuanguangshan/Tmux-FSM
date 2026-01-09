@@ -12,16 +12,18 @@ const (
 	DecisionNone DecisionKind = iota
 	DecisionFSM
 	DecisionLegacy
+	DecisionIntent
 )
 
 type Decision struct {
 	Kind   DecisionKind
 	Intent *intent.Intent
+	Action string // For simple FSM actions
 }
 
 // GrammarEmitter 用于将 Grammar 的结果传递给 Kernel
 type GrammarEmitter struct {
-	grammar *planner.Grammar
+	grammar  *planner.Grammar
 	callback func(*intent.GrammarIntent)
 }
 
@@ -60,8 +62,21 @@ func (k *Kernel) Decide(key string) *Decision {
 
 			// 返回意图供执行
 			return &Decision{
-				Kind:   DecisionFSM,
+				Kind:   DecisionIntent, // This is a full-fledged intent
 				Intent: finalIntent,
+			}
+		}
+
+		// Fallback for simple actions defined in keymap.yaml
+		if dispatched && lastGrammarIntent == nil {
+			if state, ok := k.FSM.Keymap.States[k.FSM.Active]; ok {
+				if keyAction, ok := state.Keys[key]; ok && keyAction.Action != "" {
+					// This is a simple FSM action, not a full intent.
+					return &Decision{
+						Kind:   DecisionFSM,
+						Action: keyAction.Action,
+					}
+				}
 			}
 		}
 

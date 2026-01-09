@@ -242,12 +242,22 @@ func makeMoveGrammarIntent(m intentPkg.MotionKind, count int, key string) *inten
 		Count: count,
 	}
 
-	// 特殊处理某些按键，设置更精确的 Motion 类型
+	// 为基础移动键设置精确的 Direction 或 Range
 	switch key {
-	case "$":
-		motion.Kind = intentPkg.MotionLine
+	case "h":
+		motion.Direction = intentPkg.DirectionLeft
+	case "l":
+		motion.Direction = intentPkg.DirectionRight
+	case "k":
+		motion.Direction = intentPkg.DirectionUp
+	case "j":
+		motion.Direction = intentPkg.DirectionDown
 	case "0", "^":
-		motion.Kind = intentPkg.MotionLine
+		motion.Kind = intentPkg.MotionRange
+		motion.Range = &intentPkg.RangeMotion{Kind: intentPkg.RangeLineStart}
+	case "$":
+		motion.Kind = intentPkg.MotionRange
+		motion.Range = &intentPkg.RangeMotion{Kind: intentPkg.RangeLineEnd}
 	case "G", "gg":
 		motion.Kind = intentPkg.MotionGoto
 	case "H", "M", "L":
@@ -268,12 +278,22 @@ func makeOpMotionGrammarIntent(op intentPkg.OperatorKind, m intentPkg.MotionKind
 		Count: count,
 	}
 
-	// 特殊处理某些按键，设置更精确的 Motion 类型
+	// 为基础移动键设置精确的 Direction 或 Range
 	switch key {
-	case "$":
-		motion.Kind = intentPkg.MotionLine
+	case "h":
+		motion.Direction = intentPkg.DirectionLeft
+	case "l":
+		motion.Direction = intentPkg.DirectionRight
+	case "k":
+		motion.Direction = intentPkg.DirectionUp
+	case "j":
+		motion.Direction = intentPkg.DirectionDown
 	case "0", "^":
-		motion.Kind = intentPkg.MotionLine
+		motion.Kind = intentPkg.MotionRange
+		motion.Range = &intentPkg.RangeMotion{Kind: intentPkg.RangeLineStart}
+	case "$":
+		motion.Kind = intentPkg.MotionRange
+		motion.Range = &intentPkg.RangeMotion{Kind: intentPkg.RangeLineEnd}
 	case "G", "gg":
 		motion.Kind = intentPkg.MotionGoto
 	case "H", "M", "L":
