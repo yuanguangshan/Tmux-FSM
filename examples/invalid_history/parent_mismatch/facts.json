@@ -1,0 +1,28 @@
+{
+  "facts": [
+    {
+      "id": "H1",
+      "actor": "alice",
+      "parents": [],
+      "timestamp": 1,
+      "policy_ref": "P0",
+      "payload": {
+        "actor": "alice",
+        "causal_parents": [],
+        "fact": { "type": "insert", "pos": 0, "text": "A" }
+      }
+    },
+    {
+      "id": "H2",
+      "actor": "alice",
+      "parents": ["H1"],
+      "timestamp": 2,
+      "policy_ref": "P0",
+      "payload": {
+        "actor": "alice",
+        "causal_parents": [],
+        "fact": { "type": "insert", "pos": 1, "text": "B" }
+      }
+    }
+  ]
+}

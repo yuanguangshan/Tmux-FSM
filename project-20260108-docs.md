@@ -1,14 +1,17 @@
 # Project Documentation
 
-- **Generated at:** 2026-01-08 17:55:38
+- **Generated at:** 2026-01-08 23:15:17
 - **Root Dir:** `.`
-- **File Count:** 86
-- **Total Size:** 274.16 KB
+- **File Count:** 99
+- **Total Size:** 360.97 KB
 
 ## 📂 File List
 - `backend/backend.go` (2.96 KB)
 - `client.go` (1.87 KB)
+- `cmd/verifier/main.go` (1.49 KB)
 - `config.go` (1.37 KB)
+- `crdt/crdt.go` (5.36 KB)
+- `decide/decide.go` (4.70 KB)
 - `editor/engine.go` (3.43 KB)
 - `editor/execution_context.go` (0.58 KB)
 - `editor/selection_update.go` (4.24 KB)
@@ -16,15 +19,16 @@
 - `editor/text_object.go` (13.10 KB)
 - `engine.go` (8.74 KB)
 - `engine/concrete_engine.go` (5.13 KB)
-- `engine/engine.go` (0.38 KB)
+- `engine/engine.go` (7.09 KB)
 - `examples/transaction_demo.go` (2.63 KB)
-- `execute.go` (32.53 KB)
+- `execute.go` (49.27 KB)
 - `fsm/engine.go` (9.52 KB)
 - `fsm/keymap.go` (1.16 KB)
 - `fsm/nvim.go` (0.67 KB)
 - `fsm/token.go` (0.17 KB)
 - `fsm/ui_stub.go` (1.85 KB)
-- `globals.go` (4.22 KB)
+- `globals.go` (4.32 KB)
+- `index/index.go` (6.56 KB)
 - `intent.go` (5.22 KB)
 - `intent/builder/builder.go` (0.53 KB)
 - `intent/builder/composite_builder.go` (1.06 KB)
@@ -41,20 +45,24 @@
 - `intent/range.go` (0.16 KB)
 - `intent/text_object.go` (0.28 KB)
 - `intent_bridge.go` (6.25 KB)
-- `kernel/decide.go` (1.60 KB)
-- `kernel/execute.go` (0.30 KB)
+- `invariant/test.go` (4.04 KB)
+- `kernel/decide.go` (1.72 KB)
+- `kernel/execute.go` (0.55 KB)
 - `kernel/intent_executor.go` (0.21 KB)
-- `kernel/kernel.go` (2.03 KB)
+- `kernel/kernel.go` (2.31 KB)
 - `kernel/resolver_executor.go` (0.75 KB)
-- `kernel/transaction.go` (2.98 KB)
+- `kernel/transaction.go` (1.99 KB)
 - `legacy_logic.go` (4.96 KB)
+- `main.go` (15.86 KB)
 - `pkg/legacy/handlers.go` (7.25 KB)
 - `pkg/protocol/protocol.go` (0.77 KB)
 - `pkg/server/server.go` (5.88 KB)
 - `pkg/state/state.go` (5.39 KB)
 - `planner/grammar.go` (12.05 KB)
 - `planner/grammar_test.go` (5.62 KB)
+- `policy/policy.go` (5.45 KB)
 - `protocol.go` (0.78 KB)
+- `replay/replay.go` (1.92 KB)
 - `resolver/context.go` (0.24 KB)
 - `resolver/motion_resolver.go` (4.73 KB)
 - `resolver/move.go` (0.49 KB)
@@ -63,12 +71,17 @@
 - `resolver/repeat.go` (1.30 KB)
 - `resolver/resolver.go` (5.61 KB)
 - `resolver/types.go` (0.80 KB)
-- `resolver/undo.go` (0.31 KB)
+- `resolver/undo.go` (0.47 KB)
+- `selection/selection.go` (4.49 KB)
+- `semantic/capture.go` (3.17 KB)
+- `semantic/decide.go` (3.11 KB)
 - `text_object.go` (13.01 KB)
 - `tools/gen-docs.go` (10.41 KB)
-- `transaction.go` (0.75 KB)
+- `types/types.go` (1.19 KB)
 - `ui/interface.go` (0.08 KB)
 - `ui/popup.go` (0.71 KB)
+- `verifier/verifier.go` (5.15 KB)
+- `wal/wal.go` (1.69 KB)
 - `weaver/adapter/backend.go` (3.00 KB)
 - `weaver/adapter/selection_normalizer.go` (1.66 KB)
 - `weaver/adapter/snapshot.go` (0.23 KB)
@@ -285,6 +298,82 @@ func runClient(key, paneAndClient string) {
 }
 ````
 
+## 📄 `cmd/verifier/main.go`
+
+````go
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"tmux-fsm/verifier"
+)
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: verifier verify --facts <facts.jsonl> --expect-root <root_hash>")
+		os.Exit(1)
+	}
+
+	command := os.Args[1]
+	if command == "verify" {
+		verifyCommand(os.Args[2:])
+	} else {
+		fmt.Printf("Unknown command: %s\n", command)
+		os.Exit(1)
+	}
+}
+
+func verifyCommand(args []string) {
+	var factsFile, expectedRoot string
+	
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--facts" && i+1 < len(args) {
+			factsFile = args[i+1]
+			i++
+		} else if arg == "--expect-root" && i+1 < len(args) {
+			expectedRoot = args[i+1]
+			i++
+		}
+	}
+
+	if factsFile == "" || expectedRoot == "" {
+		fmt.Println("Error: --facts and --expect-root are required")
+		os.Exit(1)
+	}
+
+	// 读取事实文件
+	factsData, err := os.ReadFile(factsFile)
+	if err != nil {
+		fmt.Printf("Error reading facts file: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 创建验证器
+	verifierInst := verifier.NewVerifier(nil) // 简化版，不使用策略
+
+	// 执行验证
+	result, err := verifierInst.VerifyFromJSON(factsData, verifier.Hash(expectedRoot))
+	if err != nil {
+		fmt.Printf("Verification error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if result.OK {
+		fmt.Println("✔ VERIFIED")
+		fmt.Printf("StateRoot: %s\n", result.StateRoot)
+		fmt.Printf("FactsUsed: %d\n", result.FactsUsed)
+		fmt.Printf("Policies: %d\n", result.Policies)
+	} else {
+		fmt.Println("✘ VERIFICATION FAILED")
+		fmt.Printf("Reason: %s\n", result.Error)
+		os.Exit(1)
+	}
+}
+````
+
 ## 📄 `config.go`
 
 ````go
@@ -357,6 +446,541 @@ func ShouldFailFast() bool {
 	return globalConfig.FailFast
 }
 
+````
+
+## 📄 `crdt/crdt.go`
+
+````go
+package crdt
+
+import (
+	"sort"
+	"time"
+	"tmux-fsm/semantic"
+)
+
+// EventID 事件ID类型
+type EventID string
+
+// ActorID 参与者ID类型
+type ActorID string
+
+// PositionID CRDT 位置ID
+type PositionID struct {
+	Path  []uint32 `json:"path"`
+	Actor ActorID    `json:"actor"`
+	Epoch int      `json:"epoch"`  // 每次分叉/reset +1
+}
+
+// SemanticEvent 修正后的语义事件结构
+type SemanticEvent struct {
+	// 全局唯一、幂等基础
+	ID     EventID `json:"id"`
+	Actor  ActorID `json:"actor"`
+	Time   time.Time `json:"time"`
+
+	// 因果一致性（CRDT 用）
+	CausalParents []EventID `json:"causal_parents"`
+	// 含义：本事件在语义上依赖的事件集合
+	// ✅ 用于拓扑排序 / 合并
+	// ✅ 永远不用于 Undo
+
+	// 本地历史（Undo 用）
+	LocalParent EventID `json:"local_parent"`
+	// 含义：本 actor 本地编辑历史中的上一个事件
+	// ✅ 只在本地有意义
+	// ✅ 不同步、不合并
+
+	// 不可变语义
+	Fact semantic.BaseFact `json:"fact"`
+}
+
+// ComparePos 比较两个位置
+func ComparePos(a, b PositionID) int {
+	min := len(a.Path)
+	if len(b.Path) < min {
+		min = len(b.Path)
+	}
+
+	for i := 0; i < min; i++ {
+		if a.Path[i] < b.Path[i] {
+			return -1
+		}
+		if a.Path[i] > b.Path[i] {
+			return 1
+		}
+	}
+	if len(a.Path) != len(b.Path) {
+		if len(a.Path) < len(b.Path) {
+			return -1
+		}
+		return 1
+	}
+	if a.Actor < b.Actor {
+		return -1
+	}
+	if a.Actor > b.Actor {
+		return 1
+	}
+	if a.Epoch < b.Epoch {
+		return -1
+	}
+	if a.Epoch > b.Epoch {
+		return 1
+	}
+	return 0
+}
+
+// AllocateBetween 在两个位置之间分配新位置
+func AllocateBetween(a, b *PositionID, actor ActorID) PositionID {
+	const Base = uint32(1 << 31)
+
+	var path []uint32
+	i := 0
+
+	for {
+		var left uint32 = 0
+		var right uint32 = Base
+
+		if a != nil && i < len(a.Path) {
+			left = a.Path[i]
+		}
+		if b != nil && i < len(b.Path) {
+			right = b.Path[i]
+		}
+
+		if right-left > 1 {
+			mid := left + (right-left)/2
+			path = append(path, mid)
+			break
+		}
+
+		path = append(path, left)
+		i++
+	}
+
+	return PositionID{
+		Path:  path,
+		Actor: actor,
+		Epoch: 0, // 可能需要根据实际情况设置
+	}
+}
+
+// EventStore 事件存储
+type EventStore struct {
+	Events map[EventID]SemanticEvent
+}
+
+// NewEventStore 创建新的事件存储
+func NewEventStore() *EventStore {
+	return &EventStore{
+		Events: make(map[EventID]SemanticEvent),
+	}
+}
+
+// Merge 合并事件（网络/WAL/Sync）
+func (s *EventStore) Merge(e SemanticEvent) {
+	if _, ok := s.Events[e.ID]; ok {
+		return // 幂等
+	}
+	s.Events[e.ID] = e
+}
+
+// TopoSort 拓扑排序（因果顺序）
+func (s *EventStore) TopoSort() []SemanticEvent {
+	return TopoSortByCausality(s.Events)
+}
+
+// TopoSortByCausality 按因果关系拓扑排序
+func TopoSortByCausality(events map[EventID]SemanticEvent) []SemanticEvent {
+	inDegree := make(map[EventID]int)
+	graph := make(map[EventID][]EventID)
+
+	// 初始化
+	for id := range events {
+		inDegree[id] = 0
+	}
+
+	// 构建因果图
+	for _, e := range events {
+		for _, p := range e.CausalParents {
+			if _, ok := events[p]; ok {
+				graph[p] = append(graph[p], e.ID)
+				inDegree[e.ID]++
+			}
+		}
+	}
+
+	// 入度为 0 的队列
+	var queue []EventID
+	for id, d := range inDegree {
+		if d == 0 {
+			queue = append(queue, id)
+		}
+	}
+
+	// 稳定排序（可选：EventID）
+	sort.Slice(queue, func(i, j int) bool {
+		return queue[i] < queue[j]
+	})
+
+	var result []SemanticEvent
+
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+
+		result = append(result, events[id])
+
+		for _, next := range graph[id] {
+			inDegree[next]--
+			if inDegree[next] == 0 {
+				queue = append(queue, next)
+			}
+		}
+	}
+
+	// 检测环（理论上不该出现）
+	if len(result) != len(events) {
+		panic("causal cycle detected")
+	}
+
+	return result
+}
+
+// LocalHistory 获取本地历史（参与者投影）
+func LocalHistory(events map[EventID]SemanticEvent, me ActorID) []SemanticEvent {
+	var out []SemanticEvent
+	for _, e := range events {
+		if e.Actor == me {
+			out = append(out, e)
+		}
+	}
+	return BuildLocalChain(out)
+}
+
+// BuildLocalChain 构建本地链
+func BuildLocalChain(events []SemanticEvent) []SemanticEvent {
+	// 按 LocalParent 链组织
+	parentMap := make(map[EventID]EventID)
+	eventMap := make(map[EventID]SemanticEvent)
+
+	for _, e := range events {
+		eventMap[e.ID] = e
+		parentMap[e.ID] = e.LocalParent
+	}
+
+	// 找到根节点
+	var roots []EventID
+	for id, parent := range parentMap {
+		if parent == "" {
+			roots = append(roots, id)
+		}
+	}
+
+	// 按链排序
+	var result []SemanticEvent
+	visited := make(map[EventID]bool)
+
+	var dfs func(EventID)
+	dfs = func(id EventID) {
+		if visited[id] {
+			return
+		}
+		visited[id] = true
+		result = append(result, eventMap[id])
+
+		// 找到所有子节点
+		for childID, parentID := range parentMap {
+			if parentID == id {
+				dfs(childID)
+			}
+		}
+	}
+
+	for _, root := range roots {
+		dfs(root)
+	}
+
+	return result
+}
+
+// UndoFilter 创建撤销过滤器
+func UndoFilter(me ActorID, undoPoint EventID, events map[EventID]SemanticEvent) func(SemanticEvent) bool {
+	disabled := make(map[EventID]bool)
+	
+	// 从撤销点向上追踪，标记需要禁用的事件
+	current := undoPoint
+	for current != "" {
+		disabled[current] = true
+		
+		// 找到当前事件
+		event, exists := events[current]
+		if !exists {
+			break
+		}
+		
+		// 移动到父事件
+		current = event.LocalParent
+	}
+
+	return func(e SemanticEvent) bool {
+		if e.Actor != me {
+			return true
+		}
+		// 如果事件在撤销点之后，则不执行
+		return !disabled[e.ID]
+	}
+}
+````
+
+## 📄 `decide/decide.go`
+
+````go
+package decide
+
+import (
+	"fmt"
+	"os/exec"
+	"tmux-fsm/semantic"
+)
+
+// Transaction 接口定义
+type Transaction interface {
+	Apply() error
+	Inverse() Transaction
+	Kind() string
+	Tags() []string
+	CanMerge(next Transaction) bool
+	Merge(next Transaction) Transaction
+}
+
+// Decide 将语义事实转换为事务
+func Decide(f semantic.Fact) []Transaction {
+	switch f.Kind() {
+	case "delete":
+		return decideDelete(f)
+	case "insert":
+		return decideInsert(f)
+	case "replace":
+		return decideReplace(f)
+	case "move":
+		return decideMove(f)
+	default:
+		return nil
+	}
+}
+
+// decideDelete 处理删除操作
+func decideDelete(f semantic.Fact) []Transaction {
+	r := f.GetRange()
+	return []Transaction{
+		&TmuxDeleteTx{
+			PaneID: r.Start.PaneID,
+			Range:  r,
+			Text:   r.Text,
+		},
+	}
+}
+
+// decideInsert 处理插入操作
+func decideInsert(f semantic.Fact) []Transaction {
+	return []Transaction{
+		&TmuxInsertTx{
+			PaneID: f.GetAnchor().PaneID,
+			Pos:    f.GetAnchor(),
+			Text:   f.GetText(),
+		},
+	}
+}
+
+// decideReplace 处理替换操作
+func decideReplace(f semantic.Fact) []Transaction {
+	r := f.GetRange()
+
+	return []Transaction{
+		&TmuxDeleteTx{
+			PaneID: r.Start.PaneID,
+			Range:  r,
+			Text:   r.Text,
+		},
+		&TmuxInsertTx{
+			PaneID: r.Start.PaneID,
+			Pos:    r.Start,
+			Text:   f.GetText(),
+		},
+	}
+}
+
+// decideMove 处理移动操作
+func decideMove(f semantic.Fact) []Transaction {
+	from := f.GetRange().Start
+	to := f.GetAnchor()
+	return []Transaction{
+		&TmuxMoveCursorTx{
+			From:   from,
+			To:     to,
+			PaneID: from.PaneID,
+		},
+	}
+}
+
+// TmuxDeleteTx tmux 删除事务
+type TmuxDeleteTx struct {
+	PaneID string
+	Range  semantic.Range
+	Text   string
+}
+
+func (t *TmuxDeleteTx) Apply() error {
+	// 执行删除操作
+	args := []string{"send-keys", "-t", t.PaneID, "-N", fmt.Sprint(len(t.Text)), "Delete"}
+	return exec.Command("tmux", args...).Run()
+}
+
+func (t *TmuxDeleteTx) Inverse() Transaction {
+	return &TmuxInsertTx{
+		PaneID: t.PaneID,
+		Pos:    t.Range.Start,
+		Text:   t.Text,
+	}
+}
+
+func (t *TmuxDeleteTx) Kind() string {
+	return "tmux_delete"
+}
+
+func (t *TmuxDeleteTx) Tags() []string {
+	return []string{"tmux", "delete", "atomic"}
+}
+
+func (t *TmuxDeleteTx) CanMerge(next Transaction) bool {
+	nextTx, ok := next.(*TmuxDeleteTx)
+	return ok && nextTx.PaneID == t.PaneID
+}
+
+func (t *TmuxDeleteTx) Merge(next Transaction) Transaction {
+	nextTx := next.(*TmuxDeleteTx)
+	return &TmuxDeleteTx{
+		PaneID: t.PaneID,
+		Range: semantic.Range{
+			Start: t.Range.Start,
+			End:   nextTx.Range.End,
+			Text:  t.Text + nextTx.Text,
+		},
+		Text: t.Text + nextTx.Text,
+	}
+}
+
+// TmuxInsertTx tmux 插入事务
+type TmuxInsertTx struct {
+	PaneID string
+	Pos    semantic.Anchor
+	Text   string
+}
+
+func (t *TmuxInsertTx) Apply() error {
+	// 执行插入操作
+	args := []string{"send-keys", "-t", t.PaneID, "i", t.Text, "Escape"}
+	return exec.Command("tmux", args...).Run()
+}
+
+func (t *TmuxInsertTx) Inverse() Transaction {
+	return &TmuxDeleteTx{
+		PaneID: t.PaneID,
+		Range: semantic.Range{
+			Start: t.Pos,
+			End:   t.Pos,
+			Text:  t.Text,
+		},
+		Text: t.Text,
+	}
+}
+
+func (t *TmuxInsertTx) Kind() string {
+	return "tmux_insert"
+}
+
+func (t *TmuxInsertTx) Tags() []string {
+	return []string{"tmux", "insert", "atomic"}
+}
+
+func (t *TmuxInsertTx) CanMerge(next Transaction) bool {
+	nextTx, ok := next.(*TmuxInsertTx)
+	return ok && nextTx.PaneID == t.PaneID
+}
+
+func (t *TmuxInsertTx) Merge(next Transaction) Transaction {
+	nextTx := next.(*TmuxInsertTx)
+	return &TmuxInsertTx{
+		PaneID: t.PaneID,
+		Pos:    t.Pos,
+		Text:   t.Text + nextTx.Text,
+	}
+}
+
+// TmuxMoveCursorTx tmux 光标移动事务
+type TmuxMoveCursorTx struct {
+	From   semantic.Anchor
+	To     semantic.Anchor
+	PaneID string
+}
+
+func (t *TmuxMoveCursorTx) Apply() error {
+	// 计算移动距离并执行移动操作
+	dx := t.To.Col - t.From.Col
+	dy := t.To.Line - t.From.Line
+
+	var keys []string
+	if dx > 0 {
+		for i := 0; i < dx; i++ {
+			keys = append(keys, "Right")
+		}
+	} else if dx < 0 {
+		for i := 0; i < -dx; i++ {
+			keys = append(keys, "Left")
+		}
+	}
+	if dy > 0 {
+		for i := 0; i < dy; i++ {
+			keys = append(keys, "Down")
+		}
+	} else if dy < 0 {
+		for i := 0; i < -dy; i++ {
+			keys = append(keys, "Up")
+		}
+	}
+
+	if len(keys) > 0 {
+		args := append([]string{"send-keys", "-t", t.PaneID}, keys...)
+		return exec.Command("tmux", args...).Run()
+	}
+	return nil
+}
+
+func (t *TmuxMoveCursorTx) Inverse() Transaction {
+	return &TmuxMoveCursorTx{
+		From:   t.To,
+		To:     t.From,
+		PaneID: t.PaneID,
+	}
+}
+
+func (t *TmuxMoveCursorTx) Kind() string {
+	return "tmux_move"
+}
+
+func (t *TmuxMoveCursorTx) Tags() []string {
+	return []string{"tmux", "move"}
+}
+
+func (t *TmuxMoveCursorTx) CanMerge(next Transaction) bool {
+	return false // 移动操作一般不合并
+}
+
+func (t *TmuxMoveCursorTx) Merge(next Transaction) Transaction {
+	return next
+}
 ````
 
 ## 📄 `editor/engine.go`
@@ -2038,30 +2662,274 @@ func (e *ConcreteEngine) ChangeRange(r Range) error {
 package engine
 
 import (
-	"tmux-fsm/intent"
+	"fmt"
+	"tmux-fsm/crdt"
+	"tmux-fsm/index"
+	"tmux-fsm/policy"
+	"tmux-fsm/replay"
+	"tmux-fsm/selection"
+	"tmux-fsm/wal"
 )
 
-type Cursor struct {
-	Line int
-	Col  int
-}
-
-type Range struct {
-	Start Cursor
-	End   Cursor
-}
-
-// Engine 定义了编辑引擎的接口
+// Engine 编辑器内核引擎接口
 type Engine interface {
-	Cursor() Cursor
+	// State 状态管理
+	Apply(event crdt.SemanticEvent) error
+	Replay(upTo crdt.EventID) replay.TextState
+	Snapshot() *Snapshot
 
-	ComputeMotion(m *intent.Motion) (Range, error)
+	// WAL 事件日志
+	Append(event crdt.SemanticEvent) crdt.EventID
+	WALSince(id crdt.EventID) []wal.SemanticEvent
 
-	MoveCursor(r Range) error
+	// CRDT 位置管理
+	AllocatePosition(after, before *crdt.PositionID) crdt.PositionID
+	ComparePosition(a, b crdt.PositionID) int
 
-	DeleteRange(r Range) error
-	YankRange(r Range) error
-	ChangeRange(r Range) error
+	// Selection 管理
+	ApplySelection(actor crdt.ActorID, fact selection.SetSelectionFact)
+	GetSelection(cursorID selection.CursorID) (selection.Selection, bool)
+	GetAllSelections() map[selection.CursorID]selection.Selection
+
+	// Policy 管理
+	RegisterActor(actorID crdt.ActorID, level policy.TrustLevel, name string)
+	CheckPolicy(event crdt.SemanticEvent) error
+
+	// Index 查询
+	QueryByActor(actor crdt.ActorID) []crdt.EventID
+	QueryByType(ft index.FactType) []crdt.EventID
+	QueryByTimeRange(start, end time.Time) []crdt.EventID
+	QueryAIChanges(aiActorPrefix string) []crdt.EventID
+
+	// GC 垃圾回收
+	Compact(stable crdt.EventID)
+
+	// 同步
+	KnownHeads() map[crdt.ActorID]crdt.EventID
+	Integrate(events []wal.SemanticEvent) error
+}
+
+// Snapshot 快照
+type Snapshot struct {
+	At    crdt.EventID    `json:"at"`
+	State replay.TextState `json:"state"`
+}
+
+// HeadlessEngine 无头引擎实现
+type HeadlessEngine struct {
+	store      *crdt.EventStore
+	snapshots  map[crdt.EventID]*Snapshot
+	currentState replay.TextState
+	selectionMgr *selection.SelectionManager
+	policyMgr    *policy.DefaultPolicy
+	index        *index.EventIndex
+}
+
+// Apply 应用事件
+func (e *HeadlessEngine) Apply(event crdt.SemanticEvent) error {
+	e.store.Merge(event)
+	
+	// 更新当前状态
+	sortedEvents := e.store.TopoSort()
+	e.currentState = replay.Replay(
+		replay.TextState{}, 
+		sortedEvents, 
+		nil, // 不使用过滤器
+	)
+	
+	return nil
+}
+
+// Replay 重放至指定事件
+func (e *HeadlessEngine) Replay(upTo crdt.EventID) replay.TextState {
+	allEvents := e.store.TopoSort()
+	
+	// 找到 upTo 事件的索引
+	var eventsToReplay []crdt.SemanticEvent
+	for _, event := range allEvents {
+		eventsToReplay = append(eventsToReplay, event)
+		if event.ID == upTo {
+			break
+		}
+	}
+	
+	return replay.Replay(
+		replay.TextState{}, 
+		eventsToReplay, 
+		nil,
+	)
+}
+
+// Snapshot 创建快照
+func (e *HeadlessEngine) Snapshot() *Snapshot {
+	snapshot := &Snapshot{
+		At:    "", // 需要设置为最新的事件ID
+		State: e.currentState,
+	}
+	
+	// 获取最新的事件ID
+	allEvents := e.store.TopoSort()
+	if len(allEvents) > 0 {
+		snapshot.At = allEvents[len(allEvents)-1].ID
+	}
+	
+	e.snapshots[snapshot.At] = snapshot
+	return snapshot
+}
+
+// Append 添加事件到日志
+func (e *HeadlessEngine) Append(event crdt.SemanticEvent) crdt.EventID {
+	e.store.Merge(event)
+	return event.ID
+}
+
+// WALSince 获取指定事件之后的日志
+func (e *HeadlessEngine) WALSince(id crdt.EventID) []wal.SemanticEvent {
+	allEvents := e.store.TopoSort()
+	
+	var result []wal.SemanticEvent
+	found := false
+	for _, event := range allEvents {
+		if !found && event.ID == id {
+			found = true
+			continue
+		}
+		if found {
+			// 转换 crdt.SemanticEvent 到 wal.SemanticEvent
+			walEvent := wal.SemanticEvent{
+				ID:            string(event.ID),
+				CausalParents: []string{},
+				LocalParent:   string(event.LocalParent),
+				Time:          event.Time,
+				Actor:         string(event.Actor),
+				Fact:          event.Fact,
+			}
+			
+			// 填充 CausalParents
+			for _, parent := range event.CausalParents {
+				walEvent.CausalParents = append(walEvent.CausalParents, string(parent))
+			}
+			
+			result = append(result, walEvent)
+		}
+	}
+	
+	return result
+}
+
+// AllocatePosition 分配新位置
+func (e *HeadlessEngine) AllocatePosition(after, before *crdt.PositionID) crdt.PositionID {
+	actor := "default" // 这里应该从上下文获取实际的 actor
+	if after != nil {
+		actor = string(after.Actor)
+	} else if before != nil {
+		actor = string(before.Actor)
+	}
+	
+	return crdt.AllocateBetween(after, before, crdt.ActorID(actor))
+}
+
+// ComparePosition 比较位置
+func (e *HeadlessEngine) ComparePosition(a, b crdt.PositionID) int {
+	return crdt.ComparePos(a, b)
+}
+
+// Compact 压缩日志
+func (e *HeadlessEngine) Compact(stable crdt.EventID) {
+	// 实现压缩逻辑
+	// 这里简化处理，实际实现需要更复杂的逻辑
+}
+
+// KnownHeads 获取已知头部
+func (e *HeadlessEngine) KnownHeads() map[crdt.ActorID]crdt.EventID {
+	heads := make(map[crdt.ActorID]crdt.EventID)
+	
+	allEvents := e.store.TopoSort()
+	
+	// 按参与者分组，找到每个参与者的最新事件
+	for _, event := range allEvents {
+		if current, exists := heads[event.Actor]; !exists || event.ID > current {
+			heads[event.Actor] = event.ID
+		}
+	}
+	
+	return heads
+}
+
+// Integrate 集成外部事件
+func (e *HeadlessEngine) Integrate(events []wal.SemanticEvent) error {
+	for _, walEvent := range events {
+		// 转换 wal.SemanticEvent 到 crdt.SemanticEvent
+		crdtEvent := crdt.SemanticEvent{
+			ID:            crdt.EventID(walEvent.ID),
+			Actor:         crdt.ActorID(walEvent.Actor),
+			CausalParents: []crdt.EventID{},
+			LocalParent:   crdt.EventID(walEvent.LocalParent),
+			Time:          walEvent.Time,
+			Fact:          walEvent.Fact,
+		}
+
+		// 转换 CausalParents
+		for _, parent := range walEvent.CausalParents {
+			crdtEvent.CausalParents = append(crdtEvent.CausalParents, crdt.EventID(parent))
+		}
+
+		e.store.Merge(crdtEvent)
+	}
+
+	return nil
+}
+
+// ApplySelection 应用选择区域变更
+func (e *HeadlessEngine) ApplySelection(actor crdt.ActorID, fact selection.SetSelectionFact) {
+	e.selectionMgr.ApplySelection(actor, fact)
+}
+
+// GetSelection 获取选择区域
+func (e *HeadlessEngine) GetSelection(cursorID selection.CursorID) (selection.Selection, bool) {
+	return e.selectionMgr.GetSelection(cursorID)
+}
+
+// GetAllSelections 获取所有选择区域
+func (e *HeadlessEngine) GetAllSelections() map[selection.CursorID]selection.Selection {
+	return e.selectionMgr.GetAllSelections()
+}
+
+// RegisterActor 注册参与者
+func (e *HeadlessEngine) RegisterActor(actorID crdt.ActorID, level policy.TrustLevel, name string) {
+	e.policyMgr.RegisterActor(actorID, level, name)
+}
+
+// CheckPolicy 检查策略
+func (e *HeadlessEngine) CheckPolicy(event crdt.SemanticEvent) error {
+	actorInfo, exists := e.policyMgr.Actors[event.Actor]
+	if !exists {
+		return fmt.Errorf("unknown actor: %s", event.Actor)
+	}
+	ctx := policy.PolicyContext{
+		ActorInfo: actorInfo,
+	}
+	return e.policyMgr.Allow(event, ctx)
+}
+
+// QueryByActor 按参与者查询
+func (e *HeadlessEngine) QueryByActor(actor crdt.ActorID) []crdt.EventID {
+	return e.index.QueryByActor(actor)
+}
+
+// QueryByType 按类型查询
+func (e *HeadlessEngine) QueryByType(ft index.FactType) []crdt.EventID {
+	return e.index.QueryByType(ft)
+}
+
+// QueryByTimeRange 按时间范围查询
+func (e *HeadlessEngine) QueryByTimeRange(start, end time.Time) []crdt.EventID {
+	return e.index.QueryByTimeRange(start, end)
+}
+
+// QueryAIChanges 查询 AI 的更改
+func (e *HeadlessEngine) QueryAIChanges(aiActorPrefix string) []crdt.EventID {
+	return e.index.QueryAIChanges(aiActorPrefix)
 }
 ````
 
@@ -2198,6 +3066,7 @@ func printBuffer(buf editor.Buffer) {
 // This file defines the canonical physical behavior.
 // Any change here MUST be mirrored in weaver/adapter/tmux_physical.go.
 
+// DEPRECATED: executor logic must be migrated to Transaction
 package main
 
 import (
@@ -2341,11 +3210,12 @@ func executeFact(f Fact) error {
 	return fmt.Errorf("no executor for fact")
 }
 
-func executeAction(action string, state *FSMState, targetPane string, clientName string) {
-	// --- [ABI: Verdict Deliberation Starts] ---
-	// The kernel evaluates the intent against the current world state.
+// buildActionTransactions 将动作转换为事务列表
+func buildActionTransactions(action string, state *FSMState, targetPane string, clientName string) []Transaction {
+	// 使用新的语义层和决策层
+	// 这里我们先创建语义事实，然后通过决策层转换为事务
 	if action == "" {
-		return
+		return nil
 	}
 	// Default to current if empty (though should be provided)
 	if targetPane == "" {
@@ -2355,74 +3225,135 @@ func executeAction(action string, state *FSMState, targetPane string, clientName
 	// 1. 处理特殊内核动作：Undo / Redo
 	// [Phase 9] Dispatch to Weaver as single source of truth
 	if action == "undo" {
-		// Create undo intent and dispatch to Weaver
-		undoIntent := intent.Intent{
-			Kind:   intent.IntentUndo,
-			PaneID: targetPane,
+		// 使用新的事务日志系统执行撤销
+		if txJournal != nil {
+			_ = txJournal.Undo()
+		} else {
+			// 后备方案：创建 undo intent 并分派给 Weaver
+			undoIntent := intent.Intent{
+				Kind:   intent.IntentUndo,
+				PaneID: targetPane,
+			}
+			ProcessIntentGlobal(undoIntent)
 		}
-		ProcessIntentGlobal(undoIntent)
-		return
+		return nil
 	}
 	if action == "redo" {
-		// Create redo intent and dispatch to Weaver
-		redoIntent := intent.Intent{
-			Kind:   intent.IntentRedo,
-			PaneID: targetPane,
+		// 使用新的事务日志系统执行重做
+		if txJournal != nil {
+			_ = txJournal.Redo()
+		} else {
+			// 后备方案：创建 redo intent 并分派给 Weaver
+			redoIntent := intent.Intent{
+				Kind:   intent.IntentRedo,
+				PaneID: targetPane,
+			}
+			ProcessIntentGlobal(redoIntent)
 		}
-		ProcessIntentGlobal(redoIntent)
-		return
+		return nil
 	}
 
 	if action == "search_next" {
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "search-again").Run()
-		return
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-X", "search-again"},
+			},
+		}
 	}
 	if action == "search_prev" {
-		exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "search-reverse").Run()
-		return
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-X", "search-reverse"},
+			},
+		}
 	}
 	if strings.HasPrefix(action, "search_forward_") {
 		query := strings.TrimPrefix(action, "search_forward_")
-		executeSearch(query, targetPane)
-		return
+		return buildSearchTransactions(query, targetPane)
 	}
 
 	// 2. 处理VISUAL模式相关动作
 	if action == "start_visual_char" {
 		if isVimPane(targetPane) {
-			exec.Command("tmux", "send-keys", "-t", targetPane, "v").Run()
+			return []Transaction{
+				VimSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"v"},
+				},
+			}
 		} else {
-			exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "begin-selection").Run()
+			return []Transaction{
+				TmuxSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"-X", "begin-selection"},
+				},
+			}
 		}
-		return
 	}
 	if action == "start_visual_line" {
 		if isVimPane(targetPane) {
-			exec.Command("tmux", "send-keys", "-t", targetPane, "V").Run()
+			return []Transaction{
+				VimSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"V"},
+				},
+			}
 		} else {
-			exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "select-line").Run()
+			return []Transaction{
+				TmuxSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"-X", "select-line"},
+				},
+			}
 		}
-		return
 	}
 	if action == "cancel_selection" {
 		if isVimPane(targetPane) {
-			exec.Command("tmux", "send-keys", "-t", targetPane, "Escape").Run()
+			return []Transaction{
+				VimSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"Escape"},
+				},
+			}
 		} else {
-			exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "clear-selection").Run()
+			return []Transaction{
+				TmuxSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"-X", "clear-selection"},
+				},
+			}
 		}
-		return
 	}
 	if strings.HasPrefix(action, "visual_") {
 		// 处理视觉模式下的操作 (如 visual_delete, visual_yank, visual_change)
-		handleVisualAction(action, state, targetPane)
-		return
+		return buildVisualTransactions(action, state, targetPane)
 	}
 
 	// 3. 环境探测：Vim vs Shell
 	if isVimPane(targetPane) {
-		executeVimAction(action, state, targetPane)
+		return buildVimTransactions(action, state, targetPane)
 	} else {
-		executeShellAction(action, state, targetPane)
+		return buildShellTransactions(action, state, targetPane)
+	}
+}
+
+// executeAction 保持原有签名，但现在返回事务并应用
+func executeAction(action string, state *FSMState, targetPane string, clientName string) {
+	txs := buildActionTransactions(action, state, targetPane, clientName)
+	if txs == nil {
+		return
+	}
+
+	// 使用事务日志应用事务
+	if txJournal != nil {
+		_ = txJournal.ApplyTxs(txs)
+	} else {
+		// 后备方案：直接应用事务
+		for _, tx := range txs {
+			_ = tx.Apply()
+		}
 	}
 }
 
@@ -2501,9 +3432,8 @@ func executeShellAction(action string, state *FSMState, targetPane string) {
 				opRecord := types.OperationRecord{
 					ResolvedOp: editor.ResolvedOperation{},
 					Fact:       convertFactToCoreFact(record.Fact),
-					Inverse:    convertFactToCoreFact(record.Inverse),
 				}
-				transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact, opRecord.Inverse)
+				transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact)
 
 				// [Phase 7] Robust Deletion:
 				// Since we know EXACTLY what we captured, we delete by character count.
@@ -3198,9 +4128,8 @@ func executeVimAction(action string, state *FSMState, targetPane string) {
 		opRecord := types.OperationRecord{
 			ResolvedOp: editor.ResolvedOperation{},
 			Fact:       convertFactToCoreFact(record.Fact),
-			Inverse:    convertFactToCoreFact(record.Inverse),
 		}
-		transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact, opRecord.Inverse)
+		transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact)
 	}
 
 	// For Vim, we just send the count + key
@@ -3338,6 +4267,695 @@ func convertFactToCoreFact(mainFact Fact) core.Fact {
 		Meta:        mainFact.Meta,
 		Timestamp:   time.Now().Unix(),
 		SideEffects: mainFact.SideEffects,
+	}
+}
+
+// TmuxSendKeysTx 表示 tmux send-keys 操作的事务
+type TmuxSendKeysTx struct {
+	Pane string
+	Keys []string
+}
+
+func (t TmuxSendKeysTx) Apply() error {
+	args := append([]string{"send-keys", "-t", t.Pane}, t.Keys...)
+	return exec.Command("tmux", args...).Run()
+}
+
+func (t TmuxSendKeysTx) Inverse() Transaction {
+	// 对于 send-keys 操作，逆操作通常是撤销操作
+	// 这里返回一个空操作作为占位符
+	return NoopTx{}
+}
+
+func (t TmuxSendKeysTx) Kind() string {
+	return "tmux_send_keys"
+}
+
+func (t TmuxSendKeysTx) Tags() []string {
+	return []string{"tmux"}
+}
+
+func (t TmuxSendKeysTx) CanMerge(next Transaction) bool {
+	// 检查是否可以合并到下一个事务
+	nextTx, ok := next.(TmuxSendKeysTx)
+	return ok && nextTx.Pane == t.Pane
+}
+
+func (t TmuxSendKeysTx) Merge(next Transaction) Transaction {
+	// 合并两个 TmuxSendKeysTx 事务
+	nextTx := next.(TmuxSendKeysTx)
+	// 简单地将键序列连接
+	mergedKeys := append(t.Keys, nextTx.Keys...)
+	return TmuxSendKeysTx{
+		Pane: t.Pane,
+		Keys: mergedKeys,
+	}
+}
+
+// VimSendKeysTx 表示 Vim 模式下的 send-keys 操作事务
+type VimSendKeysTx struct {
+	Pane string
+	Keys []string
+}
+
+func (v VimSendKeysTx) Apply() error {
+	args := append([]string{"send-keys", "-t", v.Pane}, v.Keys...)
+	return exec.Command("tmux", args...).Run()
+}
+
+func (v VimSendKeysTx) Inverse() Transaction {
+	// Vim 操作的逆操作通常是 'u' (undo)
+	return VimSendKeysTx{
+		Pane: v.Pane,
+		Keys: []string{"u"},
+	}
+}
+
+func (v VimSendKeysTx) Kind() string {
+	return "vim_send_keys"
+}
+
+func (v VimSendKeysTx) Tags() []string {
+	return []string{"vim"}
+}
+
+func (v VimSendKeysTx) CanMerge(next Transaction) bool {
+	nextTx, ok := next.(VimSendKeysTx)
+	return ok && nextTx.Pane == v.Pane
+}
+
+func (v VimSendKeysTx) Merge(next Transaction) Transaction {
+	nextTx := next.(VimSendKeysTx)
+	mergedKeys := append(v.Keys, nextTx.Keys...)
+	return VimSendKeysTx{
+		Pane: v.Pane,
+		Keys: mergedKeys,
+	}
+}
+
+// NoopTx 空操作事务
+type NoopTx struct{}
+
+func (n NoopTx) Apply() error {
+	return nil
+}
+
+func (n NoopTx) Inverse() Transaction {
+	return n
+}
+
+func (n NoopTx) Kind() string {
+	return "noop"
+}
+
+func (n NoopTx) Tags() []string {
+	return []string{"noop"}
+}
+
+func (n NoopTx) CanMerge(next Transaction) bool {
+	return false
+}
+
+func (n NoopTx) Merge(next Transaction) Transaction {
+	return next
+}
+
+// buildSearchTransactions 构建搜索操作的事务
+func buildSearchTransactions(query string, targetPane string) []Transaction {
+	return []Transaction{
+		FuncTx{
+			apply: func() error {
+				exec.Command("tmux", "copy-mode", "-t", targetPane).Run()
+				exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "search-forward", query).Run()
+				return nil
+			},
+			inverse: func() Transaction {
+				return NoopTx{}
+			},
+			kind: "search",
+			tags: []string{"search"},
+		},
+	}
+}
+
+// buildVisualTransactions 构建视觉模式操作的事务
+func buildVisualTransactions(action string, state *FSMState, targetPane string) []Transaction {
+	// 提取操作类型 (delete, yank, change)
+	parts := strings.Split(action, "_")
+	if len(parts) < 2 {
+		return nil
+	}
+
+	op := parts[1] // delete, yank, 或 change
+
+	if isVimPane(targetPane) {
+		// 在Vim中执行视觉模式操作
+		vimOp := ""
+		switch op {
+		case "delete":
+			vimOp = "d"
+		case "yank":
+			vimOp = "y"
+		case "change":
+			vimOp = "c"
+		}
+
+		if vimOp != "" {
+			return []Transaction{
+				VimSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{vimOp},
+				},
+			}
+		}
+	} else {
+		// 在Shell中执行视觉模式操作
+		if op == "yank" {
+			// 复制选中内容
+			return []Transaction{
+				TmuxSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"-X", "copy-pipe-and-cancel", "tmux save-buffer -"},
+				},
+			}
+		} else if op == "delete" || op == "change" {
+			// 删除选中内容
+			actions := []Transaction{
+				TmuxSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"-X", "copy-pipe-and-cancel", "tmux save-buffer -"},
+				},
+			}
+			if op == "change" {
+				// change 操作需要额外输入
+				actions = append(actions, TmuxSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"i"},
+				})
+			}
+			return actions
+		}
+	}
+
+	return nil
+}
+
+// buildVimTransactions 构建 Vim 操作的事务
+func buildVimTransactions(action string, state *FSMState, targetPane string) []Transaction {
+	// Map FSM actions to Vim native keys
+	vimKey := ""
+	isEdit := false
+
+	switch action {
+	case "move_left":
+		vimKey = "h"
+	case "move_down":
+		vimKey = "j"
+	case "move_up":
+		vimKey = "k"
+	case "move_right":
+		vimKey = "l"
+	case "move_word_forward":
+		vimKey = "w"
+	case "move_word_backward":
+		vimKey = "b"
+	case "move_end_of_word":
+		vimKey = "e"
+	case "move_start_of_line":
+		vimKey = "0"
+	case "move_end_of_line":
+		vimKey = "$"
+	case "move_start_of_file":
+		vimKey = "gg"
+	case "move_end_of_file":
+		vimKey = "G"
+	case "delete_line":
+		vimKey = "dd"
+		isEdit = true
+	case "delete_word_forward":
+		vimKey = "dw"
+		isEdit = true
+	case "delete_word_backward":
+		vimKey = "db"
+		isEdit = true
+	case "delete_end_of_word":
+		vimKey = "de"
+		isEdit = true
+	case "delete_right":
+		vimKey = "x"
+		isEdit = true
+	case "delete_left":
+		vimKey = "X"
+		isEdit = true
+	case "delete_end_of_line":
+		vimKey = "D"
+		isEdit = true
+	case "change_end_of_line":
+		vimKey = "C"
+		isEdit = true
+	case "change_line":
+		vimKey = "S"
+		isEdit = true
+	case "insert_start_of_line":
+		vimKey = "I"
+		isEdit = true
+	case "insert_end_of_line":
+		vimKey = "A"
+		isEdit = true
+	case "insert_before":
+		vimKey = "i"
+		isEdit = true
+	case "insert_after":
+		vimKey = "a"
+		isEdit = true
+	case "insert_open_below":
+		vimKey = "o"
+		isEdit = true
+	case "insert_open_above":
+		vimKey = "O"
+		isEdit = true
+	case "paste_after":
+		vimKey = "p"
+		isEdit = true
+	case "paste_before":
+		vimKey = "P"
+		isEdit = true
+	case "toggle_case":
+		vimKey = "~"
+		isEdit = true
+	case "undo":
+		vimKey = "u"
+	case "redo":
+		vimKey = "C-r"
+	}
+
+	if strings.HasPrefix(action, "replace_char_") {
+		char := strings.TrimPrefix(action, "replace_char_")
+		vimKey = "r" + char
+		isEdit = true
+	}
+
+	if vimKey == "" {
+		// Fallback: if not mapped, it might be a direct key or sequence
+		return nil
+	}
+
+	actions := []Transaction{}
+
+	if isEdit {
+		// Record a Fact that delegates undo to Vim
+		anchor := Anchor{PaneID: targetPane}
+		record := ActionRecord{
+			Fact:    Fact{Kind: "insert", Target: Range{Anchor: anchor, Text: vimKey}, Meta: map[string]interface{}{"is_vim_raw": true}}, // Pseudo-fact
+			Inverse: Fact{Kind: "undo", Target: Range{Anchor: anchor}},
+		}
+
+		// 将ActionRecord转换为OperationRecord
+		// 由于Fact类型不匹配，我们创建一个空的ResolvedOperation
+		// 在实际实现中，这里应该是有意义的ResolvedOperation
+		opRecord := types.OperationRecord{
+			ResolvedOp: editor.ResolvedOperation{},
+			Fact:       convertFactToCoreFact(record.Fact),
+		}
+		transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact)
+	}
+
+	// For Vim, we just send the count + key
+	countStr := ""
+	if state.Count > 0 {
+		countStr = fmt.Sprint(state.Count)
+	}
+
+	actions = append(actions, VimSendKeysTx{
+		Pane: targetPane,
+		Keys: []string{countStr + vimKey},
+	})
+
+	return actions
+}
+
+// buildShellTransactions 构建 Shell 操作的事务
+func buildShellTransactions(action string, state *FSMState, targetPane string) []Transaction {
+	parts := strings.Split(action, "_")
+	if len(parts) < 1 {
+		return nil
+	}
+
+	op := parts[0]
+	count := state.Count
+	if count <= 0 {
+		count = 1
+	}
+
+	// 1. 处理特殊单一动词
+	if op == "insert" {
+		motion := strings.Join(parts[1:], "_")
+		return buildShellInsertTransactions(motion, targetPane)
+	}
+	if op == "paste" {
+		motion := strings.Join(parts[1:], "_")
+		actions := []Transaction{}
+		for i := 0; i < count; i++ {
+			actions = append(actions, buildShellPasteTransactions(motion, targetPane)...)
+		}
+		return actions
+	}
+	if op == "toggle" { // toggle_case
+		actions := []Transaction{}
+		for i := 0; i < count; i++ {
+			actions = append(actions, buildShellToggleCaseTransactions(targetPane)...)
+		}
+		return actions
+	}
+	if op == "replace" && len(parts) >= 3 && parts[1] == "char" {
+		char := strings.Join(parts[2:], "_")
+		actions := []Transaction{}
+		for i := 0; i < count; i++ {
+			actions = append(actions, buildShellReplaceTransactions(char, targetPane)...)
+		}
+		return actions
+	}
+
+	// 2. 处理传统 Op+Motion 组合
+	if len(parts) < 2 {
+		return nil
+	}
+	motion := strings.Join(parts[1:], "_")
+
+	if op == "delete" || op == "change" {
+		// FOEK Multi-Range 模拟
+		actions := []Transaction{}
+		for i := 0; i < count; i++ {
+			// Check if it's a text object action (e.g., delete_inside_word)
+			if strings.Contains(motion, "inside_") || strings.Contains(motion, "around_") {
+				actions = append(actions, buildShellTextObjectTransactions(op, motion, targetPane)...)
+				continue
+			}
+
+			// Capture deleted text before it's gone
+			startPos := getCursorPos(targetPane) // [col, row]
+			content := captureText(motion, targetPane)
+
+			if content != "" {
+				// Record semantic Fact in active transaction
+				record := captureShellDelete(targetPane, startPos[0], content)
+
+				// 将ActionRecord转换为OperationRecord
+				// 由于Fact类型不匹配，我们创建一个空的ResolvedOperation
+				// 在实际实现中，这里应该是有意义的ResolvedOperation
+				opRecord := types.OperationRecord{
+					ResolvedOp: editor.ResolvedOperation{},
+					Fact:       convertFactToCoreFact(record.Fact),
+				}
+				transMgr.AppendEffect(opRecord.ResolvedOp, opRecord.Fact)
+
+				// [Phase 7] Robust Deletion:
+				// Since we know EXACTLY what we captured, we delete by character count.
+				// This is much safer than relying on shell M-d bindings.
+				actions = append(actions, TmuxSendKeysTx{
+					Pane: targetPane,
+					Keys: []string{"-N", fmt.Sprint(len(content)), "Delete"},
+				})
+			} else {
+				// Fallback if capture failed
+				actions = append(actions, buildShellDeleteTransactions(motion, targetPane)...)
+			}
+		}
+		if op == "change" {
+			actions = append(actions, buildExitFSMTransactions(targetPane)...)
+			state.RedoStack = nil
+		}
+		return actions
+	} else if op == "yank" {
+		if strings.Contains(motion, "inside_") || strings.Contains(motion, "around_") {
+			return buildShellTextObjectTransactions(op, motion, targetPane)
+		} else {
+			// standard yank logic
+			return nil
+		}
+	} else if strings.HasPrefix(action, "find_") {
+		parts := strings.SplitN(action, "_", 3)
+		if len(parts) == 3 {
+			return buildShellFindTransactions(parts[1], parts[2], count, targetPane)
+		}
+	} else if op == "move" {
+		return buildShellMoveTransactions(motion, count, targetPane)
+	}
+
+	return nil
+}
+
+// buildShellInsertTransactions 构建 Shell 插入操作的事务
+func buildShellInsertTransactions(motion, targetPane string) []Transaction {
+	switch motion {
+	case "after":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"Right"},
+			},
+		}
+	case "start_of_line":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"Home"},
+			},
+		}
+	case "end_of_line":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"End"},
+			},
+		}
+	case "open_below":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"End", "Enter"},
+			},
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"Up"}, // Move up after Enter
+			},
+		}
+	case "open_above":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"Home", "Enter", "Up"},
+			},
+		}
+	default:
+		return nil
+	}
+}
+
+// buildShellPasteTransactions 构建 Shell 粘贴操作的事务
+func buildShellPasteTransactions(motion, targetPane string) []Transaction {
+	actions := []Transaction{}
+	if motion == "after" {
+		actions = append(actions, TmuxSendKeysTx{
+			Pane: targetPane,
+			Keys: []string{"Right"},
+		})
+	}
+	actions = append(actions, TmuxSendKeysTx{
+		Pane: targetPane,
+		Keys: []string{"paste-buffer", "-t", targetPane},
+	})
+	return actions
+}
+
+// buildShellToggleCaseTransactions 构建 Shell 切换大小写操作的事务
+func buildShellToggleCaseTransactions(targetPane string) []Transaction {
+	return []Transaction{
+		FuncTx{
+			apply: func() error {
+				performPhysicalToggleCase(targetPane)
+				return nil
+			},
+			inverse: func() Transaction {
+				return NoopTx{}
+			},
+			kind: "toggle_case",
+			tags: []string{"shell"},
+		},
+	}
+}
+
+// buildShellReplaceTransactions 构建 Shell 替换操作的事务
+func buildShellReplaceTransactions(char, targetPane string) []Transaction {
+	return []Transaction{
+		TmuxSendKeysTx{
+			Pane: targetPane,
+			Keys: []string{"Delete", char},
+		},
+	}
+}
+
+// buildShellTextObjectTransactions 构建 Shell 文本对象操作的事务
+func buildShellTextObjectTransactions(op, motion, targetPane string) []Transaction {
+	return []Transaction{
+		FuncTx{
+			apply: func() error {
+				performPhysicalTextObject(op, motion, targetPane)
+				return nil
+			},
+			inverse: func() Transaction {
+				return NoopTx{}
+			},
+			kind: "text_object",
+			tags: []string{"shell"},
+		},
+	}
+}
+
+// buildShellDeleteTransactions 构建 Shell 删除操作的事务
+func buildShellDeleteTransactions(motion, targetPane string) []Transaction {
+	return []Transaction{
+		FuncTx{
+			apply: func() error {
+				performPhysicalDelete(motion, targetPane)
+				return nil
+			},
+			inverse: func() Transaction {
+				return NoopTx{}
+			},
+			kind: "delete",
+			tags: []string{"shell"},
+		},
+	}
+}
+
+// buildShellFindTransactions 构建 Shell 查找操作的事务
+func buildShellFindTransactions(fType, char string, count int, targetPane string) []Transaction {
+	return []Transaction{
+		FuncTx{
+			apply: func() error {
+				performPhysicalFind(fType, char, count, targetPane)
+				return nil
+			},
+			inverse: func() Transaction {
+				return NoopTx{}
+			},
+			kind: "find",
+			tags: []string{"shell"},
+		},
+	}
+}
+
+// buildShellMoveTransactions 构建 Shell 移动操作的事务
+func buildShellMoveTransactions(motion string, count int, targetPane string) []Transaction {
+	cStr := fmt.Sprint(count)
+
+	switch motion {
+	case "up":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-N", cStr, "Up"},
+			},
+		}
+	case "down":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-N", cStr, "Down"},
+			},
+		}
+	case "left":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-N", cStr, "Left"},
+			},
+		}
+	case "right":
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-N", cStr, "Right"},
+			},
+		}
+	case "start_of_line": // 0
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"Home"},
+			},
+		}
+	case "end_of_line": // $
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"End"},
+			},
+		}
+	case "word_forward": // w
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-N", cStr, "M-f"},
+			},
+		}
+	case "word_backward": // b
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-N", cStr, "M-b"},
+			},
+		}
+	case "end_of_word": // e
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"-N", cStr, "M-f"},
+			},
+		}
+	case "start_of_file": // gg
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"Home"},
+			},
+		}
+	case "end_of_file": // G
+		return []Transaction{
+			TmuxSendKeysTx{
+				Pane: targetPane,
+				Keys: []string{"End"},
+			},
+		}
+	default:
+		return nil
+	}
+}
+
+// buildExitFSMTransactions 构建退出 FSM 的事务
+func buildExitFSMTransactions(targetPane string) []Transaction {
+	return []Transaction{
+		TmuxSendKeysTx{
+			Pane: targetPane,
+			Keys: []string{"set", "-g", "@fsm_active", "false"},
+		},
+		TmuxSendKeysTx{
+			Pane: targetPane,
+			Keys: []string{"set", "-g", "@fsm_state", ""},
+		},
+		TmuxSendKeysTx{
+			Pane: targetPane,
+			Keys: []string{"set", "-g", "@fsm_keys", ""},
+		},
+		TmuxSendKeysTx{
+			Pane: targetPane,
+			Keys: []string{"switch-client", "-T", "root"},
+		},
+		TmuxSendKeysTx{
+			Pane: targetPane,
+			Keys: []string{"refresh-client", "-S"},
+		},
 	}
 }
 
@@ -4022,6 +5640,7 @@ var (
 	stateMu     sync.Mutex
 	globalState FSMState
 	transMgr    *TransactionManager
+	txJournal   *TxJournal  // 新增：事务日志
 	socketPath  = os.Getenv("HOME") + "/.tmux-fsm.sock"
 )
 
@@ -4030,6 +5649,9 @@ func init() {
 	transMgr = &TransactionManager{
 		nextID: 0,
 	}
+
+	// 初始化事务日志
+	txJournal = NewTxJournal()
 }
 
 func loadState() FSMState {
@@ -4140,6 +5762,273 @@ func updateStatusBar(state FSMState, clientName string) {
 	}
 }
 
+````
+
+## 📄 `index/index.go`
+
+````go
+package index
+
+import (
+	"sort"
+	"time"
+	"tmux-fsm/crdt"
+	"tmux-fsm/semantic"
+)
+
+// FactType 事实类型
+type FactType string
+
+const (
+	FactTypeInsert FactType = "insert"
+	FactTypeDelete FactType = "delete"
+	FactTypeMove   FactType = "move"
+	FactTypeReplace FactType = "replace"
+)
+
+// EventIndex 事件索引
+type EventIndex struct {
+	ByActor    map[crdt.ActorID][]crdt.EventID
+	ByType     map[FactType][]crdt.EventID
+	ByPosition PositionIntervalTree
+	ByTime     TimeBTree
+	ByContent  map[string][]crdt.EventID // 按内容索引
+}
+
+// PositionIntervalTree 位置区间树（简化实现）
+type PositionIntervalTree struct {
+	// 这里使用一个简单的映射作为示例
+	// 实际实现可能需要更复杂的数据结构
+	intervals map[string][]crdt.EventID
+}
+
+// TimeBTree 时间B树（简化实现）
+type TimeBTree struct {
+	// 简化为时间戳到事件ID的映射
+	timeline map[int64][]crdt.EventID
+}
+
+// NewEventIndex 创建新的事件索引
+func NewEventIndex() *EventIndex {
+	return &EventIndex{
+		ByActor:    make(map[crdt.ActorID][]crdt.EventID),
+		ByType:     make(map[FactType][]crdt.EventID),
+		ByPosition: PositionIntervalTree{intervals: make(map[string][]crdt.EventID)},
+		ByTime:     TimeBTree{timeline: make(map[int64][]crdt.EventID)},
+		ByContent:  make(map[string][]crdt.EventID),
+	}
+}
+
+// BuildIndex 构建索引
+func BuildIndex(events []crdt.SemanticEvent) *EventIndex {
+	index := NewEventIndex()
+	
+	for _, event := range events {
+		// 按参与者索引
+		index.ByActor[event.Actor] = append(index.ByActor[event.Actor], event.ID)
+		
+		// 按类型索引
+		factType := getFactType(event.Fact)
+		index.ByType[factType] = append(index.ByType[factType], event.ID)
+		
+		// 按时间索引
+		index.ByTime.timeline[event.Time.Unix()] = append(index.ByTime.timeline[event.Time.Unix()], event.ID)
+		
+		// 按位置索引
+		positionKey := getPositionKey(event.Fact)
+		index.ByPosition.intervals[positionKey] = append(index.ByPosition.intervals[positionKey], event.ID)
+		
+		// 按内容索引
+		contentKey := getContentKey(event.Fact)
+		if contentKey != "" {
+			index.ByContent[contentKey] = append(index.ByContent[contentKey], event.ID)
+		}
+	}
+	
+	return index
+}
+
+// getFactType 获取事实类型
+func getFactType(fact semantic.BaseFact) FactType {
+	switch fact.Kind() {
+	case "insert":
+		return FactTypeInsert
+	case "delete":
+		return FactTypeDelete
+	case "move":
+		return FactTypeMove
+	case "replace":
+		return FactTypeReplace
+	default:
+		return FactType("unknown")
+	}
+}
+
+// getPositionKey 获取位置键
+func getPositionKey(fact semantic.BaseFact) string {
+	anchor := fact.GetAnchor()
+	return string(anchor.PaneID) + ":" + string(anchor.Line) + ":" + string(anchor.Col)
+}
+
+// getContentKey 获取内容键
+func getContentKey(fact semantic.BaseFact) string {
+	return fact.GetText()
+}
+
+// QueryByActor 按参与者查询
+func (idx *EventIndex) QueryByActor(actor crdt.ActorID) []crdt.EventID {
+	events, exists := idx.ByActor[actor]
+	if !exists {
+		return []crdt.EventID{}
+	}
+	return events
+}
+
+// QueryByType 按类型查询
+func (idx *EventIndex) QueryByType(ft FactType) []crdt.EventID {
+	events, exists := idx.ByType[ft]
+	if !exists {
+		return []crdt.EventID{}
+	}
+	return events
+}
+
+// QueryByTimeRange 按时间范围查询
+func (idx *EventIndex) QueryByTimeRange(start, end time.Time) []crdt.EventID {
+	var result []crdt.EventID
+	
+	startUnix := start.Unix()
+	endUnix := end.Unix()
+	
+	for timestamp, events := range idx.ByTime.timeline {
+		if timestamp >= startUnix && timestamp <= endUnix {
+			result = append(result, events...)
+		}
+	}
+	
+	return result
+}
+
+// QueryByPositionRange 按位置范围查询
+func (idx *EventIndex) QueryByPositionRange(startPos, endPos string) []crdt.EventID {
+	var result []crdt.EventID
+	
+	// 简化实现：查找在指定位置范围内的事件
+	for posKey, events := range idx.ByPosition.intervals {
+		if posKey >= startPos && posKey <= endPos {
+			result = append(result, events...)
+		}
+	}
+	
+	return result
+}
+
+// QueryByContent 按内容查询
+func (idx *EventIndex) QueryByContent(content string) []crdt.EventID {
+	events, exists := idx.ByContent[content]
+	if !exists {
+		return []crdt.EventID{}
+	}
+	return events
+}
+
+// QueryAIChanges 查询 AI 的更改
+func (idx *EventIndex) QueryAIChanges(aiActorPrefix string) []crdt.EventID {
+	var result []crdt.EventID
+	
+	for actor, events := range idx.ByActor {
+		actorStr := string(actor)
+		if len(actorStr) >= len(aiActorPrefix) && actorStr[:len(aiActorPrefix)] == aiActorPrefix {
+			result = append(result, events...)
+		}
+	}
+	
+	return result
+}
+
+// QueryEvolutionHistory 查询某段文本的演化历史
+func (idx *EventIndex) QueryEvolutionHistory(content string) []crdt.EventID {
+	// 首先按内容查找
+	contentEvents := idx.QueryByContent(content)
+	
+	// 然后可能需要扩展到相关的插入/删除事件
+	var result []crdt.EventID
+	result = append(result, contentEvents...)
+	
+	// 这里可以添加更多逻辑来查找相关的事件
+	// 例如，查找在同一位置附近的操作等
+	
+	return result
+}
+
+// QueryWhoDeleted 查询谁删除了特定内容
+func (idx *EventIndex) QueryWhoDeleted(content string) []crdt.ActorID {
+	var actors []crdt.ActorID
+	
+	// 查找删除操作
+	deleteEvents := idx.QueryByType(FactTypeDelete)
+	
+	for _, eventID := range deleteEvents {
+		// 这里需要一个事件ID到事件的映射
+		// 由于简化实现，我们跳过这一步
+		// 在实际实现中，需要从存储中检索事件并检查其内容
+	}
+	
+	return actors
+}
+
+// SortEventsByID 对事件ID进行排序
+func SortEventsByID(events []crdt.EventID) []crdt.EventID {
+	sorted := make([]crdt.EventID, len(events))
+	copy(sorted, events)
+	
+	sort.Slice(sorted, func(i, j int) bool {
+		return string(sorted[i]) < string(sorted[j])
+	})
+	
+	return sorted
+}
+
+// SortEventsByTime 对事件按时间排序
+func SortEventsByTime(events []crdt.SemanticEvent) []crdt.SemanticEvent {
+	sorted := make([]crdt.SemanticEvent, len(events))
+	copy(sorted, events)
+	
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Time.Before(sorted[j].Time)
+	})
+	
+	return sorted
+}
+
+// GetTimeline 获取时间线
+func (idx *EventIndex) GetTimeline() []int64 {
+	var timestamps []int64
+	for timestamp := range idx.ByTime.timeline {
+		timestamps = append(timestamps, timestamp)
+	}
+	
+	sort.Slice(timestamps, func(i, j int) bool {
+		return timestamps[i] < timestamps[j]
+	})
+	
+	return timestamps
+}
+
+// GetActors 获取所有参与者
+func (idx *EventIndex) GetActors() []crdt.ActorID {
+	var actors []crdt.ActorID
+	for actor := range idx.ByActor {
+		actors = append(actors, actor)
+	}
+	
+	// 排序以确保一致性
+	sort.Slice(actors, func(i, j int) bool {
+		return string(actors[i]) < string(actors[j])
+	})
+	
+	return actors
+}
 ````
 
 ## 📄 `intent.go`
@@ -5223,6 +7112,178 @@ func isTextObject(motion string) bool {
 
 ````
 
+## 📄 `invariant/test.go`
+
+````go
+package invariant
+
+import (
+	"math/rand"
+	"testing"
+	"time"
+)
+
+// TextState 模拟文本状态
+type TextState struct {
+	Text   string
+	Cursor int
+}
+
+// Apply 模拟事务对状态的应用
+func (s TextState) Apply(tx Transaction) (TextState, error) {
+	switch t := tx.(type) {
+	case *InsertTx:
+		if t.Pos < 0 || t.Pos > len(s.Text) {
+			return s, nil // 边界检查，不执行
+		}
+		newText := s.Text[:t.Pos] + t.Text + s.Text[t.Pos:]
+		return TextState{
+			Text:   newText,
+			Cursor: t.Pos + len(t.Text),
+		}, nil
+
+	case *DeleteTx:
+		if t.Pos < 0 || t.Pos+t.Len > len(s.Text) {
+			return s, nil // 边界检查，不执行
+		}
+		newText := s.Text[:t.Pos] + s.Text[t.Pos+t.Len:]
+		return TextState{
+			Text:   newText,
+			Cursor: t.Pos,
+		}, nil
+
+	case *MoveCursorTx:
+		newCursor := t.To
+		if newCursor < 0 {
+			newCursor = 0
+		}
+		if newCursor > len(s.Text) {
+			newCursor = len(s.Text)
+		}
+		return TextState{
+			Text:   s.Text,
+			Cursor: newCursor,
+		}, nil
+	}
+
+	return s, nil
+}
+
+// Transaction 接口定义
+type Transaction interface {
+	Apply() error
+	Inverse() Transaction
+	Kind() string
+	Tags() []string
+	CanMerge(next Transaction) bool
+	Merge(next Transaction) Transaction
+}
+
+// InsertTx 插入事务
+type InsertTx struct {
+	Pos  int
+	Text string
+}
+
+func (t *InsertTx) Apply() error { return nil }
+func (t *InsertTx) Inverse() Transaction {
+	return &DeleteTx{Pos: t.Pos, Len: len(t.Text)}
+}
+func (t *InsertTx) Kind() string { return "insert" }
+func (t *InsertTx) Tags() []string { return []string{"insert"} }
+func (t *InsertTx) CanMerge(next Transaction) bool { return false }
+func (t *InsertTx) Merge(next Transaction) Transaction { return next }
+
+// DeleteTx 删除事务
+type DeleteTx struct {
+	Pos int
+	Len int
+}
+
+func (t *DeleteTx) Apply() error { return nil }
+func (t *DeleteTx) Inverse() Transaction {
+	return &InsertTx{Pos: t.Pos, Text: ""} // 简化实现
+}
+func (t *DeleteTx) Kind() string { return "delete" }
+func (t *DeleteTx) Tags() []string { return []string{"delete"} }
+func (t *DeleteTx) CanMerge(next Transaction) bool { return false }
+func (t *DeleteTx) Merge(next Transaction) Transaction { return next }
+
+// MoveCursorTx 移动光标事务
+type MoveCursorTx struct {
+	To int
+}
+
+func (t *MoveCursorTx) Apply() error { return nil }
+func (t *MoveCursorTx) Inverse() Transaction {
+	// 简化实现
+	return &MoveCursorTx{To: 0}
+}
+func (t *MoveCursorTx) Kind() string { return "move" }
+func (t *MoveCursorTx) Tags() []string { return []string{"move"} }
+func (t *MoveCursorTx) CanMerge(next Transaction) bool { return false }
+func (t *MoveCursorTx) Merge(next Transaction) Transaction { return next }
+
+// TestTxInverseProperty 测试事务与其逆操作的性质
+func TestTxInverseProperty(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+	
+	for i := 0; i < 100; i++ {
+		// 随机生成初始状态
+		initialText := randomString(rand.Intn(20))
+		s0 := TextState{Text: initialText, Cursor: rand.Intn(len(initialText)+1)}
+		
+		// 创建一个随机事务
+		tx := randomTransaction(len(s0.Text))
+		
+		// 应用事务
+		s1, err := s0.Apply(tx)
+		if err != nil {
+			continue // Apply 失败不违反不变量
+		}
+
+		// 应用逆事务
+		s2, err := s1.Apply(tx.Inverse())
+		if err != nil {
+			t.Errorf("Inverse application failed: %v", err)
+			continue
+		}
+
+		// 检查是否回到原始状态
+		if s0.Text != s2.Text {
+			t.Errorf("Apply ∘ Inverse ≠ Identity: %s != %s", s0.Text, s2.Text)
+		}
+	}
+}
+
+// randomString 生成随机字符串
+func randomString(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(b)
+}
+
+// randomTransaction 生成随机事务
+func randomTransaction(maxPos int) Transaction {
+	pos := rand.Intn(maxPos + 1)
+	switch rand.Intn(3) {
+	case 0:
+		return &InsertTx{Pos: pos, Text: randomString(rand.Intn(5))}
+	case 1:
+		delLen := rand.Intn(maxPos - pos + 1)
+		return &DeleteTx{Pos: pos, Len: delLen}
+	case 2:
+		newPos := rand.Intn(maxPos + 1)
+		return &MoveCursorTx{To: newPos}
+	default:
+		return &InsertTx{Pos: pos, Text: "test"}
+	}
+}
+````
+
 ## 📄 `kernel/decide.go`
 
 ````go
@@ -5296,12 +7357,16 @@ func (k *Kernel) Decide(key string) *Decision {
 		if dispatched {
 			// ✅ 合法状态：key 被 FSM 吃了，但 Grammar 没有生成意图
 			// 这是正常情况，例如在等待更多按键时
-			return nil
+			return &Decision{
+				Kind: DecisionNone, // FSM 吃了，但还没决定
+			}
 		}
 	}
 
-	// 没有 FSM 处理，返回 nil
-	return nil
+	// 没有 FSM 处理，明确返回 Legacy 决策
+	return &Decision{
+		Kind: DecisionLegacy,
+	}
 }
 
 ````
@@ -5311,11 +7376,9 @@ func (k *Kernel) Decide(key string) *Decision {
 ````go
 package kernel
 
-
-
 func (k *Kernel) Execute(decision *Decision) {
-	if decision == nil || decision.Intent == nil {
-		return
+	if decision == nil {
+		panic("kernel.Execute called with nil decision")
 	}
 
 	if k.Exec == nil {
@@ -5323,10 +7386,23 @@ func (k *Kernel) Execute(decision *Decision) {
 	}
 
 	switch decision.Kind {
+	case DecisionNone:
+		return // 刻意不作为
+
 	case DecisionFSM:
+		if decision.Intent == nil {
+			panic("FSM decision without intent")
+		}
 		_ = k.Exec.Process(decision.Intent)
+
 	case DecisionLegacy:
+		if decision.Intent == nil {
+			panic("Legacy decision without intent")
+		}
 		_ = k.Exec.Process(decision.Intent)
+
+	default:
+		panic("unknown decision kind")
 	}
 }
 
@@ -5407,19 +7483,32 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 	if k.FSM != nil && k.Grammar != nil {
 		decision = k.Decide(key)
 
-		// 如果Grammar成功生成了intent，直接执行
-		if decision != nil && decision.Intent != nil {
-			k.Execute(decision)
-			return
+		if decision != nil {
+			switch decision.Kind {
+			case DecisionFSM:
+				k.Execute(decision)
+				return
+
+			case DecisionNone:
+				// FSM 吃了 key，合法等待
+				return
+
+			case DecisionLegacy:
+				// 明确：Grammar/FSM 不处理，才允许 legacy
+				break
+			}
 		}
 	}
 
 	// 如果Grammar没有处理，记录信息（未来将完全移除legacy路径）
 	if k.ShadowIntent && k.NativeBuilder != nil {
-		// 记录未被Grammar处理的按键
-		log.Printf("[GRAMMAR COVERAGE] key '%s' not handled by Grammar", key)
-		k.ShadowStats.Total++
-		k.ShadowStats.Mismatched++ // 记录为未覆盖
+		// 只有在 DecisionLegacy 情况下才记录为未覆盖
+		// DecisionNone 是合法的等待状态，不应计入未覆盖
+		if decision != nil && decision.Kind == DecisionLegacy {
+			log.Printf("[GRAMMAR COVERAGE] key '%s' not handled by Grammar", key)
+			k.ShadowStats.Total++
+			k.ShadowStats.Mismatched++ // 记录为未覆盖
+		}
 	}
 }
 
@@ -5523,32 +7612,7 @@ func (tr *TransactionRunner) Apply(tx *types.Transaction) error {
 
 // Undo 撤销事务（反向执行）
 func (tr *TransactionRunner) Undo(tx *types.Transaction) error {
-	if tx == nil {
-		return fmt.Errorf("transaction is nil")
-	}
-
-	// 收集所有反向操作
-	ops := make([]editor.ResolvedOperation, 0, len(tx.Records))
-
-	// 逆序执行反向操作
-	for i := len(tx.Records) - 1; i >= 0; i-- {
-		record := tx.Records[i]
-
-		// 将 Inverse (core.Fact) 转换为 ResolvedOperation
-		// TODO: 这里需要实现 Fact -> ResolvedOperation 的转换
-		// 暂时使用占位逻辑
-		inverseOp := tr.factToResolvedOp(record.Inverse)
-
-		if err := editor.ApplyResolvedOperation(tr.ctx, inverseOp); err != nil {
-			return fmt.Errorf("failed to undo operation: %w", err)
-		}
-		ops = append(ops, inverseOp)
-	}
-
-	// 更新 selections
-	tr.updateSelectionsAfterOps(ops)
-
-	return nil
+	return fmt.Errorf("undo not supported: inverse execution not implemented")
 }
 
 // Repeat 重复执行事务（用于 . repeat）
@@ -5574,16 +7638,6 @@ func (tr *TransactionRunner) updateSelectionsAfterOps(ops []editor.ResolvedOpera
 		currentSels := tr.ctx.Selections.Get(bufferID)
 		updatedSels := editor.UpdateSelections(currentSels, bufferOps)
 		tr.ctx.Selections.Set(bufferID, updatedSels)
-	}
-}
-
-// factToResolvedOp 将 core.Fact 转换为 ResolvedOperation
-// TODO: 这是一个临时实现，需要根据实际的 Fact 结构完善
-func (tr *TransactionRunner) factToResolvedOp(fact interface{}) editor.ResolvedOperation {
-	// 这里需要根据 core.Fact 的实际结构进行转换
-	// 暂时返回一个空操作
-	return editor.ResolvedOperation{
-		Kind: editor.OpMove,
 	}
 }
 
@@ -5770,6 +7824,660 @@ func isDigit(s string) (int, bool) {
 	}
 	return 0, false
 }
+````
+
+## 📄 `main.go`
+
+````go
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"log"
+	"net"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"tmux-fsm/decide"
+	"tmux-fsm/editor"
+	"tmux-fsm/fsm"
+	"tmux-fsm/intent"
+	"tmux-fsm/kernel"
+	"tmux-fsm/semantic"
+	"tmux-fsm/types"
+	"tmux-fsm/weaver/core"
+	"tmux-fsm/weaver/manager"
+)
+
+// weaverMgr 全局 Weaver 实例
+var weaverMgr *manager.WeaverManager
+
+// kernelInstance 全局 Kernel 实例
+var kernelInstance *kernel.Kernel
+
+// globalExecContext 全局执行上下文
+var globalExecContext *editor.ExecutionContext
+
+// TransactionManager 事务管理器
+// 负责管理编辑操作的历史记录，遵循Vim语义规则
+type TransactionManager struct {
+	current         *types.Transaction
+	nextID          types.TransactionID
+	history         []*types.Transaction // 存储已提交的事务，用于 . repeat 和 undo
+	lastCommittedTx *types.Transaction   // 最近提交的事务，用于 . repeat
+}
+
+// BeginTransaction 开始一个新的事务
+// 一个事务对应一次可被 `.` 重复的最小操作单元
+func (tm *TransactionManager) BeginTransaction() *types.Transaction {
+	tm.current = &types.Transaction{
+		ID:        tm.nextID,
+		Records:   make([]types.OperationRecord, 0),
+		CreatedAt: time.Now(),
+	}
+	tm.nextID++
+	return tm.current
+}
+
+// AppendEffect 向当前事务追加效果记录
+// 注意：调用此方法前必须确保事务已开始
+func (tm *TransactionManager) AppendEffect(resolvedOp editor.ResolvedOperation, fact core.Fact) {
+	if tm.current == nil {
+		panic("AppendEffect called without active transaction - transaction must be explicitly started")
+	}
+
+	record := types.OperationRecord{
+		ResolvedOp: resolvedOp,
+		Fact:       fact,
+	}
+
+	tm.current.Records = append(tm.current.Records, record)
+}
+
+// CommitTransaction 提交当前事务
+func (tm *TransactionManager) CommitTransaction() error {
+	if tm.current == nil {
+		return fmt.Errorf("no active transaction to commit")
+	}
+
+	// 保存到历史记录
+	tm.history = append(tm.history, tm.current)
+
+	// 更新最近提交的事务（用于 . repeat）
+	tm.lastCommittedTx = tm.current
+
+	tm.current = nil // 重置当前事务
+
+	return nil
+}
+
+// AbortTransaction 放弃当前事务
+func (tm *TransactionManager) AbortTransaction() error {
+	if tm.current == nil {
+		return fmt.Errorf("no active transaction to abort")
+	}
+
+	tm.current = nil // 重置当前事务
+
+	return nil
+}
+
+// GetCurrentTransaction 获取当前事务（如果存在）
+func (tm *TransactionManager) GetCurrentTransaction() *types.Transaction {
+	return tm.current
+}
+
+// LastCommittedTransaction 获取最近提交的事务
+// 用于 . repeat 功能
+func (tm *TransactionManager) LastCommittedTransaction() *types.Transaction {
+	return tm.lastCommittedTx
+}
+
+func main() {
+	serverMode := flag.Bool("server", false, "run as server")
+	socketPath := flag.String("socket", "/tmp/tmux-fsm.sock", "socket path")
+	debugMode := flag.Bool("debug", false, "enable debug logging")
+	configPath := flag.String("config", "./keymap.yaml", "path to keymap configuration file")
+	reloadFlag := flag.Bool("reload", false, "reload keymap configuration")
+	keyFlag := flag.String("key", "", "dispatch key to FSM")
+	enterFlag := flag.Bool("enter", false, "enter FSM mode")
+	exitFlag := flag.Bool("exit", false, "exit FSM mode")
+	helpFlag := flag.Bool("help", false, "show help")
+	flag.Parse()
+
+	// Load keymap configuration
+	if err := fsm.LoadKeymap(*configPath); err != nil {
+		log.Printf("Warning: Failed to load keymap from %s: %v", *configPath, err)
+		// Continue with default keymap if available
+	} else {
+		log.Printf("Successfully loaded keymap from %s", *configPath)
+	}
+
+	// Initialize FSM engine with loaded keymap
+	fsm.InitEngine(&fsm.KM)
+
+	// 初始化新的编辑内核组件
+	// cursorEngine := editor.NewCursorEngine(editor.NewSimpleBuffer([]string{})) // 创建光标引擎（已移除，因为函数不存在）
+
+	// 创建基于新解析器的执行器（过渡性实现）
+	resolverExecutor := kernel.NewResolverExecutor()
+
+	// 创建全局执行上下文
+	globalExecContext = editor.NewExecutionContext(
+		editor.NewSimpleBufferStore(),
+		editor.NewSimpleWindowStore(),
+		editor.NewSimpleSelectionStore(),
+	)
+
+	// Initialize kernel with FSM engine and new resolver executor
+	kernelInstance = kernel.NewKernel(fsm.GetDefaultEngine(), resolverExecutor)
+
+	// 初始化 Weaver 系统
+	manager.InitWeaver(manager.ModeWeaver) // 默认启用 Weaver 模式
+
+	if *reloadFlag {
+		// Invariant 8: Reload = atomic rebuild
+		// 使用统一的Reload函数
+		if err := fsm.Reload(*configPath); err != nil {
+			log.Fatalf("reload failed: %v", err) // Invariant 10: error = reject running
+		}
+		log.Println("Keymap reloaded successfully")
+		os.Exit(0)
+	}
+
+	if *debugMode {
+		log.SetFlags(log.LstdFlags | log.Lshortfile) // Include file and line info in logs
+	}
+
+	// Handle command line arguments
+	args := flag.Args()
+
+	if *enterFlag {
+		// Enter FSM mode
+		fsm.EnterFSM()
+		os.Exit(0)
+	}
+
+	if *exitFlag {
+		// Exit FSM mode
+		fsm.ExitFSM()
+		os.Exit(0)
+	}
+
+	if *helpFlag {
+		fmt.Println("tmux-fsm - A Tmux plugin providing Vim-like modal editing")
+		fmt.Println("Usage:")
+		fmt.Println("  tmux-fsm -server          # Run as server daemon")
+		fmt.Println("  tmux-fsm -enter           # Enter FSM mode")
+		fmt.Println("  tmux-fsm -exit            # Exit FSM mode")
+		fmt.Println("  tmux-fsm -reload          # Reload keymap configuration")
+		fmt.Println("  tmux-fsm -key <key> <pane_client>  # Process a key event")
+		fmt.Println("  tmux-fsm -debug           # Enable debug logging")
+		os.Exit(0)
+	}
+
+	if *keyFlag != "" {
+		// Process key event
+		paneAndClient := ""
+		if len(args) > 0 {
+			paneAndClient = args[0]
+		}
+		// Call runClient function to dispatch the key
+		runClient(*keyFlag, paneAndClient)
+		os.Exit(0)
+	}
+
+	if *serverMode {
+		if *debugMode {
+			log.Printf("[DEBUG] Starting server on %s", *socketPath)
+		}
+		log.Printf("[server] tmux-fsm daemon starting: %s", time.Now().Format(time.RFC3339))
+
+		// Write PID file for reliable process management
+		pid := os.Getpid()
+		pidPath := "/tmp/tmux-fsm.pid"
+		if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil {
+			log.Printf("[server] warning: could not write PID file: %v", err)
+		}
+
+		srv := NewServer(ServerConfig{
+			SocketPath: *socketPath,
+		})
+		log.Fatal(srv.Run(context.Background()))
+		return
+	}
+
+	// client / other modes 保持你原来的逻辑
+	log.Println("no mode specified")
+}
+
+// ServerConfig 服务器配置
+type ServerConfig struct {
+	SocketPath string
+}
+
+// Server 服务器结构
+type Server struct {
+	cfg ServerConfig
+	// kernel *kernel.Kernel  // Temporarily disabled
+}
+
+// NewServer 创建新服务器实例
+func NewServer(cfg ServerConfig) *Server {
+	return &Server{
+		cfg: cfg,
+	}
+}
+
+// Run 启动服务器
+func (s *Server) Run(ctx context.Context) error {
+	// 清理旧 socket
+	_ = os.Remove(s.cfg.SocketPath)
+
+	ln, err := net.Listen("unix", s.cfg.SocketPath)
+	if err != nil {
+		return err
+	}
+	defer ln.Close()
+
+	log.Printf("[server] listening on %s\n", s.cfg.SocketPath)
+
+	go s.handleSignals(ctx, ln)
+
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			log.Printf("[server] accept error: %v\n", err)
+			return err
+		}
+		log.Printf("[server] accepted connection from %s\n", conn.RemoteAddr())
+		go s.handleClient(conn)
+	}
+}
+
+// handleClient 处理客户端连接
+func (s *Server) handleClient(conn net.Conn) {
+	defer conn.Close()
+
+	log.Printf("[server] client connected: %s", conn.RemoteAddr())
+
+	var in intent.Intent
+	dec := json.NewDecoder(conn)
+
+	if err := dec.Decode(&in); err != nil {
+		log.Printf("[server] decode intent error: %v", err)
+		return
+	}
+
+	log.Printf("[server] intent received: kind=%v count=%d",
+		in.Kind, in.Count,
+	)
+
+	// Invariant 1: FSM has absolute priority on key events
+	// Check if this is a key dispatch request first
+	if in.Meta != nil {
+		if key, ok := in.Meta["key"].(string); ok {
+			// ✅ Phase‑4 边界：非键盘事件，直接忽略
+			if key == "" {
+				log.Printf("[server] empty key event ignored")
+				return
+			}
+
+			// Use kernel to handle key dispatch
+			if kernelInstance != nil {
+				hctx := kernel.HandleContext{Ctx: context.Background()}
+				kernelInstance.HandleKey(hctx, key)
+				// If kernel handled the key, return without processing further
+				return
+			}
+		}
+		// Check for reload command
+		if cmd, ok := in.Meta["command"].(string); ok {
+			if cmd == "reload" {
+				configPath, ok := in.Meta["config_path"].(string)
+				if !ok {
+					configPath = "./keymap.yaml"
+				}
+				// Use unified Reload function
+				if err := fsm.Reload(configPath); err != nil {
+					return
+				}
+				return
+			}
+			if cmd == "nvim-mode" {
+				// Handle Neovim mode changes
+				mode, ok := in.Meta["mode"].(string)
+				if ok {
+					fsm.OnNvimMode(mode)
+				}
+				return
+			}
+		}
+	}
+
+	// If FSM didn't consume the key, process as regular intent
+	if err := ProcessIntentGlobal(in); err != nil {
+		log.Printf("[server] ProcessIntentGlobal error: %v", err)
+	}
+}
+
+// handleSignals 处理信号
+func (s *Server) handleSignals(ctx context.Context, ln net.Listener) {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case <-ctx.Done():
+	case sig := <-ch:
+		log.Printf("[server] signal received: %v\n", sig)
+		// Clean up PID file
+		os.Remove("/tmp/tmux-fsm.pid")
+	}
+
+	_ = ln.Close()
+}
+
+// intentAdapter 适配 intent.Intent 到 core.Intent
+type intentAdapter struct {
+	intent intent.Intent
+}
+
+func (a *intentAdapter) GetKind() core.IntentKind {
+	return core.IntentKind(a.intent.Kind)
+}
+
+func (a *intentAdapter) GetTarget() core.SemanticTarget {
+	return core.SemanticTarget{
+		Kind:      int(a.intent.Target.Kind),
+		Direction: a.intent.Target.Direction,
+		Scope:     a.intent.Target.Scope,
+		Value:     a.intent.Target.Value,
+	}
+}
+
+func (a *intentAdapter) GetCount() int {
+	return a.intent.Count
+}
+
+func (a *intentAdapter) GetMeta() map[string]interface{} {
+	return a.intent.Meta
+}
+
+func (a *intentAdapter) GetPaneID() string {
+	return a.intent.GetPaneID()
+}
+
+func (a *intentAdapter) GetSnapshotHash() string {
+	return a.intent.GetSnapshotHash()
+}
+
+func (a *intentAdapter) IsPartialAllowed() bool {
+	return a.intent.IsPartialAllowed()
+}
+
+func (a *intentAdapter) GetAnchors() []core.Anchor {
+	// 将 intent.Anchor 转换为 core.Anchor
+	anchors := a.intent.Anchors
+	coreAnchors := make([]core.Anchor, len(anchors))
+	for i, anchor := range anchors {
+		coreAnchors[i] = core.Anchor{
+			PaneID: anchor.PaneID,
+			Kind:   core.AnchorKind(anchor.Kind),
+			Ref:    anchor.Ref,
+			Hash:   anchor.Hash,
+			LineID: core.LineID(anchor.LineID),
+			Start:  anchor.Start,
+			End:    anchor.End,
+		}
+	}
+	return coreAnchors
+}
+
+// RepeatLastTransaction 重复执行最近提交的事务
+// 这是 . repeat 功能的核心实现
+func RepeatLastTransaction(ctx *editor.ExecutionContext, tm *TransactionManager) error {
+	tx := tm.LastCommittedTransaction()
+	if tx == nil {
+		return nil // Vim 行为：无事发生
+	}
+
+	// 开始新事务以支持 repeat 本身的 undo
+	tm.BeginTransaction()
+
+	// 重放最近事务中的所有操作
+	for _, opRecord := range tx.Records {
+		err := editor.ApplyResolvedOperation(ctx, opRecord.ResolvedOp)
+		if err != nil {
+			tm.AbortTransaction()
+			return err
+		}
+	}
+
+	return tm.CommitTransaction()
+}
+
+// UndoLastTransaction 撤销最近的事务
+// 这是 undo 功能的核心实现
+func UndoLastTransaction(tm *TransactionManager) error {
+	return fmt.Errorf("undo not supported: inverse execution not implemented")
+}
+
+// TxNode 事务节点，用于构建 redo tree
+type TxNode struct {
+	Tx       *types.Transaction
+	Parent   *TxNode
+	Children []*TxNode
+}
+
+// History 编辑历史，支持 undo/redo tree
+type History struct {
+	Root    *TxNode
+	Current *TxNode
+}
+
+// NewHistory 创建新的历史记录
+func NewHistory() *History {
+	root := &TxNode{
+		Tx:       nil, // 根节点不包含事务
+		Parent:   nil,
+		Children: make([]*TxNode, 0),
+	}
+
+	return &History{
+		Root:    root,
+		Current: root,
+	}
+}
+
+// Commit 将事务提交到历史记录中
+func (h *History) Commit(tx *types.Transaction) {
+	node := &TxNode{
+		Tx:       tx,
+		Parent:   h.Current,
+		Children: make([]*TxNode, 0),
+	}
+
+	h.Current.Children = append(h.Current.Children, node)
+	h.Current = node
+}
+
+// Undo 执行撤销操作
+func (h *History) Undo() *types.Transaction {
+	if h.Current == h.Root {
+		return nil // 已经在根节点，无法再撤销
+	}
+
+	tx := h.Current.Tx
+	h.Current = h.Current.Parent
+	return tx
+}
+
+// Redo 执行重做操作
+func (h *History) Redo(childIndex int) *types.Transaction {
+	if len(h.Current.Children) == 0 {
+		return nil // 没有可重做的事务
+	}
+
+	if childIndex < 0 || childIndex >= len(h.Current.Children) {
+		childIndex = 0 // 默认选择第一个子节点
+	}
+
+	next := h.Current.Children[childIndex]
+	h.Current = next
+	return next.Tx
+}
+
+// Macro 宏定义，包含一系列事务
+type Macro struct {
+	Name         string
+	Transactions []*types.Transaction
+}
+
+// MacroManager 宏管理器
+type MacroManager struct {
+	macros      map[string]*Macro
+	activeMacro *Macro // 当前正在录制的宏
+}
+
+// NewMacroManager 创建新的宏管理器
+func NewMacroManager() *MacroManager {
+	return &MacroManager{
+		macros: make(map[string]*Macro),
+	}
+}
+
+// StartRecording 开始录制宏
+func (mm *MacroManager) StartRecording(name string) {
+	mm.activeMacro = &Macro{
+		Name:         name,
+		Transactions: make([]*types.Transaction, 0),
+	}
+}
+
+// StopRecording 停止录制宏
+func (mm *MacroManager) StopRecording() {
+	if mm.activeMacro != nil {
+		// 保存宏
+		mm.macros[mm.activeMacro.Name] = mm.activeMacro
+		mm.activeMacro = nil
+	}
+}
+
+// RecordTransaction 记录事务到当前宏
+func (mm *MacroManager) RecordTransaction(tx *types.Transaction) {
+	if mm.activeMacro != nil {
+		// 复制事务以避免后续修改影响宏
+		clonedTx := cloneTransaction(tx)
+		mm.activeMacro.Transactions = append(mm.activeMacro.Transactions, clonedTx)
+	}
+}
+
+// PlayMacro 执行宏
+func (mm *MacroManager) PlayMacro(name string, count int) error {
+	macro, exists := mm.macros[name]
+	if !exists {
+		return fmt.Errorf("macro '%s' not found", name)
+	}
+
+	if count <= 0 {
+		count = 1
+	}
+
+	for i := 0; i < count; i++ {
+		for _, tx := range macro.Transactions {
+			err := replayTransaction(globalExecContext, tx)
+			if err != nil {
+				return fmt.Errorf("error replaying macro '%s': %v", name, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// cloneTransaction 克隆事务
+func cloneTransaction(src *types.Transaction) *types.Transaction {
+	dst := &types.Transaction{
+		ID:               src.ID,
+		Records:          make([]types.OperationRecord, len(src.Records)),
+		CreatedAt:        src.CreatedAt,
+		SafetyLevel:      src.SafetyLevel,
+		PreSnapshotHash:  src.PreSnapshotHash,
+		PostSnapshotHash: src.PostSnapshotHash,
+	}
+
+	// 克隆 Records
+	copy(dst.Records, src.Records)
+
+	return dst
+}
+
+// replayTransaction 重放事务
+func replayTransaction(ctx *editor.ExecutionContext, tx *types.Transaction) error {
+	for _, record := range tx.Records {
+		err := editor.ApplyResolvedOperation(ctx, record.ResolvedOp)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// IsRecording 检查是否正在录制宏
+func (mm *MacroManager) IsRecording() bool {
+	return mm.activeMacro != nil
+}
+
+// ProcessIntentGlobal 全局意图处理入口
+// RFC-WC-002: Intent ABI - 统一入口，统一审计
+func ProcessIntentGlobal(intent intent.Intent) error {
+	// 如果 weaverMgr 未初始化，返回
+	if weaverMgr == nil {
+		return nil
+	}
+
+	// 开始事务 - 一个事务对应一次可被 `.` 重复的最小操作单元
+	if transMgr != nil {
+		transMgr.BeginTransaction()
+	}
+
+	// 使用 weaver manager 处理意图
+	err := weaverMgr.ProcessIntentGlobal(&intentAdapter{intent: intent})
+	if err != nil && transMgr != nil {
+		// 如果处理过程中出现错误，回滚事务
+		transMgr.AbortTransaction()
+		return err
+	}
+
+	// 成功处理后提交事务
+	if transMgr != nil {
+		return transMgr.CommitTransaction()
+	}
+
+	return err
+}
+
+// ProcessUndo 执行撤销操作
+func ProcessUndo(paneID string) error {
+	if txJournal != nil {
+		return txJournal.Undo()
+	}
+	return nil
+}
+
+// ProcessRedo 执行重做操作
+func ProcessRedo(paneID string) error {
+	if txJournal != nil {
+		return txJournal.Redo()
+	}
+	return nil
+}
+
 ````
 
 ## 📄 `pkg/legacy/handlers.go`
@@ -7243,6 +9951,256 @@ func TestGrammarRepeat(t *testing.T) {
 }
 ````
 
+## 📄 `policy/policy.go`
+
+````go
+package policy
+
+import (
+	"errors"
+	"tmux-fsm/crdt"
+	"tmux-fsm/semantic"
+)
+
+// TrustLevel 信任级别
+type TrustLevel int
+
+const (
+	TrustSystem TrustLevel = iota // GC / rebalance
+	TrustUser                     // 人类
+	TrustDevice                   // 同用户多端
+	TrustAI                       // AI
+	TrustExternal                 // 插件 / import
+)
+
+// ActorInfo 参与者信息
+type ActorInfo struct {
+	ID      crdt.ActorID
+	Level   TrustLevel
+	Name    string
+	Allowed []string // 允许的操作类型
+}
+
+// PolicyContext 策略上下文
+type PolicyContext struct {
+	ActorInfo ActorInfo
+	AllowedSlice EventSlice
+	Timestamp int64
+}
+
+// EventSlice 事件切片
+type EventSlice struct {
+	From crdt.EventID
+	To   crdt.EventID
+	Events []crdt.SemanticEvent
+}
+
+// Policy 策略接口
+type Policy interface {
+	Allow(event crdt.SemanticEvent, ctx PolicyContext) error
+}
+
+// DefaultPolicy 默认策略实现
+type DefaultPolicy struct {
+	actors map[crdt.ActorID]ActorInfo
+}
+
+// NewDefaultPolicy 创建默认策略
+func NewDefaultPolicy() *DefaultPolicy {
+	return &DefaultPolicy{
+		actors: make(map[crdt.ActorID]ActorInfo),
+	}
+}
+
+// RegisterActor 注册参与者
+func (p *DefaultPolicy) RegisterActor(actorID crdt.ActorID, level TrustLevel, name string) {
+	p.actors[actorID] = ActorInfo{
+		ID:      actorID,
+		Level:   level,
+		Name:    name,
+		Allowed: []string{"insert", "delete", "move"}, // 默认允许的操作
+	}
+}
+
+// Allow 检查事件是否被允许
+func (p *DefaultPolicy) Allow(event crdt.SemanticEvent, ctx PolicyContext) error {
+	actorInfo, exists := p.actors[event.Actor]
+	if !exists {
+		return errors.New("unknown actor")
+	}
+
+	// 根据信任级别进行不同的检查
+	switch actorInfo.Level {
+	case TrustAI:
+		// AI 的特殊检查
+		return p.checkAIEvent(event, ctx)
+	case TrustUser:
+		// 用户检查
+		return p.checkUserEvent(event, ctx)
+	case TrustSystem:
+		// 系统操作检查
+		return p.checkSystemEvent(event, ctx)
+	default:
+		// 其他类型的检查
+		return p.checkGeneralEvent(event, ctx)
+	}
+}
+
+// checkAIEvent 检查 AI 事件
+func (p *DefaultPolicy) checkAIEvent(event crdt.SemanticEvent, ctx PolicyContext) error {
+	// 检查 AI 是否在允许的范围内操作
+	if ctx.AllowedSlice.From != "" && ctx.AllowedSlice.To != "" {
+		// 检查事件是否在允许的范围内
+		// 这里简化处理，实际实现需要更复杂的逻辑
+	}
+
+	// 检查操作类型是否被允许
+	factKind := event.Fact.Kind()
+	allowed := false
+	for _, allowedOp := range ctx.ActorInfo.Allowed {
+		if allowedOp == factKind {
+			allowed = true
+			break
+		}
+	}
+	
+	if !allowed {
+		return errors.New("AI operation not allowed: " + factKind)
+	}
+
+	return nil
+}
+
+// checkUserEvent 检查用户事件
+func (p *DefaultPolicy) checkUserEvent(event crdt.SemanticEvent, ctx PolicyContext) error {
+	// 用户通常可以执行所有基本操作
+	factKind := event.Fact.Kind()
+	
+	// 检查是否是允许的操作
+	allowed := false
+	for _, allowedOp := range ctx.ActorInfo.Allowed {
+		if allowedOp == factKind {
+			allowed = true
+			break
+		}
+	}
+	
+	if !allowed {
+		return errors.New("user operation not allowed: " + factKind)
+	}
+
+	return nil
+}
+
+// checkSystemEvent 检查系统事件
+func (p *DefaultPolicy) checkSystemEvent(event crdt.SemanticEvent, ctx PolicyContext) error {
+	// 系统操作通常只允许特定类型
+	factKind := event.Fact.Kind()
+	
+	// 系统操作可能包括：rebalance, gc, snapshot 等
+	systemOps := []string{"rebalance", "gc", "snapshot"}
+	
+	for _, sysOp := range systemOps {
+		if sysOp == factKind {
+			return nil
+		}
+	}
+	
+	return errors.New("system operation not allowed: " + factKind)
+}
+
+// checkGeneralEvent 检查一般事件
+func (p *DefaultPolicy) checkGeneralEvent(event crdt.SemanticEvent, ctx PolicyContext) error {
+	// 一般检查
+	factKind := event.Fact.Kind()
+	
+	allowed := false
+	for _, allowedOp := range ctx.ActorInfo.Allowed {
+		if allowedOp == factKind {
+			allowed = true
+			break
+		}
+	}
+	
+	if !allowed {
+		return errors.New("operation not allowed: " + factKind)
+	}
+
+	return nil
+}
+
+// ValidateEventSlice 验证事件切片
+func (p *DefaultPolicy) ValidateEventSlice(slice EventSlice) error {
+	for _, event := range slice.Events {
+		ctx := PolicyContext{
+			ActorInfo: p.actors[event.Actor],
+			AllowedSlice: slice,
+		}
+		
+		if err := p.Allow(event, ctx); err != nil {
+			return err
+		}
+	}
+	
+	return nil
+}
+
+// GetActorTrustLevel 获取参与者信任级别
+func (p *DefaultPolicy) GetActorTrustLevel(actorID crdt.ActorID) (TrustLevel, bool) {
+	info, exists := p.actors[actorID]
+	if !exists {
+		return TrustExternal, false
+	}
+	return info.Level, true
+}
+
+// AIProposal AI 提案
+type AIProposal struct {
+	SessionID string
+	Actor     crdt.ActorID
+	Context   EventSlice
+	Proposed  []DraftEvent
+}
+
+// DraftEvent 草案事件
+type DraftEvent struct {
+	Fact semantic.BaseFact
+}
+
+// ValidateAIProposal 验证 AI 提案
+func (p *DefaultPolicy) ValidateAIProposal(proposal AIProposal) error {
+	// 检查提案者是否是 AI
+	level, exists := p.GetActorTrustLevel(proposal.Actor)
+	if !exists || level != TrustAI {
+		return errors.New("proposal must come from AI actor")
+	}
+
+	// 验证上下文
+	if err := p.ValidateEventSlice(proposal.Context); err != nil {
+		return err
+	}
+
+	// 验证提议的事件
+	ctx := PolicyContext{
+		ActorInfo:    p.actors[proposal.Actor],
+		AllowedSlice: proposal.Context,
+	}
+	
+	for _, draft := range proposal.Proposed {
+		// 创建一个临时事件来检查
+		tempEvent := crdt.SemanticEvent{
+			Fact: draft.Fact,
+		}
+		
+		if err := p.Allow(tempEvent, ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+````
+
 ## 📄 `protocol.go`
 
 ````go
@@ -7273,6 +10231,98 @@ type Fact struct {
 type ActionRecord struct {
 	Fact    Fact `json:"fact"`
 	Inverse Fact `json:"inverse"`
+}
+````
+
+## 📄 `replay/replay.go`
+
+````go
+package replay
+
+import (
+	"tmux-fsm/crdt"
+	"tmux-fsm/semantic"
+	"tmux-fsm/decide"
+)
+
+// TextState 文本状态
+type TextState struct {
+	Text   string
+	Cursor int
+}
+
+// Clone 克隆状态
+func (s TextState) Clone() TextState {
+	return TextState{
+		Text:   s.Text,
+		Cursor: s.Cursor,
+	}
+}
+
+// TextNode 表示文本中的一个节点
+type TextNode struct {
+	Pos  interface{} // 这里应该使用 PositionID，但由于循环依赖问题，暂时使用 interface{}
+	Rune rune
+}
+
+// ApplyFact 应用语义事实
+func ApplyFact(state *TextState, fact semantic.BaseFact) {
+	// 这里需要根据实际的 Fact 类型进行处理
+	// 由于 BaseFact 的字段是私有的，我们需要通过方法访问
+	switch fact.Kind() {
+	case "insert":
+		anchor := fact.GetAnchor()
+		text := fact.GetText()
+		if anchor.Col >= 0 && anchor.Col <= len(state.Text) {
+			state.Text = state.Text[:anchor.Col] + text + state.Text[anchor.Col:]
+			state.Cursor = anchor.Col + len(text)
+		}
+	case "delete":
+		rng := fact.GetRange()
+		if rng.Start.Col >= 0 && rng.End.Col <= len(state.Text) && rng.Start.Col < rng.End.Col {
+			state.Text = state.Text[:rng.Start.Col] + state.Text[rng.End.Col:]
+			state.Cursor = rng.Start.Col
+		}
+	case "move":
+		// 更新光标位置
+		anchor := fact.GetAnchor()
+		state.Cursor = anchor.Col
+	}
+}
+
+// Replay 重放事件
+func Replay(
+	initial TextState,
+	events []crdt.SemanticEvent,
+	filter func(crdt.SemanticEvent) bool,
+) TextState {
+	state := initial.Clone()
+
+	for _, e := range events {
+		if filter != nil && !filter(e) {
+			continue
+		}
+		ApplyFact(&state, e.Fact)
+	}
+
+	return state
+}
+
+// UndoCheckout 撤销检出
+func UndoCheckout(
+	target crdt.EventID,
+	global map[crdt.EventID]crdt.SemanticEvent,
+	me crdt.ActorID,
+	initial TextState,
+) TextState {
+	// 1. 全局 CRDT 决议
+	sorted := crdt.TopoSortByCausality(global)
+
+	// 2. 创建撤销过滤器
+	filter := crdt.UndoFilter(me, target, global)
+
+	// 3. 重放
+	return Replay(initial, sorted, filter)
 }
 ````
 
@@ -8010,17 +11060,547 @@ type UndoTree struct {
 ````go
 package resolver
 
-import "tmux-fsm/intent"
+import (
+	"fmt"
+	"tmux-fsm/intent"
+)
+
+// ErrUndoNotSupportedYet 表示撤销功能尚未实现
+var ErrUndoNotSupportedYet = fmt.Errorf("undo not supported: undo tree not implemented")
 
 // resolveUndo 解析撤销意图
 func (r *Resolver) resolveUndo(i *intent.Intent) error {
-	r.engine.SendKeys("u")
-	return nil
+	return ErrUndoNotSupportedYet
 }
 
 // recordAction 记录操作到撤销树
 func (r *Resolver) recordAction(i *intent.Intent) {
-	// 暂时留空，实际实现需要撤销树
+	panic("recordAction called but undo tree not implemented")
+}
+````
+
+## 📄 `selection/selection.go`
+
+````go
+package selection
+
+import (
+	"tmux-fsm/crdt"
+)
+
+// CursorID 光标ID类型
+type CursorID string
+
+// Affinity 亲和性类型
+type Affinity int
+
+const (
+	AffinityForward Affinity = iota
+	AffinityBackward
+	AffinityNeutral
+)
+
+// Selection 选择区域
+type Selection struct {
+	Cursor   CursorID
+	Actor    crdt.ActorID
+	Anchor   crdt.PositionID
+	Focus    crdt.PositionID
+	Affinity Affinity
+}
+
+// SetSelectionFact 设置选择区域的事实
+type SetSelectionFact struct {
+	Cursor CursorID      `json:"cursor"`
+	Anchor crdt.PositionID `json:"anchor"`
+	Focus  crdt.PositionID `json:"focus"`
+}
+
+// EphemeralFact 临时事实接口（不进入快照）
+type EphemeralFact interface {
+	IsEphemeral() bool
+}
+
+// IsEphemeral 表示这是一个临时事实
+func (f SetSelectionFact) IsEphemeral() bool {
+	return true
+}
+
+// SelectionManager 选择区域管理器
+type SelectionManager struct {
+	selections map[CursorID]Selection
+}
+
+// NewSelectionManager 创建新的选择区域管理器
+func NewSelectionManager() *SelectionManager {
+	return &SelectionManager{
+		selections: make(map[CursorID]Selection),
+	}
+}
+
+// ApplySelection 应用选择区域变更
+func (sm *SelectionManager) ApplySelection(actor crdt.ActorID, fact SetSelectionFact) {
+	selection := Selection{
+		Cursor:   fact.Cursor,
+		Actor:    actor,
+		Anchor:   fact.Anchor,
+		Focus:    fact.Focus,
+		Affinity: AffinityNeutral,
+	}
+	
+	sm.selections[fact.Cursor] = selection
+}
+
+// GetSelection 获取选择区域
+func (sm *SelectionManager) GetSelection(cursorID CursorID) (Selection, bool) {
+	selection, exists := sm.selections[cursorID]
+	return selection, exists
+}
+
+// GetAllSelections 获取所有选择区域
+func (sm *SelectionManager) GetAllSelections() map[CursorID]Selection {
+	result := make(map[CursorID]Selection)
+	for id, sel := range sm.selections {
+		result[id] = sel
+	}
+	return result
+}
+
+// UpdateForInsert 处理插入操作对选择区域的影响
+func (sm *SelectionManager) UpdateForInsert(pos crdt.PositionID) {
+	for cursorID, selection := range sm.selections {
+		// 如果插入位置在选择区域内，扩展选择区域
+		anchorComp := crdt.ComparePos(selection.Anchor, pos)
+		focusComp := crdt.ComparePos(selection.Focus, pos)
+		
+		// 如果插入在选择区域内
+		if (anchorComp <= 0 && focusComp >= 0) || (anchorComp >= 0 && focusComp <= 0) {
+			// 根据亲和性决定如何调整
+			if selection.Affinity == AffinityForward {
+				// 向前扩展
+				newFocus := pos
+				sm.selections[cursorID] = Selection{
+					Cursor:   selection.Cursor,
+					Actor:    selection.Actor,
+					Anchor:   selection.Anchor,
+					Focus:    newFocus,
+					Affinity: selection.Affinity,
+				}
+			}
+		} else if anchorComp > 0 {
+			// 如果插入在锚点之前，平移整个选择区域
+			newAnchor := pos
+			sm.selections[cursorID] = Selection{
+				Cursor:   selection.Cursor,
+				Actor:    selection.Actor,
+				Anchor:   newAnchor,
+				Focus:    selection.Focus,
+				Affinity: selection.Affinity,
+			}
+		} else if focusComp > 0 {
+			// 如果插入在焦点之前，平移焦点
+			newFocus := pos
+			sm.selections[cursorID] = Selection{
+				Cursor:   selection.Cursor,
+				Actor:    selection.Actor,
+				Anchor:   selection.Anchor,
+				Focus:    newFocus,
+				Affinity: selection.Affinity,
+			}
+		}
+	}
+}
+
+// UpdateForDelete 处理删除操作对选择区域的影响
+func (sm *SelectionManager) UpdateForDelete(startPos, endPos crdt.PositionID) {
+	for cursorID, selection := range sm.selections {
+		anchorCompStart := crdt.ComparePos(selection.Anchor, startPos)
+		anchorCompEnd := crdt.ComparePos(selection.Anchor, endPos)
+		focusCompStart := crdt.ComparePos(selection.Focus, startPos)
+		focusCompEnd := crdt.ComparePos(selection.Focus, endPos)
+		
+		// 如果锚点在删除范围内，将其吸附到最近的存活位置
+		if anchorCompStart >= 0 && anchorCompEnd <= 0 {
+			// 锚点在删除范围内，吸附到删除范围的开始
+			newAnchor := startPos
+			sm.selections[cursorID] = Selection{
+				Cursor:   selection.Cursor,
+				Actor:    selection.Actor,
+				Anchor:   newAnchor,
+				Focus:    selection.Focus,
+				Affinity: selection.Affinity,
+			}
+		}
+		
+		// 如果焦点在删除范围内，将其吸附到最近的存活位置
+		if focusCompStart >= 0 && focusCompEnd <= 0 {
+			// 焦点在删除范围内，吸附到删除范围的开始
+			newFocus := startPos
+			currentSel := sm.selections[cursorID]
+			sm.selections[cursorID] = Selection{
+				Cursor:   currentSel.Cursor,
+				Actor:    currentSel.Actor,
+				Anchor:   currentSel.Anchor,
+				Focus:    newFocus,
+				Affinity: currentSel.Affinity,
+			}
+		}
+	}
+}
+````
+
+## 📄 `semantic/capture.go`
+
+````go
+package semantic
+
+// Anchor 描述文本位置的锚点
+type Anchor struct {
+	PaneID string
+	Line   int
+	Col    int
+	Hash   string
+}
+
+// Motion 动作类型
+type Motion struct {
+	Kind  string
+	Count int
+}
+
+// Range 表示文本范围
+type Range struct {
+	Start Anchor
+	End   Anchor
+	Text  string
+}
+
+// Fact 表示一个语义事实
+type Fact interface {
+	Kind() string
+	Inverse() Fact
+	GetAnchor() Anchor
+	GetRange() Range
+	GetText() string
+}
+
+// BaseFact 基础事实结构
+type BaseFact struct {
+	kind   string
+	anchor Anchor
+	rng    Range
+	text   string
+}
+
+func (f *BaseFact) Kind() string {
+	return f.kind
+}
+
+func (f *BaseFact) GetAnchor() Anchor {
+	return f.anchor
+}
+
+func (f *BaseFact) GetRange() Range {
+	return f.rng
+}
+
+func (f *BaseFact) GetText() string {
+	return f.text
+}
+
+// DeleteFact 删除事实
+type DeleteFact struct {
+	BaseFact
+}
+
+func (f *DeleteFact) Inverse() Fact {
+	return &InsertFact{
+		BaseFact: BaseFact{
+			kind:   "insert",
+			anchor: f.anchor,
+			rng:    f.rng,
+			text:   f.text,
+		},
+	}
+}
+
+// InsertFact 插入事实
+type InsertFact struct {
+	BaseFact
+}
+
+func (f *InsertFact) Inverse() Fact {
+	return &DeleteFact{
+		BaseFact: BaseFact{
+			kind:   "delete",
+			anchor: f.anchor,
+			rng:    f.rng,
+			text:   f.text,
+		},
+	}
+}
+
+// ReplaceFact 替换事实
+type ReplaceFact struct {
+	BaseFact
+	oldText string
+}
+
+func (f *ReplaceFact) Inverse() Fact {
+	return &ReplaceFact{
+		BaseFact: BaseFact{
+			kind:   "replace",
+			anchor: f.anchor,
+			rng:    f.rng,
+			text:   f.oldText,
+		},
+		oldText: f.text,
+	}
+}
+
+// MoveFact 移动事实
+type MoveFact struct {
+	BaseFact
+	from Anchor
+	to   Anchor
+}
+
+func (f *MoveFact) Inverse() Fact {
+	return &MoveFact{
+		BaseFact: BaseFact{
+			kind:   "move",
+			anchor: f.anchor,
+			rng:    f.rng,
+			text:   f.text,
+		},
+		from: f.to,
+		to:   f.from,
+	}
+}
+
+// CaptureAnchor 纯语义锚点捕获（不产生副作用）
+func CaptureAnchor(a Anchor) Anchor {
+	return a
+}
+
+// CaptureRange 捕获一个范围（纯语义，不访问外部状态）
+func CaptureRange(anchor Anchor, motion Motion, text string) Range {
+	start := anchor
+	end := anchor
+
+	switch motion.Kind {
+	case "word_forward":
+		// 模拟单词前进的范围计算
+		end.Col += 5 // 模拟前进到下一个单词
+	case "line":
+		// 整行范围
+		end.Col = 1 << 30 // 语义行尾
+	}
+
+	return Range{
+		Start: start,
+		End:   end,
+		Text:  text, // 由上层提供的已知文本
+	}
+}
+
+// CaptureDelete 捕获删除操作
+func CaptureDelete(rng Range) Fact {
+	return &DeleteFact{
+		BaseFact: BaseFact{
+			kind:   "delete",
+			anchor: rng.Start,
+			rng:    rng,
+			text:   rng.Text,
+		},
+	}
+}
+
+// CaptureInsert 捕获插入操作
+func CaptureInsert(anchor Anchor, text string) Fact {
+	return &InsertFact{
+		BaseFact: BaseFact{
+			kind:   "insert",
+			anchor: anchor,
+			text:   text,
+		},
+	}
+}
+
+// CaptureReplace 捕获替换操作
+func CaptureReplace(rng Range, text string) Fact {
+	return &ReplaceFact{
+		BaseFact: BaseFact{
+			kind:   "replace",
+			anchor: rng.Start,
+			rng:    rng,
+			text:   text,
+		},
+		oldText: rng.Text,
+	}
+}
+
+// CaptureMove 捕获移动操作
+func CaptureMove(from, to Anchor) Fact {
+	return &MoveFact{
+		BaseFact: BaseFact{
+			kind:   "move",
+			anchor: from,
+		},
+		from: from,
+		to:   to,
+	}
+}
+````
+
+## 📄 `semantic/decide.go`
+
+````go
+package semantic
+
+import (
+	"fmt"
+	"os/exec"
+)
+
+// Decide 将语义事实转换为事务
+func Decide(f Fact) []Transaction {
+	switch f.Kind() {
+	case "delete":
+		df := f.(*DeleteFact)
+		return []Transaction{
+			NewTmuxSendKeysTx(df.anchor.PaneID, []string{"-N", fmt.Sprint(len(df.text)), "Delete"}),
+		}
+	case "insert":
+		inf := f.(*InsertFact)
+		keys := append([]string{inf.text}, "Escape")
+		return []Transaction{
+			NewTmuxSendKeysTx(inf.anchor.PaneID, append([]string{"i"}, keys...)),
+		}
+	case "replace":
+		rf := f.(*ReplaceFact)
+		// 先删除旧文本，再插入新文本
+		return []Transaction{
+			NewTmuxSendKeysTx(rf.anchor.PaneID, []string{"-N", fmt.Sprint(len(rf.oldText)), "Delete"}),
+			NewTmuxSendKeysTx(rf.anchor.PaneID, []string{rf.text, "Escape"}),
+		}
+	case "move":
+		mf := f.(*MoveFact)
+		// 简单的移动实现
+		dx := mf.to.Col - mf.from.Col
+		dy := mf.to.Line - mf.from.Line
+		var keys []string
+		if dx > 0 {
+			for i := 0; i < dx; i++ {
+				keys = append(keys, "Right")
+			}
+		} else if dx < 0 {
+			for i := 0; i < -dx; i++ {
+				keys = append(keys, "Left")
+			}
+		}
+		if dy > 0 {
+			for i := 0; i < dy; i++ {
+				keys = append(keys, "Down")
+			}
+		} else if dy < 0 {
+			for i := 0; i < -dy; i++ {
+				keys = append(keys, "Up")
+			}
+		}
+		return []Transaction{
+			NewTmuxSendKeysTx(mf.anchor.PaneID, keys),
+		}
+	default:
+		return nil
+	}
+}
+
+// Transaction 接口定义
+type Transaction interface {
+	Apply() error
+	Inverse() Transaction
+	Kind() string
+	Tags() []string
+	CanMerge(next Transaction) bool
+	Merge(next Transaction) Transaction
+}
+
+// TmuxSendKeysTx tmux send-keys 事务
+type TmuxSendKeysTx struct {
+	Pane string
+	Keys []string
+}
+
+// NewTmuxSendKeysTx 创建新的 TmuxSendKeysTx
+func NewTmuxSendKeysTx(pane string, keys []string) *TmuxSendKeysTx {
+	return &TmuxSendKeysTx{
+		Pane: pane,
+		Keys: keys,
+	}
+}
+
+func (t *TmuxSendKeysTx) Apply() error {
+	args := append([]string{"send-keys", "-t", t.Pane}, t.Keys...)
+	return exec.Command("tmux", args...).Run()
+}
+
+func (t *TmuxSendKeysTx) Inverse() Transaction {
+	// 对于 send-keys 操作，逆操作通常是撤销操作
+	// 这里返回一个空操作作为占位符
+	return &NoopTx{}
+}
+
+func (t *TmuxSendKeysTx) Kind() string {
+	return "tmux_send_keys"
+}
+
+func (t *TmuxSendKeysTx) Tags() []string {
+	return []string{"tmux", "atomic"}
+}
+
+func (t *TmuxSendKeysTx) CanMerge(next Transaction) bool {
+	// 检查是否可以合并到下一个事务
+	nextTx, ok := next.(*TmuxSendKeysTx)
+	return ok && nextTx.Pane == t.Pane
+}
+
+func (t *TmuxSendKeysTx) Merge(next Transaction) Transaction {
+	// 合并两个 TmuxSendKeysTx 事务
+	nextTx := next.(*TmuxSendKeysTx)
+	// 简单地将键序列连接
+	mergedKeys := append(t.Keys, nextTx.Keys...)
+	return &TmuxSendKeysTx{
+		Pane: t.Pane,
+		Keys: mergedKeys,
+	}
+}
+
+// NoopTx 空操作事务
+type NoopTx struct{}
+
+func (n *NoopTx) Apply() error {
+	return nil
+}
+
+func (n *NoopTx) Inverse() Transaction {
+	return n
+}
+
+func (n *NoopTx) Kind() string {
+	return "noop"
+}
+
+func (n *NoopTx) Tags() []string {
+	return []string{"noop"}
+}
+
+func (n *NoopTx) CanMerge(next Transaction) bool {
+	return false
+}
+
+func (n *NoopTx) Merge(next Transaction) Transaction {
+	return next
 }
 ````
 
@@ -9060,30 +12640,41 @@ func logf(verbose bool, format string, a ...any) {
 
 ````
 
-## 📄 `transaction.go`
+## 📄 `types/types.go`
 
 ````go
-package main
+package types
 
 import (
 	"time"
+	"tmux-fsm/weaver/core"
+	"tmux-fsm/editor"
 )
 
 // TransactionID 事务ID类型
 type TransactionID uint64
 
+// OperationRecord 操作记录，基于ResolvedOperation
+type OperationRecord struct {
+	ResolvedOp editor.ResolvedOperation `json:"resolved_operation"`
+	Fact       core.Fact               `json:"fact"`
+}
 
 // Transaction 事务
 // RFC-WC-003: Audit Trail - 所有编辑操作必须可追溯
+//
+// 更新：现在使用ResolvedOperation作为核心操作表示
+// 这样可以更好地支持Vim语义的repeat/undo操作
+//
+// Transaction is an immutable description of intent resolution.
+// It does not track execution state and does not contain inverse operations.
 type Transaction struct {
-	ID               TransactionID  `json:"id"`
-	Records          []ActionRecord `json:"records"`
-	CreatedAt        time.Time      `json:"created_at"`
-	Applied          bool           `json:"applied"`
-	Skipped          bool           `json:"skipped"`
-	SafetyLevel      string         `json:"safety_level,omitempty"`       // exact, fuzzy
-	PreSnapshotHash  string         `json:"pre_snapshot_hash,omitempty"`  // Phase 8: World state before transaction
-	PostSnapshotHash string         `json:"post_snapshot_hash,omitempty"` // Phase 8: World state after transaction
+	ID               TransactionID      `json:"id"`
+	Records          []OperationRecord  `json:"records"`
+	CreatedAt        time.Time          `json:"created_at"`
+	SafetyLevel      string             `json:"safety_level,omitempty"`       // exact, fuzzy
+	PreSnapshotHash  string             `json:"pre_snapshot_hash,omitempty"`  // Phase 8: World state before transaction
+	PostSnapshotHash string             `json:"post_snapshot_hash,omitempty"` // Phase 8: World state after transaction
 }
 ````
 
@@ -9152,6 +12743,336 @@ func (p *PopupUI) Hide() {
 	}
 }
 
+````
+
+## 📄 `verifier/verifier.go`
+
+````go
+package verifier
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"sort"
+	"tmux-fsm/crdt"
+	"tmux-fsm/replay"
+	"tmux-fsm/semantic"
+)
+
+// Hash 用于表示哈希值
+type Hash string
+
+// Fact 表示一个经过验证的事件事实
+type Fact struct {
+	ID        Hash                    `json:"id"`
+	Actor     crdt.ActorID           `json:"actor"`
+	Parents   []Hash                 `json:"parents"`
+	Timestamp int64                  `json:"timestamp"`
+	Payload   crdt.SemanticEvent     `json:"payload"`
+	PolicyRef Hash                   `json:"policy_ref"`
+}
+
+// VerifyInput 验证输入
+type VerifyInput struct {
+	Facts       []Fact
+	Policies    map[Hash][]byte // Policy code as bytes
+	Snapshot    *replay.TextState `json:"snapshot"`
+	ExpectedRoot Hash            `json:"expected_root"`
+}
+
+// VerifyResult 验证结果
+type VerifyResult struct {
+	OK        bool   `json:"ok"`
+	StateRoot Hash   `json:"state_root"`
+	Error     string `json:"error,omitempty"`
+	FactsUsed int    `json:"facts_used"`
+	Policies  int    `json:"policies"`
+}
+
+// Verifier 可验证编辑器内核
+type Verifier struct {
+	policies map[Hash][]byte
+}
+
+// NewVerifier 创建新的验证器
+func NewVerifier(policies map[Hash][]byte) *Verifier {
+	return &Verifier{
+		policies: policies,
+	}
+}
+
+// Verify 执行验证
+func (v *Verifier) Verify(input VerifyInput) VerifyResult {
+	// 1. 校验 Fact 哈希自洽
+	for _, f := range input.Facts {
+		expectedID := calculateFactHash(f)
+		if expectedID != f.ID {
+			return VerifyResult{
+				OK:    false,
+				Error: fmt.Sprintf("Fact tampered: expected %s, got %s", expectedID, f.ID),
+			}
+		}
+	}
+
+	// 2. 构建 DAG + 拓扑排序（稳定）
+	orderedFacts := v.topoSort(input.Facts)
+
+	// 3. Replay（纯函数）
+	initialState := replay.TextState{}
+	if input.Snapshot != nil {
+		initialState = *input.Snapshot
+	}
+	
+	state := initialState
+	for _, f := range orderedFacts {
+		// 检查策略（简化版）
+		if !v.checkPolicy(f, state) {
+			return VerifyResult{
+				OK:    false,
+				Error: fmt.Sprintf("Policy violation at Fact %s", f.ID),
+			}
+		}
+		// 应用事实
+		state = v.applyFact(state, f.Payload)
+	}
+
+	// 4. 计算 State Root
+	root := calculateStateHash(state)
+
+	// 5. 比对
+	if root != input.ExpectedRoot {
+		return VerifyResult{
+			OK:    false,
+			Error: fmt.Sprintf("Root mismatch: expected %s, got %s", input.ExpectedRoot, root),
+		}
+	}
+
+	return VerifyResult{
+		OK:        true,
+		StateRoot: root,
+		FactsUsed: len(orderedFacts),
+		Policies:  len(v.policies),
+	}
+}
+
+// topoSort 拓扑排序
+func (v *Verifier) topoSort(facts []Fact) []Fact {
+	// 构建依赖图
+	graph := make(map[Hash][]Hash)
+	inDegree := make(map[Hash]int)
+	
+	for _, f := range facts {
+		inDegree[f.ID] = 0
+		graph[f.ID] = []Hash{}
+	}
+	
+	// 建立边
+	for _, f := range facts {
+		for _, parent := range f.Parents {
+			if _, exists := inDegree[parent]; exists {
+				graph[parent] = append(graph[parent], f.ID)
+				inDegree[f.ID]++
+			}
+		}
+	}
+
+	// Kahn 算法
+	var queue []Hash
+	for id, degree := range inDegree {
+		if degree == 0 {
+			queue = append(queue, id)
+		}
+	}
+
+	// 稳定排序
+	sort.Slice(queue, func(i, j int) bool {
+		return string(queue[i]) < string(queue[j])
+	})
+
+	var result []Fact
+	factMap := make(map[Hash]Fact)
+	for _, f := range facts {
+		factMap[f.ID] = f
+	}
+
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+
+		result = append(result, factMap[id])
+
+		for _, next := range graph[id] {
+			inDegree[next]--
+			if inDegree[next] == 0 {
+				queue = append(queue, next)
+			}
+		}
+	}
+
+	return result
+}
+
+// checkPolicy 检查策略（简化版）
+func (v *Verifier) checkPolicy(f Fact, state replay.TextState) bool {
+	// 这里可以实现策略检查逻辑
+	// 例如：检查 AI 是否在允许的范围内操作
+	actor := string(f.Actor)
+	if len(actor) >= 2 && actor[:2] == "ai" {
+		// AI 操作的特殊检查
+		// 这里可以实现更复杂的策略检查
+	}
+	return true
+}
+
+// applyFact 应用事实
+func (v *Verifier) applyFact(state replay.TextState, event crdt.SemanticEvent) replay.TextState {
+	// 使用 replay 包来应用事实
+	newState := state
+	replay.ApplyFact(&newState, event.Fact)
+	return newState
+}
+
+// calculateFactHash 计算事实的哈希
+func calculateFactHash(f Fact) Hash {
+	data, _ := json.Marshal(struct {
+		Actor     crdt.ActorID       `json:"actor"`
+		Parents   []Hash             `json:"parents"`
+		Timestamp int64              `json:"timestamp"`
+		Payload   crdt.SemanticEvent `json:"payload"`
+		PolicyRef Hash               `json:"policy_ref"`
+	}{
+		Actor:     f.Actor,
+		Parents:   f.Parents,
+		Timestamp: f.Timestamp,
+		Payload:   f.Payload,
+		PolicyRef: f.PolicyRef,
+	})
+	
+	hash := sha256.Sum256(data)
+	return Hash(hex.EncodeToString(hash[:]))
+}
+
+// calculateStateHash 计算状态哈希
+func calculateStateHash(state replay.TextState) Hash {
+	data, _ := json.Marshal(state)
+	hash := sha256.Sum256(data)
+	return Hash(hex.EncodeToString(hash[:]))
+}
+
+// VerifyFromJSON 从 JSON 数据验证
+func (v *Verifier) VerifyFromJSON(factsJSON []byte, expectedRoot Hash) (VerifyResult, error) {
+	var facts []Fact
+	if err := json.Unmarshal(factsJSON, &facts); err != nil {
+		return VerifyResult{}, err
+	}
+
+	input := VerifyInput{
+		Facts:        facts,
+		ExpectedRoot: expectedRoot,
+	}
+
+	return v.Verify(input), nil
+}
+````
+
+## 📄 `wal/wal.go`
+
+````go
+package wal
+
+import (
+	"bufio"
+	"encoding/json"
+	"os"
+	"time"
+	"tmux-fsm/semantic"
+)
+
+// SemanticEvent 语义事件
+type SemanticEvent struct {
+	ID            string             `json:"id"`
+	CausalParents []string           `json:"causal_parents"`
+	LocalParent   string             `json:"local_parent"`
+	Time          time.Time          `json:"time"`
+	Actor         string             `json:"actor"`
+	Fact          semantic.BaseFact  `json:"fact"`
+}
+
+// WAL Write-ahead Log
+type WAL struct {
+	file *os.File
+	writer *bufio.Writer
+}
+
+// NewWAL 创建新的 WAL
+func NewWAL(filename string) (*WAL, error) {
+	f, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return nil, err
+	}
+
+	w := &WAL{
+		file: f,
+		writer: bufio.NewWriter(f),
+	}
+
+	return w, nil
+}
+
+// Append 向 WAL 追加事件
+func (w *WAL) Append(event SemanticEvent) error {
+	data, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+
+	// 添加换行符分隔
+	data = append(data, '\n')
+
+	_, err = w.writer.Write(data)
+	if err != nil {
+		return err
+	}
+
+	// 确保写入磁盘
+	return w.writer.Flush()
+}
+
+// Close 关闭 WAL
+func (w *WAL) Close() error {
+	if w.writer != nil {
+		w.writer.Flush()
+	}
+	return w.file.Close()
+}
+
+// LoadFromWAL 从 WAL 加载事件
+func LoadFromWAL(filename string) ([]SemanticEvent, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var events []SemanticEvent
+	scanner := bufio.NewScanner(f)
+
+	for scanner.Scan() {
+		var event SemanticEvent
+		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return events, nil
+}
 ````
 
 ## 📄 `weaver/adapter/backend.go`

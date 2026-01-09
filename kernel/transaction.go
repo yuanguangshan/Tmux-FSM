@@ -44,32 +44,7 @@ func (tr *TransactionRunner) Apply(tx *types.Transaction) error {
 
 // Undo 撤销事务（反向执行）
 func (tr *TransactionRunner) Undo(tx *types.Transaction) error {
-	if tx == nil {
-		return fmt.Errorf("transaction is nil")
-	}
-
-	// 收集所有反向操作
-	ops := make([]editor.ResolvedOperation, 0, len(tx.Records))
-
-	// 逆序执行反向操作
-	for i := len(tx.Records) - 1; i >= 0; i-- {
-		record := tx.Records[i]
-
-		// 将 Inverse (core.Fact) 转换为 ResolvedOperation
-		// TODO: 这里需要实现 Fact -> ResolvedOperation 的转换
-		// 暂时使用占位逻辑
-		inverseOp := tr.factToResolvedOp(record.Inverse)
-
-		if err := editor.ApplyResolvedOperation(tr.ctx, inverseOp); err != nil {
-			return fmt.Errorf("failed to undo operation: %w", err)
-		}
-		ops = append(ops, inverseOp)
-	}
-
-	// 更新 selections
-	tr.updateSelectionsAfterOps(ops)
-
-	return nil
+	return fmt.Errorf("undo not supported: inverse execution not implemented")
 }
 
 // Repeat 重复执行事务（用于 . repeat）
@@ -95,15 +70,5 @@ func (tr *TransactionRunner) updateSelectionsAfterOps(ops []editor.ResolvedOpera
 		currentSels := tr.ctx.Selections.Get(bufferID)
 		updatedSels := editor.UpdateSelections(currentSels, bufferOps)
 		tr.ctx.Selections.Set(bufferID, updatedSels)
-	}
-}
-
-// factToResolvedOp 将 core.Fact 转换为 ResolvedOperation
-// TODO: 这是一个临时实现，需要根据实际的 Fact 结构完善
-func (tr *TransactionRunner) factToResolvedOp(fact interface{}) editor.ResolvedOperation {
-	// 这里需要根据 core.Fact 的实际结构进行转换
-	// 暂时返回一个空操作
-	return editor.ResolvedOperation{
-		Kind: editor.OpMove,
 	}
 }

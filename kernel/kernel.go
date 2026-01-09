@@ -56,19 +56,32 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 	if k.FSM != nil && k.Grammar != nil {
 		decision = k.Decide(key)
 
-		// 如果Grammar成功生成了intent，直接执行
-		if decision != nil && decision.Intent != nil {
-			k.Execute(decision)
-			return
+		if decision != nil {
+			switch decision.Kind {
+			case DecisionFSM:
+				k.Execute(decision)
+				return
+
+			case DecisionNone:
+				// FSM 吃了 key，合法等待
+				return
+
+			case DecisionLegacy:
+				// 明确：Grammar/FSM 不处理，才允许 legacy
+				break
+			}
 		}
 	}
 
 	// 如果Grammar没有处理，记录信息（未来将完全移除legacy路径）
 	if k.ShadowIntent && k.NativeBuilder != nil {
-		// 记录未被Grammar处理的按键
-		log.Printf("[GRAMMAR COVERAGE] key '%s' not handled by Grammar", key)
-		k.ShadowStats.Total++
-		k.ShadowStats.Mismatched++ // 记录为未覆盖
+		// 只有在 DecisionLegacy 情况下才记录为未覆盖
+		// DecisionNone 是合法的等待状态，不应计入未覆盖
+		if decision != nil && decision.Kind == DecisionLegacy {
+			log.Printf("[GRAMMAR COVERAGE] key '%s' not handled by Grammar", key)
+			k.ShadowStats.Total++
+			k.ShadowStats.Mismatched++ // 记录为未覆盖
+		}
 	}
 }
 

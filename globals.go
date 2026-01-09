@@ -33,6 +33,7 @@ var (
 	stateMu     sync.Mutex
 	globalState FSMState
 	transMgr    *TransactionManager
+	txJournal   *TxJournal  // 新增：事务日志
 	socketPath  = os.Getenv("HOME") + "/.tmux-fsm.sock"
 )
 
@@ -41,6 +42,9 @@ func init() {
 	transMgr = &TransactionManager{
 		nextID: 0,
 	}
+
+	// 初始化事务日志
+	txJournal = NewTxJournal()
 }
 
 func loadState() FSMState {

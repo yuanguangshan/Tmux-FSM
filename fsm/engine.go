@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 	"tmux-fsm/intent"
-	"tmux-fsm/resolver"
 )
 
 // RawTokenEmitter 用于发送 RawToken 的接口
@@ -48,23 +47,23 @@ func (ea *EngineAdapter) ExitVisualMode() {
 	UpdateUI()
 }
 
-func (ea *EngineAdapter) GetCurrentCursor() resolver.ResolverCursor {
+func (ea *EngineAdapter) GetCurrentCursor() interface{} {
 	// 获取当前光标位置（通过 tmux 命令）
 	// 这里需要实际从 tmux 获取光标位置
-	return resolver.ResolverCursor{Line: 0, Col: 0} // 简化实现
+	return struct{Line int; Col int}{Line: 0, Col: 0} // 简化实现
 }
 
-func (ea *EngineAdapter) ComputeMotion(m *intent.Motion) (resolver.ResolverRange, error) {
+func (ea *EngineAdapter) ComputeMotion(m *intent.Motion) (interface{}, error) {
 	// 计算动作范围
-	return resolver.ResolverRange{}, nil
+	return struct{}{}, nil
 }
 
-func (ea *EngineAdapter) MoveCursor(r resolver.ResolverRange) error {
+func (ea *EngineAdapter) MoveCursor(r interface{}) error {
 	// 移动光标
 	return nil
 }
 
-func (ea *EngineAdapter) DeleteRange(r resolver.ResolverRange) error {
+func (ea *EngineAdapter) DeleteRange(r interface{}) error {
 	// 删除范围内容
 	return nil
 }
@@ -84,7 +83,7 @@ func (ea *EngineAdapter) DeleteWithMotion(motion intent.MotionKind, count int) e
 	return nil
 }
 
-func (ea *EngineAdapter) YankRange(r resolver.ResolverRange) error {
+func (ea *EngineAdapter) YankRange(r interface{}) error {
 	// 复制范围内容
 	return nil
 }
@@ -104,7 +103,7 @@ func (ea *EngineAdapter) YankWithMotion(motion intent.MotionKind, count int) err
 	return nil
 }
 
-func (ea *EngineAdapter) ChangeRange(r resolver.ResolverRange) error {
+func (ea *EngineAdapter) ChangeRange(r interface{}) error {
 	// 修改范围内容
 	return nil
 }
@@ -132,7 +131,6 @@ type Engine struct {
 	count        int              // 用于存储数字计数
 	emitters     []RawTokenEmitter // 用于向外部发送token的多个接收者
 	visualMode   intent.VisualMode // 视觉模式状态
-	resolver     *resolver.Resolver // 解析器
 }
 
 // FSMStatus FSM 状态信息，用于UI更新
@@ -178,10 +176,10 @@ func NewEngine(km *Keymap) *Engine {
 	}
 
 	// 创建引擎适配器
-	adapter := &EngineAdapter{engine: engine}
+	// adapter := &EngineAdapter{engine: engine}
 
-	// 初始化解析器
-	engine.resolver = resolver.New(adapter)
+	// 初始化解析器（已废弃）
+	// engine.resolver = resolver.New(adapter)
 
 	return engine
 }
@@ -394,9 +392,7 @@ func tmux(cmd string) {
 
 // DispatchIntent 分发意图给解析器
 func (e *Engine) DispatchIntent(i *intent.Intent) error {
-	if e.resolver != nil {
-		return e.resolver.Resolve(i)
-	}
+	// 解析器已废弃，直接返回
 	return nil
 }
 
