@@ -2,241 +2,214 @@ package policy
 
 import (
 	"errors"
+
 	"tmux-fsm/crdt"
 	"tmux-fsm/semantic"
 )
 
-// TrustLevel 信任级别
+//
+// ─────────────────────────────────────────────────────────────
+//  Trust Model
+// ─────────────────────────────────────────────────────────────
+//
+
+// TrustLevel 表示“是否拥有最终提交权”
 type TrustLevel int
 
 const (
-	TrustSystem TrustLevel = iota // GC / rebalance
+	TrustSystem TrustLevel = iota // GC / snapshot / rebalance
 	TrustUser                     // 人类
-	TrustDevice                   // 同用户多端
-	TrustAI                       // AI
-	TrustExternal                 // 插件 / import
+	TrustDevice                   // 同一用户的多端
+	TrustAI                       // 只能 proposal
+	TrustExternal                 // 插件 / import（默认只读）
 )
 
-// ActorInfo 参与者信息
+//
+// ─────────────────────────────────────────────────────────────
+//  Actor
+// ─────────────────────────────────────────────────────────────
+//
+
+// ActorInfo 只存储“身份 + 信任级别”
 type ActorInfo struct {
-	ID      crdt.ActorID
-	Level   TrustLevel
-	Name    string
-	Allowed []string // 允许的操作类型
+	ID    crdt.ActorID
+	Level TrustLevel
+	Name  string
 }
 
-// PolicyContext 策略上下文
-type PolicyContext struct {
-	ActorInfo ActorInfo
-	AllowedSlice EventSlice
-	Timestamp int64
+//
+// ─────────────────────────────────────────────────────────────
+//  Semantic Operation
+// ─────────────────────────────────────────────────────────────
+//
+
+type OpKind string
+
+const (
+	OpInsert OpKind = "insert"
+	OpDelete OpKind = "delete"
+	OpMove   OpKind = "move"
+	OpFormat OpKind = "format"
+)
+
+//
+// ─────────────────────────────────────────────────────────────
+//  Scope（AI 的语义沙箱）
+// ─────────────────────────────────────────────────────────────
+//
+
+// Scope 表示 AI 被允许操作的“语义范围”
+type Scope struct {
+	DocumentID string
+	Range      semantic.Range
+	AllowedOps []OpKind
 }
 
-// EventSlice 事件切片
-type EventSlice struct {
-	From crdt.EventID
-	To   crdt.EventID
-	Events []crdt.SemanticEvent
+func (s Scope) allowsOp(op OpKind) bool {
+	for _, a := range s.AllowedOps {
+		if a == op {
+			return true
+		}
+	}
+	return false
 }
 
-// Policy 策略接口
+//
+// ─────────────────────────────────────────────────────────────
+//  AI Draft（注意：不是 Event）
+// ─────────────────────────────────────────────────────────────
+//
+
+type AIDraft struct {
+	Fact semantic.BaseFact
+}
+
+//
+// ─────────────────────────────────────────────────────────────
+//  Policy Interface
+// ─────────────────────────────────────────────────────────────
+//
+
+// Policy 是 CRDT 的安全边界
 type Policy interface {
-	Allow(event crdt.SemanticEvent, ctx PolicyContext) error
+	RegisterActor(info ActorInfo)
+
+	// AllowCommit：是否允许 actor 提交最终 CRDT Event
+	AllowCommit(actor crdt.ActorID, event crdt.SemanticEvent) error
+
+	// AllowAIDraft：是否允许 AI 在 scope 内提出 draft
+	AllowAIDraft(actor crdt.ActorID, scope Scope, draft AIDraft) error
+
+	// ValidateAIProposal：批量校验 AI 提案
+	ValidateAIProposal(proposal AIProposal) error
 }
 
-// DefaultPolicy 默认策略实现
+//
+// ─────────────────────────────────────────────────────────────
+//  DefaultPolicy
+// ─────────────────────────────────────────────────────────────
+//
+
 type DefaultPolicy struct {
 	actors map[crdt.ActorID]ActorInfo
 }
 
-// NewDefaultPolicy 创建默认策略
 func NewDefaultPolicy() *DefaultPolicy {
 	return &DefaultPolicy{
 		actors: make(map[crdt.ActorID]ActorInfo),
 	}
 }
 
-// RegisterActor 注册参与者
-func (p *DefaultPolicy) RegisterActor(actorID crdt.ActorID, level TrustLevel, name string) {
-	p.actors[actorID] = ActorInfo{
-		ID:      actorID,
-		Level:   level,
-		Name:    name,
-		Allowed: []string{"insert", "delete", "move"}, // 默认允许的操作
-	}
+func (p *DefaultPolicy) RegisterActor(info ActorInfo) {
+	p.actors[info.ID] = info
 }
 
-// Allow 检查事件是否被允许
-func (p *DefaultPolicy) Allow(event crdt.SemanticEvent, ctx PolicyContext) error {
-	actorInfo, exists := p.actors[event.Actor]
-	if !exists {
+//
+// ─────────────────────────────────────────────────────────────
+//  Commit Path（CRDT 最终入口）
+// ─────────────────────────────────────────────────────────────
+//
+
+func (p *DefaultPolicy) AllowCommit(
+	actorID crdt.ActorID,
+	_ crdt.SemanticEvent,
+) error {
+
+	actor, ok := p.actors[actorID]
+	if !ok {
 		return errors.New("unknown actor")
 	}
 
-	// 根据信任级别进行不同的检查
-	switch actorInfo.Level {
+	switch actor.Level {
+	case TrustSystem, TrustUser, TrustDevice:
+		return nil
+
 	case TrustAI:
-		// AI 的特殊检查
-		return p.checkAIEvent(event, ctx)
-	case TrustUser:
-		// 用户检查
-		return p.checkUserEvent(event, ctx)
-	case TrustSystem:
-		// 系统操作检查
-		return p.checkSystemEvent(event, ctx)
+		return errors.New("AI is not allowed to commit CRDT events")
+
 	default:
-		// 其他类型的检查
-		return p.checkGeneralEvent(event, ctx)
+		return errors.New("actor not allowed to commit")
 	}
 }
 
-// checkAIEvent 检查 AI 事件
-func (p *DefaultPolicy) checkAIEvent(event crdt.SemanticEvent, ctx PolicyContext) error {
-	// 检查 AI 是否在允许的范围内操作
-	if ctx.AllowedSlice.From != "" && ctx.AllowedSlice.To != "" {
-		// 检查事件是否在允许的范围内
-		// 这里简化处理，实际实现需要更复杂的逻辑
+//
+// ─────────────────────────────────────────────────────────────
+//  AI Draft Path（唯一合法 AI 入口）
+// ─────────────────────────────────────────────────────────────
+//
+
+func (p *DefaultPolicy) AllowAIDraft(
+	actorID crdt.ActorID,
+	scope Scope,
+	draft AIDraft,
+) error {
+
+	actor, ok := p.actors[actorID]
+	if !ok {
+		return errors.New("unknown actor")
 	}
 
-	// 检查操作类型是否被允许
-	factKind := event.Fact.Kind()
-	allowed := false
-	for _, allowedOp := range ctx.ActorInfo.Allowed {
-		if allowedOp == factKind {
-			allowed = true
-			break
-		}
+	if actor.Level != TrustAI {
+		return errors.New("actor is not AI")
 	}
-	
-	if !allowed {
-		return errors.New("AI operation not allowed: " + factKind)
+
+	op := OpKind(draft.Fact.Kind())
+
+	// 1️⃣ 操作类型检查
+	if !scope.allowsOp(op) {
+		return errors.New("operation not allowed in scope: " + string(op))
+	}
+
+	// 2️⃣ 范围检查（语义级）
+	if !scope.Range.ContainsFact(draft.Fact) {
+		return errors.New("draft out of allowed range")
 	}
 
 	return nil
 }
 
-// checkUserEvent 检查用户事件
-func (p *DefaultPolicy) checkUserEvent(event crdt.SemanticEvent, ctx PolicyContext) error {
-	// 用户通常可以执行所有基本操作
-	factKind := event.Fact.Kind()
-	
-	// 检查是否是允许的操作
-	allowed := false
-	for _, allowedOp := range ctx.ActorInfo.Allowed {
-		if allowedOp == factKind {
-			allowed = true
-			break
-		}
-	}
-	
-	if !allowed {
-		return errors.New("user operation not allowed: " + factKind)
-	}
+//
+// ─────────────────────────────────────────────────────────────
+//  AI Proposal
+// ─────────────────────────────────────────────────────────────
+//
 
-	return nil
-}
-
-// checkSystemEvent 检查系统事件
-func (p *DefaultPolicy) checkSystemEvent(event crdt.SemanticEvent, ctx PolicyContext) error {
-	// 系统操作通常只允许特定类型
-	factKind := event.Fact.Kind()
-	
-	// 系统操作可能包括：rebalance, gc, snapshot 等
-	systemOps := []string{"rebalance", "gc", "snapshot"}
-	
-	for _, sysOp := range systemOps {
-		if sysOp == factKind {
-			return nil
-		}
-	}
-	
-	return errors.New("system operation not allowed: " + factKind)
-}
-
-// checkGeneralEvent 检查一般事件
-func (p *DefaultPolicy) checkGeneralEvent(event crdt.SemanticEvent, ctx PolicyContext) error {
-	// 一般检查
-	factKind := event.Fact.Kind()
-	
-	allowed := false
-	for _, allowedOp := range ctx.ActorInfo.Allowed {
-		if allowedOp == factKind {
-			allowed = true
-			break
-		}
-	}
-	
-	if !allowed {
-		return errors.New("operation not allowed: " + factKind)
-	}
-
-	return nil
-}
-
-// ValidateEventSlice 验证事件切片
-func (p *DefaultPolicy) ValidateEventSlice(slice EventSlice) error {
-	for _, event := range slice.Events {
-		ctx := PolicyContext{
-			ActorInfo: p.actors[event.Actor],
-			AllowedSlice: slice,
-		}
-		
-		if err := p.Allow(event, ctx); err != nil {
-			return err
-		}
-	}
-	
-	return nil
-}
-
-// GetActorTrustLevel 获取参与者信任级别
-func (p *DefaultPolicy) GetActorTrustLevel(actorID crdt.ActorID) (TrustLevel, bool) {
-	info, exists := p.actors[actorID]
-	if !exists {
-		return TrustExternal, false
-	}
-	return info.Level, true
-}
-
-// AIProposal AI 提案
 type AIProposal struct {
-	SessionID string
-	Actor     crdt.ActorID
-	Context   EventSlice
-	Proposed  []DraftEvent
+	Actor  crdt.ActorID
+	Scope  Scope
+	Drafts []AIDraft
 }
 
-// DraftEvent 草案事件
-type DraftEvent struct {
-	Fact semantic.BaseFact
-}
+func (p *DefaultPolicy) ValidateAIProposal(
+	proposal AIProposal,
+) error {
 
-// ValidateAIProposal 验证 AI 提案
-func (p *DefaultPolicy) ValidateAIProposal(proposal AIProposal) error {
-	// 检查提案者是否是 AI
-	level, exists := p.GetActorTrustLevel(proposal.Actor)
-	if !exists || level != TrustAI {
-		return errors.New("proposal must come from AI actor")
-	}
-
-	// 验证上下文
-	if err := p.ValidateEventSlice(proposal.Context); err != nil {
-		return err
-	}
-
-	// 验证提议的事件
-	ctx := PolicyContext{
-		ActorInfo:    p.actors[proposal.Actor],
-		AllowedSlice: proposal.Context,
-	}
-	
-	for _, draft := range proposal.Proposed {
-		// 创建一个临时事件来检查
-		tempEvent := crdt.SemanticEvent{
-			Fact: draft.Fact,
-		}
-		
-		if err := p.Allow(tempEvent, ctx); err != nil {
+	for _, draft := range proposal.Drafts {
+		if err := p.AllowAIDraft(
+			proposal.Actor,
+			proposal.Scope,
+			draft,
+		); err != nil {
 			return err
 		}
 	}
