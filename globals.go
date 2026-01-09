@@ -34,7 +34,7 @@ var (
 	globalState FSMState
 	transMgr    *TransactionManager
 	txJournal   *TxJournal  // 新增：事务日志
-	socketPath  = os.Getenv("HOME") + "/.tmux-fsm.sock"
+	socketPath  = "/tmp/tmux-fsm.sock"
 )
 
 func init() {

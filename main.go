@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -273,10 +274,67 @@ func (s *Server) handleClient(conn net.Conn) {
 
 	log.Printf("[server] client connected: %s", conn.RemoteAddr())
 
-	var in intent.Intent
-	dec := json.NewDecoder(conn)
+	// 首先尝试读取原始数据以确定协议类型
+	buf := make([]byte, 4096)
+	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+	n, err := conn.Read(buf)
+	if err != nil || n == 0 {
+		log.Printf("[server] failed to read from connection: %v", err)
+		return
+	}
 
-	if err := dec.Decode(&in); err != nil {
+	rawData := buf[:n]
+
+	// 检查是否是字符串协议格式 "pane|client|key"
+	payloadStr := string(rawData[:n])
+	if strings.Contains(payloadStr, "|") {
+		// 这是字符串协议格式
+		parts := strings.SplitN(payloadStr, "|", 3)
+		var paneID, clientName, key string
+
+		if len(parts) == 3 {
+			paneID = parts[0]
+			clientName = parts[1]
+			key = parts[2]
+		} else if len(parts) == 2 {
+			// Fallback for old protocol: PANE|KEY (Client unknown)
+			paneID = parts[0]
+			key = parts[1]
+		} else {
+			key = payloadStr
+		}
+
+		log.Printf("[server] string protocol received: pane='%s', client='%s', key='%s'", paneID, clientName, key)
+
+		// 处理特殊命令
+		switch key {
+		case "__PING__":
+			conn.Write([]byte("PONG"))
+			return
+		case "__SHUTDOWN__":
+			// 这种情况下不应该在这里处理，但为了完整性
+			conn.Write([]byte("SHUTDOWN"))
+			return
+		case "__CLEAR_STATE__":
+			fsm.Reset() // 重置新架构层级
+			conn.Write([]byte("ok"))
+			return
+		}
+
+		// 使用 kernel 处理按键
+		if kernelInstance != nil {
+			hctx := kernel.HandleContext{Ctx: context.Background()}
+			kernelInstance.HandleKey(hctx, key)
+		}
+
+		conn.Write([]byte("ok"))
+		return
+	}
+
+	// 否则是 JSON 协议格式
+	var in intent.Intent
+	decoder := json.NewDecoder(strings.NewReader(payloadStr))
+	if err := decoder.Decode(&in); err != nil {
 		log.Printf("[server] decode intent error: %v", err)
 		return
 	}
