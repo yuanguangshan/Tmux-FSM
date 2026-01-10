@@ -1,74 +1,284 @@
+
 # engine 模块
 
-## 模块职责概述
+## 模块定位（现实版本）
 
-`engine/` 是 **Tmux-FSM 的核心调度与系统粘合层**，负责将高层的 **Intent** 组织、调度并转化为一次 **可执行、可验证、可回放的事务化执行过程**。
+`engine/` 是 **Tmux-FSM 的执行中枢与系统权威层**，负责：
 
-如果说：
-- `intent/` 定义了「想做什么」
-- `kernel/` 决定了「应该怎么做」  
-- `backend/` 负责「真正去做」
+- 接收上层（cmd / fsm / ui / intent）的执行请求
+- 将「意图（Intent）」转化为 **可验证、可回放、可同步的语义事件**
+- 作为 **唯一权威仲裁者**，统一管理：
+  - 状态演化
+  - 事务边界
+  - CRDT 合并
+  - 策略（Policy）
+  - Replay / Snapshot / WAL
 
-那么：
-> **Engine = 把"想法"安全、可靠地变成一次现实执行的中枢系统**
+⚠️ 注意：  
+`engine/` 内部 **存在两种不同层级的 Engine 形态**，它们职责完全不同，但共同构成完整执行链。
 
-## Engine 的核心职责
+---
 
-- 接收来自 `cmd/`、`fsm/`、`ui/` 的高层请求
-- 将多个 Intent 组织为 **Transaction**
-- 协调以下子系统：
-  - Kernel（决策 / 推导）
-  - Backend（副作用执行）
-  - Replay / Verifier（历史与一致性）
-- 维护运行时上下文（Context / Session）
+## Engine 的双层结构（非常重要）
 
-## 核心设计思想
+### 1️⃣ HeadlessEngine（权威执行引擎）
 
-- **Intent-first**: Engine 不直接操作状态，一切变化都源自 Intent
-- **唯一权威仲裁**: 所有决策、提升与裁决，只能发生在 Engine（架构戒律 4）
-- **事务化（Transaction）**: 每一次执行都有明确边界，要么成功、要么可回滚 / 重放
-- **可回放（Replayable）**: 所有执行路径都可以被完整重建
-- **可验证（Verifiable）**: 执行结果可以被独立系统检查
+**HeadlessEngine 是系统中唯一的“真实 Engine”。**
+
+它负责一切**不可绕过、不可旁路的权威职责**：
+
+- ✅ 状态唯一来源（CRDT SemanticEvent）
+- ✅ 事务化提交
+- ✅ Replay / Snapshot
+- ✅ Policy 校验
+- ✅ Index 查询
+- ✅ WAL / 同步 / 合并
+
+> 任何会“改变世界状态”的行为，最终都必须进入 HeadlessEngine。
+
+---
+
+### 2️⃣ ConcreteEngine（编辑语义计算引擎）
+
+**ConcreteEngine 不是权威引擎，而是一个“Intent → 编辑语义”的计算层。**
+
+它的职责是：
+
+- 解析编辑 Intent（Motion / TextObject / Find / Goto）
+- 根据当前光标状态，计算：
+  - MotionRange
+  - Cursor 变化
+- 提供 Vim 风格的编辑语义解释
+
+它 **不负责**：
+
+- ❌ CRDT
+- ❌ Replay
+- ❌ Policy
+- ❌ WAL
+- ❌ 多人同步
+
+> ConcreteEngine 的本质是一个 **“编辑语义编译器”**，而不是事务引擎。
+
+---
+
+## 整体架构关系
+
+```
+Intent
+  ↓
+ConcreteEngine        （语义计算 / Motion / Range）
+  ↓
+SemanticEvent
+  ↓
+HeadlessEngine        （唯一权威 / 事务 / CRDT / Replay）
+  ↓
+Kernel
+  ↓
+Backend
+```
+
+---
+
+## 核心设计原则
+
+### ✅ Intent-first
+
+- Engine 本身不直接操作最终状态
+- 一切状态变化都来源于 `crdt.SemanticEvent`
+
+---
+
+### ✅ 唯一权威仲裁（Architecture Rule #4）
+
+- Policy 校验
+- 状态演化
+- 冲突解决
+
+**只能发生在 HeadlessEngine**
+
+---
+
+### ✅ 事务化（Transactional）
+
+- 每一次执行都有清晰边界
+- 可回放、可验证、可重建
+
+---
+
+### ✅ Replayable / Verifiable
+
+- 任意状态都可通过事件日志重建
+- Snapshot 只是优化，不是权威
+
+---
 
 ## 文件结构说明
 
-### `engine.go`
-- Engine 核心结构体与接口定义
-- 主要函数：
-  - `Apply(event crdt.SemanticEvent) error`: 应用事件到状态
-  - `Replay(upTo crdt.EventID) replay.TextState`: 重放至指定事件
-  - `Snapshot() *Snapshot`: 创建状态快照
-  - `Append(event crdt.SemanticEvent) crdt.EventID`: 添加事件到日志
-  - `AllocatePosition(after, before *crdt.PositionID) crdt.PositionID`: 分配新位置
-  - `ComparePosition(a, b crdt.PositionID) int`: 比较位置
-  - `ApplySelection(actor crdt.ActorID, fact selection.SetSelectionFact)`: 应用选择区域变更
-  - `CheckPolicy(event crdt.SemanticEvent) error`: 检查策略
-- 是其他模块使用 Engine 的唯一入口点
-- 负责协调 Kernel、Backend、Replay、Verifier 等子系统
+---
 
-### `concrete_engine.go`
-- ConcreteEngine 是 Engine 接口的具体实现
-- 主要函数：
-  - `NewConcreteEngine() *ConcreteEngine`: 创建新的引擎实例
-  - `ComputeMotion(m *intent.Motion) (editor.MotionRange, error)`: 计算运动产生的范围
-  - `computeTextObject(textObj *intent.TextObject) (editor.MotionRange, error)`: 计算文本对象的范围
-  - `computeWord(count int) (editor.MotionRange, error)`: 计算单词移动的范围
-  - `computeLine(count int) (editor.MotionRange, error)`: 计算行移动的范围
-  - `computeChar(count int) (editor.MotionRange, error)`: 计算字符移动的范围
-  - `computeGoto(count int) (editor.MotionRange, error)`: 计算跳转的范围
-  - `computeFindMotion(find *intent.FindMotion, count int) (editor.MotionRange, error)`: 计算查找运动的范围
-  - `MoveCursor(r editor.MotionRange) error`: 移动光标到指定范围
-  - `DeleteRange(r editor.MotionRange) error`: 删除指定范围的内容
-  - `YankRange(r editor.MotionRange) error`: 复制指定范围的内容
-  - `ChangeRange(r editor.MotionRange) error`: 修改指定范围的内容
+## `engine.go`
 
-## 在整体架构中的角色
+### 角色
 
-Engine 位于整个系统的中心位置，连接各个子系统：
-```
-Intent → Engine → Kernel → Backend
-           ↓
-       Replay/Verifier
+- 定义 **Engine 权威接口**
+- 提供 **HeadlessEngine 的无 UI 实现**
+
+---
+
+### Engine 接口能力
+
+#### 状态与事务
+
+```go
+Apply(event crdt.SemanticEvent) error
+Replay(upTo crdt.EventID) replay.TextState
+Snapshot() *Snapshot
 ```
 
-Engine 确保所有操作都是事务化的、可追溯的，并且能够与其他模块协同工作。
+---
+
+#### WAL / 同步
+
+```go
+Append(event crdt.SemanticEvent) crdt.EventID
+WALSince(id crdt.EventID) []wal.SemanticEvent
+Integrate(events []wal.SemanticEvent) error
+KnownHeads() map[crdt.ActorID]crdt.EventID
+```
+
+---
+
+#### CRDT 位置管理
+
+```go
+AllocatePosition(after, before *crdt.PositionID) crdt.PositionID
+ComparePosition(a, b crdt.PositionID) int
+```
+
+---
+
+#### Selection 管理
+
+```go
+ApplySelection(actor crdt.ActorID, fact selection.SetSelectionFact)
+GetSelection(cursorID selection.CursorID)
+GetAllSelections()
+```
+
+---
+
+#### Policy / Actor
+
+```go
+RegisterActor(actorID crdt.ActorID, level policy.TrustLevel, name string)
+CheckPolicy(event crdt.SemanticEvent) error
+```
+
+---
+
+#### Index 查询
+
+```go
+QueryByActor(actor crdt.ActorID)
+QueryByType(ft index.FactType)
+QueryByTimeRange(start, end time.Time)
+QueryAIChanges(aiActorPrefix string)
+```
+
+---
+
+### HeadlessEngine 特点
+
+- 无 UI、无编辑器假设
+- 完全基于事件驱动
+- 可用于：
+  - 本地执行
+  - 远程同步
+  - AI Actor
+  - 回放 / 审计
+
+---
+
+## `concrete_engine.go`
+
+### 角色
+
+**ConcreteEngine = 编辑语义计算引擎**
+
+用于解释「用户在编辑器里 *想做什么*」。
+
+---
+
+### 主要职责
+
+#### Motion 计算
+
+```go
+ComputeMotion(m *intent.Motion) (editor.MotionRange, error)
+```
+
+支持：
+
+- Word / Line / Char
+- Goto
+- Find / Till（前向 / 后向）
+- TextObject（word / paren / quote）
+- Inner / Around 语义
+
+---
+
+#### 编辑操作（语义层）
+
+```go
+MoveCursor(r editor.MotionRange)
+DeleteRange(r editor.MotionRange)
+YankRange(r editor.MotionRange)
+ChangeRange(r editor.MotionRange)
+```
+
+⚠️ 注意：  
+这些操作 **只代表“编辑意图的几何语义”**，  
+并不意味着最终状态已经被提交。
+
+---
+
+### 设计约束（非常重要）
+
+ConcreteEngine **必须保持以下特性**：
+
+- ✅ 纯计算（deterministic）
+- ✅ 不依赖 CRDT
+- ✅ 不接触 WAL / Policy
+- ✅ 可被替换 / 测试
+
+---
+
+## Snapshot
+
+```go
+type Snapshot struct {
+    At    crdt.EventID
+    State replay.TextState
+}
+```
+
+- Snapshot 是优化手段
+- **不是权威**
+- 任意 Snapshot 都必须可由 Replay 重建
+
+---
+
+## 总结一句话
+
+> **Engine 模块是 Tmux-FSM 的“执行宪法”。**  
+>
+> - ConcreteEngine 负责「理解人类编辑语义」
+> - HeadlessEngine 负责「裁决、记录并重放现实」
+
+两者职责严格分离，  
+共同保证系统 **安全、可追溯、可演化**。
+
+---
+```
+
