@@ -1,8 +1,8 @@
 package analysis
 
 import (
+	"rhm-go/core/change"
 	"rhm-go/core/history"
-	"strings"
 )
 
 type Conflict struct {
@@ -16,30 +16,36 @@ type MergeResult struct {
 }
 
 func AnalyzeMerge(view history.DagView, tipA, tipB history.NodeID) MergeResult {
-	// Simple analysis: if tipA and tipB refer to the same target in their operations, they conflict.
-	// In the real system, this would use Footprint/Operation Algebra.
-
 	nodeA := view.GetNode(tipA)
 	nodeB := view.GetNode(tipB)
+	if nodeA == nil || nodeB == nil { return MergeResult{} }
 
-	if nodeA == nil || nodeB == nil {
-		return MergeResult{}
-	}
+	semA, okA := nodeA.Op.(change.SemanticChange)
+	semB, okB := nodeB.Op.(change.SemanticChange)
 
-	descA := nodeA.Op.Describe()
-	descB := nodeB.Op.Describe()
+	// 如果无法进行语义分析，保守认为无冲突或由外层处理
+	if !okA || !okB { return MergeResult{} }
 
-	// Conflict detection logic for demo:
-	// If one is Delete and other is Edit/Write on same entity.
-	// Here we simulate by checking if descriptions "Delete" and "Edit" appear.
-	if (strings.Contains(descA, "Delete") && strings.Contains(descB, "Edit")) ||
-		(strings.Contains(descB, "Delete") && strings.Contains(descA, "Edit")) {
-		return MergeResult{
-			Conflicts: []Conflict{
-				{NodeA: tipA, NodeB: tipB, Reason: "Edit vs Delete Conflict"},
-			},
+	for _, fA := range semA.GetFootprints() {
+		for _, fB := range semB.GetFootprints() {
+			if fA.ResourceID == fB.ResourceID {
+				if isMutuallyExclusive(fA.Mode, fB.Mode) {
+					return MergeResult{
+						Conflicts: []Conflict{{
+							NodeA: tipA, NodeB: tipB,
+							Reason: "Resource Contention: " + fA.ResourceID,
+						}},
+					}
+				}
+			}
 		}
 	}
-
 	return MergeResult{}
+}
+
+func isMutuallyExclusive(m1, m2 change.AccessMode) bool {
+	// 互斥矩阵实现
+	if m1 == change.Exclusive || m2 == change.Exclusive { return true }
+	if m1 == change.Create && m2 == change.Create { return true }
+	return false
 }

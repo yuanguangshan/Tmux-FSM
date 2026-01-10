@@ -2,7 +2,6 @@ package solver
 
 import (
 	"container/heap"
-	"fmt"
 	"rhm-go/core/analysis"
 	"rhm-go/core/change"
 	"rhm-go/core/cost"
@@ -18,138 +17,116 @@ type ResolutionPlan struct {
 	Narrative narrative.Narrative
 }
 
-// Solve finds the optimal resolution path between two conflict tips in a DAG.
-//
-// [RHM Solver Contract]:
-// 1. Search space is generated ONLY by reversible operations defined in core/change.
-// 2. Solver NEVER mutates history irreversibly; it explores parallel ephemeral universes.
-// 3. Any optimal solution corresponds to a coherent, auditable responsibility narrative.
-// 4. Deterministic: Given identical HistoryDAG and CostModel, RHM produces bit-identical solutions.
+// Solve 核心入口：寻找最优时间线
 func Solve(dag *history.HistoryDAG, tipA, tipB history.NodeID) ResolutionPlan {
 	costModel := cost.DefaultModel{}
-	ctx := cost.Context{}
-
 	pq := &search.PriorityQueue{}
 	heap.Init(pq)
+
+	// closedSet 用于存储已探索过的状态指纹，避免指数爆炸
 	closedSet := make(map[uint64]bool)
 
-	// 1. Initial Analysis
-	initialRes := analysis.AnalyzeMerge(dag, tipA, tipB)
-	if len(initialRes.Conflicts) == 0 {
-		return ResolutionPlan{Resolved: true, Narrative: narrative.Narrative{Summary: "No conflict detected."}}
-	}
+	// 1. 初始化空状态 (没有突变的状态)
+	heap.Push(pq, &search.State{
+		Mutations: []change.Mutation{},
+		Cost:      0,
+		Fingerprint: 0,
+	})
 
-	h0 := cost.Cost(len(initialRes.Conflicts)) * cost.Tweak
-	heap.Push(pq, &search.State{Mutations: []change.Mutation{}, Cost: 0, Heuristic: h0})
-
-	// 2. A* Loop
 	for pq.Len() > 0 {
+		// 取出当前 Cost 最低的状态进行扩展
 		current := heap.Pop(pq).(*search.State)
 
+		// 指纹检查
 		if closedSet[current.Fingerprint] {
 			continue
 		}
 		closedSet[current.Fingerprint] = true
 
-		// Fork Sandbox
-		forkPoint := tipA // Simplified LCA
-		if parents := dag.GetParents(tipA); len(parents) > 0 {
-			forkPoint = parents[0]
-		}
-		sandbox := rewrite.RewriteBatch(dag, forkPoint, current.Mutations)
+		// 2. 环境重构：在沙盒中应用当前的突变计划
+		// 这里的 "root" 应该通过 LCA 算法计算，为了演示简化为 "root"
+		sandbox := rewrite.RewriteBatch(dag, "root", current.Mutations)
 
-		// Check Goal
+		// 3. 冲突分析：利用 Footprint 代数检查新环境是否还有冲突
 		res := analysis.AnalyzeMerge(sandbox, tipA, tipB)
+
+		// 目标达成：没有冲突，当前 current 即为最优解
 		if len(res.Conflicts) == 0 {
 			return ResolutionPlan{
 				Mutations: current.Mutations,
 				Resolved:  true,
 				Narrative: narrative.Narrative{
-					Summary:   "Optimal Timeline Found",
-					Steps:     current.Narrative,
+					Summary:   "Conflict resolved via optimized causal path",
 					TotalCost: int(current.Cost),
+					Steps:     current.Narrative,
 				},
 			}
 		}
 
-		// Expand: Explore all involved nodes in the first conflict to find the lowest cost resolution
-		if len(res.Conflicts) > 0 {
-			conflict := res.Conflicts[0]
-			// Try both sides of the conflict
-			involved := []history.NodeID{conflict.NodeA, conflict.NodeB}
+		// 4. 定向扩展：只处理第一个被检测到的冲突
+		conflict := res.Conflicts[0]
+		involved := []history.NodeID{conflict.NodeA, conflict.NodeB}
 
-			for _, offenderID := range involved {
-				candidates := generateCandidates(sandbox, offenderID)
+		for _, offenderID := range involved {
+			// 定向获取该节点的候选变体 (Downgrade/NoOp)
+			candidates := generateTargetedCandidates(sandbox, offenderID)
 
-				// Score Candidates for Narrative Comparison
-				type Scored struct {
-					Mut  change.Mutation
-					Cost cost.Cost
+			for _, mut := range candidates {
+				c := costModel.Calculate(mut, cost.Context{})
+
+				// 记录决策轨迹
+				step := narrative.DecisionStep{
+					ProblemContext: conflict.Reason,
+					Decision:       mut.String(),
+					DecisionCost:   int(c),
 				}
-				scoredCands := []Scored{}
-				for _, m := range candidates {
-					scoredCands = append(scoredCands, Scored{m, costModel.Calculate(m, ctx)})
+
+				// 创建新状态并入队
+				nextMutations := make([]change.Mutation, len(current.Mutations))
+				copy(nextMutations, current.Mutations)
+				nextMutations = append(nextMutations, mut)
+
+				nextState := &search.State{
+					Mutations:   nextMutations,
+					Cost:        current.Cost + c,
+					Narrative:   append(append([]narrative.DecisionStep{}, current.Narrative...), step),
+					Fingerprint: search.ComputeFingerprint(nextMutations),
 				}
 
-				for _, sc := range scoredCands {
-					newCost := current.Cost + sc.Cost
-					if newCost >= cost.Infinite {
-						continue
-					}
-
-					// Build Narrative Step
-					rejected := []narrative.RejectedAlternative{}
-					// In a real expanded search, we'd compare across all branches,
-					// here we record alternatives at the local decision point.
-					for _, other := range scoredCands {
-						if other.Mut.String() != sc.Mut.String() {
-							reason := "Alternative path"
-							if other.Cost > sc.Cost {
-								reason = "Higher semantic cost"
-							}
-							rejected = append(rejected, narrative.RejectedAlternative{
-								Description: other.Mut.String(),
-								Cost:        int(other.Cost),
-								Reason:      reason,
-							})
-						}
-					}
-
-					step := narrative.DecisionStep{
-						ProblemContext: fmt.Sprintf("Conflict between %s and %s (handling %s)",
-							conflict.NodeA, conflict.NodeB, offenderID),
-						Decision:     sc.Mut.String(),
-						DecisionCost: int(sc.Cost),
-						Rejected:     rejected,
-					}
-
-					newState := &search.State{
-						Mutations: append(append([]change.Mutation{}, current.Mutations...), sc.Mut),
-						Cost:      newCost,
-						Heuristic: 0,
-						Narrative: append(append([]narrative.DecisionStep{}, current.Narrative...), step),
-					}
-					newState.Fingerprint = search.ComputeFingerprint(newState.Mutations)
-					heap.Push(pq, newState)
-				}
+				heap.Push(pq, nextState)
 			}
 		}
 	}
+
 	return ResolutionPlan{Resolved: false}
 }
 
-func generateCandidates(view history.DagView, id history.NodeID) []change.Mutation {
+// generateTargetedCandidates 基于冲突节点生成局部候选方案
+func generateTargetedCandidates(view history.DagView, id history.NodeID) []change.Mutation {
 	node := view.GetNode(id)
 	if node == nil {
 		return nil
 	}
+
 	muts := []change.Mutation{}
 
-	if noop := node.Op.ToNoOp(); noop != nil {
-		muts = append(muts, change.Mutation{Type: change.ReplaceOp, Target: string(id), NewOp: noop})
-	}
+	// 尝试一：降级语义 (如 Delete -> Move，保留大部分意图)
 	if down := node.Op.Downgrade(); down != nil {
-		muts = append(muts, change.Mutation{Type: change.ReplaceOp, Target: string(id), NewOp: down})
+		muts = append(muts, change.Mutation{
+			Type:   change.ReplaceOp,
+			Target: string(id),
+			NewOp:  down,
+		})
 	}
+
+	// 尝试二：彻底中和 (NoOp，牺牲意图以换取一致性)
+	if noop := node.Op.ToNoOp(); noop != nil {
+		muts = append(muts, change.Mutation{
+			Type:   change.ReplaceOp,
+			Target: string(id),
+			NewOp:  noop,
+		})
+	}
+
 	return muts
 }

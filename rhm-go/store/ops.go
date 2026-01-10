@@ -11,15 +11,26 @@ type FileSystemOp struct {
 	IsNoOp bool
 }
 
-func (op FileSystemOp) Describe() string {
-	if op.IsNoOp {
-		return fmt.Sprintf("NoOp(%s)", op.Arg)
+func (op FileSystemOp) GetFootprints() []change.Footprint {
+	if op.IsNoOp { return nil }
+	switch op.Kind {
+	case "Edit":
+		return []change.Footprint{{ResourceID: op.Arg, Mode: change.Shared}}
+	case "Delete":
+		return []change.Footprint{{ResourceID: op.Arg, Mode: change.Exclusive}}
+	case "Create":
+		return []change.Footprint{{ResourceID: op.Arg, Mode: change.Create}}
 	}
+	return nil
+}
+
+func (op FileSystemOp) Describe() string {
+	if op.IsNoOp { return "NoOp(Neutralized)" }
 	return fmt.Sprintf("%s(%s)", op.Kind, op.Arg)
 }
 
 func (op FileSystemOp) ToNoOp() change.ReversibleChange {
-	return FileSystemOp{Kind: "NoOp", Arg: "Neutralized", IsNoOp: true}
+	return FileSystemOp{IsNoOp: true}
 }
 
 func (op FileSystemOp) Downgrade() change.ReversibleChange {
