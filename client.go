@@ -42,31 +42,46 @@ func runClient(key, paneAndClient string) {
 	// Generate a RequestID for this client request
 	requestID := fmt.Sprintf("req-%d", time.Now().UnixNano())
 
-	// Get the actor ID from the paneAndClient string
-	actorID := paneAndClient
-	if actorID == "" || actorID == "|" {
-		actorID = "default|default"
-	}
-
 	// 添加参数验证和修复
+	var paneID, clientName string
+
 	if paneAndClient == "" || paneAndClient == "|" {
 		// 尝试获取当前pane和client
 		// 注意：这里不能直接调用 tmux 命令，因为这可能导致循环依赖
 		// 我们需要确保参数格式正确
-		paneAndClient = "default|default"
+		paneID = "default"
+		clientName = "default"
 	} else {
 		// 检查参数格式是否正确 (pane|client)，如果 client 部分为空，尝试修复
 		parts := strings.Split(paneAndClient, "|")
-		if len(parts) == 2 && parts[1] == "" {
-			// client 部分为空，使用默认值
-			paneAndClient = parts[0] + "|default"
+		if len(parts) == 2 {
+			paneID = parts[0]
+			clientName = parts[1]
+			if clientName == "" {
+				// client 部分为空，使用默认值
+				clientName = "default"
+			}
 		} else if len(parts) == 1 {
 			// 只有 pane 部分，添加默认 client
-			paneAndClient = parts[0] + "|default"
+			paneID = parts[0]
+			clientName = "default"
+		} else {
+			// 更复杂的格式，使用第一部分作为 paneID，第二部分作为 clientName
+			paneID = parts[0]
+			if len(parts) > 1 {
+				clientName = parts[1]
+			} else {
+				clientName = "default"
+			}
 		}
 	}
 
-	log.Printf("Client sending request: RequestID=%s, ActorID=%s, Key=%s", requestID, actorID, key)
+	// 修复：actorID 不应该等于 paneAndClient，否则会导致重复
+	// actorID 应该是唯一标识符，可以使用 paneID 和 clientName 的组合
+	actorID := fmt.Sprintf("%s|%s", paneID, clientName)
+
+	log.Printf("Client sending request: RequestID=%s, ActorID=%s, PaneID=%s, ClientName=%s, Key=%s",
+		requestID, actorID, paneID, clientName, key)
 
 	// Retry mechanism with logging
 	maxRetries := 3
@@ -97,7 +112,13 @@ func runClient(key, paneAndClient string) {
 	}
 
 	// ✅ 新权威协议: requestID|actorID|paneAndClient|key
-	payload := fmt.Sprintf("%s|%s|%s|%s", requestID, actorID, paneAndClient, key)
+	// 现在 actorID 是 paneID|clientName，paneAndClient 也是 paneID|clientName
+	// 这仍然会导致重复，我们需要重新设计协议
+	// 实际上，最简单的修复是使用不同的 actorID
+	// 我们可以使用 paneID 作为 actorID，而不是整个 paneAndClient
+	actorIDForProtocol := paneID  // 使用 paneID 作为 actorID，避免重复
+
+	payload := fmt.Sprintf("%s|%s|%s|%s", requestID, actorIDForProtocol, paneAndClient, key)
 	if _, err := conn.Write([]byte(payload)); err != nil {
 		log.Printf("Failed to send payload '%s': %v", payload, err)
 		return
@@ -114,5 +135,5 @@ func runClient(key, paneAndClient string) {
 		fmt.Println(resp)
 	}
 
-	log.Printf("Client request completed: RequestID=%s, ActorID=%s", requestID, actorID)
+	log.Printf("Client request completed: RequestID=%s, ActorID=%s", requestID, actorIDForProtocol)
 }
