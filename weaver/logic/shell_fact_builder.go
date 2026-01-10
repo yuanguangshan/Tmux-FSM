@@ -22,17 +22,20 @@ func (b *ShellFactBuilder) Build(intent core.Intent, snapshot core.Snapshot) ([]
 		// col := snapshot.Cursor.Col // If needed for semantic logic refinement
 
 		var lineHash string
+		var lineID core.LineID
 		// Find line in snapshot
 		// Snapshot Lines order matches Rows? Usually yes, row=index.
 		// Check bounds
 		if row >= 0 && row < len(snapshot.Lines) {
 			lineHash = string(snapshot.Lines[row].Hash)
+			lineID = snapshot.Lines[row].ID
 		}
 
 		anchor := core.Anchor{
 			PaneID: snapshot.PaneID,
 			Kind:   core.AnchorAtCursor, // 默认为光标处
 			Hash:   lineHash,
+			LineID: lineID, // Phase 9: Include stable LineID
 		}
 
 		// 假设 TargetKind: 1=Char, 2=Word, 3=Line, 5=TextObject (from intent.go)
