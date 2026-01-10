@@ -309,14 +309,13 @@ func (s *Server) handleClient(conn net.Conn) {
 				clientName = paneParts[1]
 			}
 		} else if len(parts) == 3 {
-			// Original format: pane|client|key
-			paneID = parts[0]
-			clientName = parts[1]
+			// Current format: actorID|pane|key (based on log examples)
+			actorID = parts[0]
+			paneID = parts[1]
 			key = parts[2]
 
-			// Generate default requestID and actorID for backward compatibility
+			// Generate default requestID for backward compatibility
 			requestID = fmt.Sprintf("req-%d", time.Now().UnixNano())
-			actorID = parts[0] + "|" + parts[1] // Reconstruct paneAndClient
 		} else if len(parts) == 2 {
 			// Fallback for old protocol: PANE|KEY (Client unknown)
 			paneID = parts[0]
