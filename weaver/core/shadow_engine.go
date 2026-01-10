@@ -20,9 +20,10 @@ type ShadowEngine struct {
 	reality      RealityReader
 	proofBuilder *ProofBuilder
 	dag          *editor.OperationDAG
+	evidence     EvidenceLibrary
 }
 
-func NewShadowEngine(planner Planner, resolver AnchorResolver, projection Projection, reality RealityReader) *ShadowEngine {
+func NewShadowEngine(planner Planner, resolver AnchorResolver, projection Projection, reality RealityReader, evidence EvidenceLibrary) *ShadowEngine {
 	return &ShadowEngine{
 		planner:      planner,
 		history:      NewInMemoryHistory(100),
@@ -31,6 +32,7 @@ func NewShadowEngine(planner Planner, resolver AnchorResolver, projection Projec
 		reality:      reality,
 		proofBuilder: NewProofBuilder(),
 		dag:          editor.NewOperationDAG(),
+		evidence:     evidence,
 	}
 }
 
@@ -38,7 +40,7 @@ func (e *ShadowEngine) ApplyIntent(hctx HandleContext, intent Intent, snapshot S
 	requestID := hctx.RequestID
 	actorID := hctx.ActorID
 
-	log.Printf("Applying intent: RequestID=%s, Kind=%d, PaneID=%s, SnapshotHash=%s",
+	log.Printf("Applying intent: RequestID=%s, Kind=%s, PaneID=%s, SnapshotHash=%s",
 		requestID, intent.GetKind(), intent.GetPaneID(), intent.GetSnapshotHash())
 
 	// Initialize AuditRecord v2
@@ -47,7 +49,7 @@ func (e *ShadowEngine) ApplyIntent(hctx HandleContext, intent Intent, snapshot S
 		RequestID:    requestID,
 		ActorID:      actorID,
 		TimestampUTC: time.Now().Unix(),
-		IntentKind:   fmt.Sprintf("%d", intent.GetKind()),
+		IntentKind:   intent.GetKind().String(),
 		DecisionPath: "Intent",
 		Entries:      []AuditEntryV2{},
 		Result:       AuditResult{Status: "Pending", WorldDrift: false},
@@ -133,7 +135,20 @@ func (e *ShadowEngine) ApplyIntent(hctx HandleContext, intent Intent, snapshot S
 			Error:  fmt.Sprintf("Failed to plan facts: %v", err),
 		}
 
-		return &Verdict{Kind: VerdictBlocked, Audit: convertAuditRecordToLegacy(auditRecord)}, err
+		v := &Verdict{
+			Kind:      VerdictBlocked,
+			Code:      FailIntent,
+			Safety:    SafetyUnsafe,
+			Message:   fmt.Sprintf("Plan failure: %v", err),
+			RequestID: requestID,
+			Timestamp: time.Now().Unix(),
+		}
+		// RFC-WC-003: Commit evidence even on failure
+		if e.evidence != nil {
+			v.AuditHash, _ = e.evidence.Commit(auditRecord)
+		}
+		log.Printf("[VERDICT] %s: %s (Safety: %s, Code: %s, AuditRef: %s)", v.Kind, v.Message, v.Safety, v.Code, v.AuditHash)
+		return v, err
 	}
 	log.Printf("Successfully planned %d facts for intent in pane %s", len(facts), intent.GetPaneID())
 
@@ -178,7 +193,19 @@ func (e *ShadowEngine) ApplyIntent(hctx HandleContext, intent Intent, snapshot S
 			Error:  fmt.Sprintf("Failed to resolve facts: %v", err),
 		}
 
-		return &Verdict{Kind: VerdictBlocked, Audit: convertAuditRecordToLegacy(auditRecord)}, err
+		v := &Verdict{
+			Kind:      VerdictBlocked,
+			Code:      FailAnchor,
+			Safety:    SafetyUnsafe,
+			Message:   fmt.Sprintf("Resolve failure: %v", err),
+			RequestID: requestID,
+			Timestamp: time.Now().Unix(),
+		}
+		if e.evidence != nil {
+			v.AuditHash, _ = e.evidence.Commit(auditRecord)
+		}
+		log.Printf("[VERDICT] %s: %s (Safety: %s, Code: %s, AuditRef: %s)", v.Kind, v.Message, v.Safety, v.Code, v.AuditHash)
+		return v, err
 	}
 	log.Printf("Successfully resolved %d facts for intent in pane %s", len(resolvedFacts), intent.GetPaneID())
 
@@ -199,7 +226,7 @@ func (e *ShadowEngine) ApplyIntent(hctx HandleContext, intent Intent, snapshot S
 			safety = rf.Safety
 		}
 	}
-	log.Printf("Determined safety level %d for intent in pane %s", safety, intent.GetPaneID())
+	log.Printf("Determined safety level %s for intent in pane %s", safety, intent.GetPaneID())
 
 	if safety == SafetyFuzzy && !intent.IsPartialAllowed() {
 		log.Printf("Fuzzy resolution disallowed by policy for intent in pane %s", intent.GetPaneID())
@@ -220,17 +247,24 @@ func (e *ShadowEngine) ApplyIntent(hctx HandleContext, intent Intent, snapshot S
 			Error:  "Fuzzy resolution disallowed by policy",
 		}
 
-		return &Verdict{
-				Kind:    VerdictRejected,
-				Safety:  SafetyUnsafe,
-				Message: "Fuzzy resolution disallowed by policy",
-				Audit:   convertAuditRecordToLegacy(auditRecord),
-			}, &WorldDriftError{
-				Reason:   DriftSnapshotMismatch,
-				Expected: intent.GetSnapshotHash(),
-				Actual:   intent.GetSnapshotHash(), // Not actually a snapshot mismatch, but using for policy violation
-				Message:  "Fuzzy resolution disallowed by policy",
-			}
+		v := &Verdict{
+			Kind:      VerdictRejected,
+			Code:      FailEnv,
+			Safety:    SafetyUnsafe,
+			Message:   "Policy violation: fuzzy resolution disallowed",
+			RequestID: requestID,
+			Timestamp: time.Now().Unix(),
+		}
+		if e.evidence != nil {
+			v.AuditHash, _ = e.evidence.Commit(auditRecord)
+		}
+		log.Printf("[VERDICT] %s: %s (Safety: %s, Code: %s, AuditRef: %s)", v.Kind, v.Message, v.Safety, v.Code, v.AuditHash)
+		return v, &WorldDriftError{
+			Reason:   DriftSnapshotMismatch,
+			Expected: intent.GetSnapshotHash(),
+			Actual:   intent.GetSnapshotHash(),
+			Message:  "Fuzzy resolution disallowed by policy",
+		}
 	}
 
 	// [Phase 7] Inverse Fact Enrichment:
@@ -318,7 +352,19 @@ func (e *ShadowEngine) ApplyIntent(hctx HandleContext, intent Intent, snapshot S
 			Error:  fmt.Sprintf("Failed to project facts: %v", err),
 		}
 
-		return &Verdict{Kind: VerdictBlocked, Audit: convertAuditRecordToLegacy(auditRecord)}, err
+		v := &Verdict{
+			Kind:      VerdictBlocked,
+			Code:      FailEnv,
+			Safety:    safety,
+			Message:   fmt.Sprintf("Projection failure: %v", err),
+			RequestID: requestID,
+			Timestamp: time.Now().Unix(),
+		}
+		if e.evidence != nil {
+			v.AuditHash, _ = e.evidence.Commit(auditRecord)
+		}
+		log.Printf("[VERDICT] %s: %s (Safety: %s, Code: %s, AuditRef: %s)", v.Kind, v.Message, v.Safety, v.Code, v.AuditHash)
+		return v, err
 	}
 	log.Printf("Successfully projected facts for intent in pane %s", intent.GetPaneID())
 
@@ -481,13 +527,20 @@ func (e *ShadowEngine) ApplyIntent(hctx HandleContext, intent Intent, snapshot S
 	}
 
 	log.Printf("Successfully applied intent for pane %s, transaction %s", intent.GetPaneID(), intent.GetPaneID())
-	return &Verdict{
+	v := &Verdict{
 		Kind:        VerdictApplied,
 		Message:     "Applied via Smart Projection",
 		Transaction: tx,
 		Safety:      safety,
-		Audit:       convertAuditRecordToLegacy(auditRecord),
-	}, nil
+		RequestID:   requestID,
+		Timestamp:   time.Now().Unix(),
+		Resolutions: resolvedFacts,
+	}
+	if e.evidence != nil {
+		v.AuditHash, _ = e.evidence.Commit(auditRecord)
+	}
+	log.Printf("[VERDICT] %s: %s (Safety: %s, TxID: %s, AuditRef: %s)", v.Kind, v.Message, v.Safety, tx.ID, v.AuditHash)
+	return v, nil
 }
 
 // Helper function to convert AuditRecord to legacy AuditEntry format
@@ -550,12 +603,17 @@ func (e *ShadowEngine) performUndoWithRequestID(parentRequestID string, auditRec
 			At:      time.Now().Unix(),
 		})
 
-		// Update result
-		auditRecord.Result = AuditResult{
-			Status: "Skipped",
+		v := &Verdict{
+			Kind:      VerdictSkipped,
+			Message:   "Nothing to undo",
+			RequestID: requestID,
+			Timestamp: time.Now().Unix(),
 		}
-
-		return &Verdict{Kind: VerdictSkipped, Message: "Nothing to undo", Audit: convertAuditRecordToLegacy(auditRecord)}, nil
+		if e.evidence != nil {
+			v.AuditHash, _ = e.evidence.Commit(auditRecord)
+		}
+		log.Printf("[VERDICT] %s: %s (AuditRef: %s)", v.Kind, v.Message, v.AuditHash)
+		return v, nil
 	}
 
 	log.Printf("Attempting to undo transaction %s for pane %s", tx.ID, tx.Intent.GetPaneID())
@@ -586,17 +644,24 @@ func (e *ShadowEngine) performUndoWithRequestID(parentRequestID string, auditRec
 
 			// Put it back to undo stack since we didn't apply it
 			e.history.PushBack(tx)
-			return &Verdict{
-					Kind:    VerdictRejected,
-					Message: "World drift: cannot undo safely",
-					Safety:  SafetyUnsafe,
-					Audit:   convertAuditRecordToLegacy(auditRecord),
-				}, &WorldDriftError{
-					Reason:   DriftUndoMismatch,
-					Expected: tx.PostSnapshotHash,
-					Actual:   string(current.Hash),
-					Message:  "World drift: cannot undo safely",
-				}
+			v := &Verdict{
+				Kind:      VerdictRejected,
+				Code:      FailAnchor,
+				Safety:    SafetyUnsafe,
+				Message:   "World drift: cannot undo safely",
+				RequestID: requestID,
+				Timestamp: time.Now().Unix(),
+			}
+			if e.evidence != nil {
+				v.AuditHash, _ = e.evidence.Commit(auditRecord)
+			}
+			log.Printf("[VERDICT] %s: %s (Safety: %s, Code: %s, AuditRef: %s)", v.Kind, v.Message, v.Safety, v.Code, v.AuditHash)
+			return v, &WorldDriftError{
+				Reason:   DriftUndoMismatch,
+				Expected: tx.PostSnapshotHash,
+				Actual:   string(current.Hash),
+				Message:  "World drift: cannot undo safely",
+			}
 		}
 		log.Printf("Undo context verified for transaction %s", tx.ID)
 
@@ -785,12 +850,20 @@ func (e *ShadowEngine) performUndoWithRequestID(parentRequestID string, auditRec
 	}
 
 	log.Printf("Successfully undone transaction %s", tx.ID)
-	return &Verdict{
+	v := &Verdict{
 		Kind:        VerdictApplied,
 		Message:     fmt.Sprintf("Undone tx: %s", tx.ID),
 		Transaction: tx,
-		Audit:       convertAuditRecordToLegacy(auditRecord),
-	}, nil
+		Safety:      SafetyExact, // Undo depends on verified post-state
+		RequestID:   requestID,
+		Timestamp:   time.Now().Unix(),
+		Resolutions: resolvedFacts,
+	}
+	if e.evidence != nil {
+		v.AuditHash, _ = e.evidence.Commit(auditRecord)
+	}
+	log.Printf("[VERDICT] %s: %s (TxID: %s, AuditRef: %s)", v.Kind, v.Message, tx.ID, v.AuditHash)
+	return v, nil
 }
 
 func (e *ShadowEngine) performRedo() (*Verdict, error) {
@@ -833,12 +906,17 @@ func (e *ShadowEngine) performRedoWithRequestID(parentRequestID string, auditRec
 			At:      time.Now().Unix(),
 		})
 
-		// Update result
-		auditRecord.Result = AuditResult{
-			Status: "Skipped",
+		v := &Verdict{
+			Kind:      VerdictSkipped,
+			Message:   "Nothing to redo",
+			RequestID: requestID,
+			Timestamp: time.Now().Unix(),
 		}
-
-		return &Verdict{Kind: VerdictSkipped, Message: "Nothing to redo", Audit: convertAuditRecordToLegacy(auditRecord)}, nil
+		if e.evidence != nil {
+			v.AuditHash, _ = e.evidence.Commit(auditRecord)
+		}
+		log.Printf("[VERDICT] %s: %s (AuditRef: %s)", v.Kind, v.Message, v.AuditHash)
+		return v, nil
 	}
 
 	log.Printf("Attempting to redo transaction %s for pane %s", tx.ID, tx.Intent.GetPaneID())
@@ -869,17 +947,24 @@ func (e *ShadowEngine) performRedoWithRequestID(parentRequestID string, auditRec
 			}
 
 			e.history.AddRedo(tx)
-			return &Verdict{
-					Kind:    VerdictRejected,
-					Message: "World drift: cannot redo safely",
-					Safety:  SafetyUnsafe,
-					Audit:   convertAuditRecordToLegacy(auditRecord),
-				}, &WorldDriftError{
-					Reason:   DriftRedoMismatch,
-					Expected: preHash,
-					Actual:   string(current.Hash),
-					Message:  "World drift: cannot redo safely",
-				}
+			v := &Verdict{
+				Kind:      VerdictRejected,
+				Code:      FailAnchor,
+				Safety:    SafetyUnsafe,
+				Message:   "World drift: cannot redo safely",
+				RequestID: requestID,
+				Timestamp: time.Now().Unix(),
+			}
+			if e.evidence != nil {
+				v.AuditHash, _ = e.evidence.Commit(auditRecord)
+			}
+			log.Printf("[VERDICT] %s: %s (Safety: %s, Code: %s, AuditRef: %s)", v.Kind, v.Message, v.Safety, v.Code, v.AuditHash)
+			return v, &WorldDriftError{
+				Reason:   DriftRedoMismatch,
+				Expected: preHash,
+				Actual:   string(current.Hash),
+				Message:  "World drift: cannot redo safely",
+			}
 		}
 		log.Printf("Redo context verified for transaction %s", tx.ID)
 
@@ -1057,12 +1142,20 @@ func (e *ShadowEngine) performRedoWithRequestID(parentRequestID string, auditRec
 	auditRecord.TransactionID = string(tx.ID)
 
 	log.Printf("Successfully redone transaction %s", tx.ID)
-	return &Verdict{
+	v := &Verdict{
 		Kind:        VerdictApplied,
 		Message:     fmt.Sprintf("Redone tx: %s", tx.ID),
 		Transaction: tx,
-		Audit:       convertAuditRecordToLegacy(auditRecord),
-	}, nil
+		Safety:      SafetyExact,
+		RequestID:   requestID,
+		Timestamp:   time.Now().Unix(),
+		Resolutions: resolvedFacts,
+	}
+	if e.evidence != nil {
+		v.AuditHash, _ = e.evidence.Commit(auditRecord)
+	}
+	log.Printf("[VERDICT] %s: %s (TxID: %s, AuditRef: %s)", v.Kind, v.Message, tx.ID, v.AuditHash)
+	return v, nil
 }
 
 // GetHistory 获取历史管理器 (用于 Reverse Bridge)

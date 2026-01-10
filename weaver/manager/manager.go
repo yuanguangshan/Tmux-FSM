@@ -57,7 +57,10 @@ func InitWeaver(mode ExecutionMode) {
 		proj = &adapter.NoopProjection{}
 	}
 
-	engine := core.NewShadowEngine(planner, resolver, proj, reality)
+	// Phase 6.3: Evidence Library for Audit persistence
+	evidence := core.NewInMemoryEvidenceLibrary()
+
+	engine := core.NewShadowEngine(planner, resolver, proj, reality, evidence)
 
 	weaverMgr = &WeaverManager{
 		mode:             mode,

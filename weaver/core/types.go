@@ -21,9 +21,33 @@ const (
 type SafetyLevel int
 
 const (
-	SafetyExact SafetyLevel = iota
-	SafetyFuzzy
-	SafetyUnsafe
+	SafetyExact   SafetyLevel = iota // 100% 匹配
+	SafetyFuzzy                      // 模糊匹配（允许漂移范围内）
+	SafetyUnsafe                     // 匹配失败或存在高风险漂移
+	SafetyUnknown                    // 状态未就绪
+)
+
+func (s SafetyLevel) String() string {
+	switch s {
+	case SafetyExact:
+		return "EXACT"
+	case SafetyFuzzy:
+		return "FUZZY"
+	case SafetyUnsafe:
+		return "UNSAFE"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// FailureClass 定义故障分类学 (RFC-WC-003)
+type FailureClass string
+
+const (
+	FailIntent   FailureClass = "CLASS_INTENT"   // 意图非法或不可解析
+	FailAnchor   FailureClass = "CLASS_ANCHOR"   // 锚点解析彻底失败（世界漂移）
+	FailEnv      FailureClass = "CLASS_ENV"      // 环境约束冲突（如权限、只读）
+	FailInternal FailureClass = "CLASS_INTERNAL" // 内核逻辑错误
 )
 
 // ErrWorldDrift 世界漂移错误（快照不匹配）
@@ -99,13 +123,32 @@ type VerificationResult struct {
 }
 
 // Verdict 裁决结果（可审计输出）
+// 它是 Weaver 对一次 Intent 处理的正式判定文件
 type Verdict struct {
-	Kind        VerdictKind        `json:"kind"`
-	Safety      SafetyLevel        `json:"safety"`
-	Message     string             `json:"message"`
-	Transaction *Transaction       `json:"transaction,omitempty"`
-	Resolutions []AnchorResolution `json:"resolutions,omitempty"`
-	Audit       []AuditEntry       `json:"audit,omitempty"` // Renamed from Details
+	Kind        VerdictKind    `json:"kind"`
+	Safety      SafetyLevel    `json:"safety"`
+	Code        FailureClass   `json:"code,omitempty"` // 仅在 Rejected 时必填
+	Message     string         `json:"message"`
+	RequestID   string         `json:"request_id"` // 关联请求 ID
+	Timestamp   int64          `json:"timestamp"`  // 判决时间
+	Transaction *Transaction   `json:"transaction,omitempty"`
+	Resolutions []ResolvedFact `json:"resolutions,omitempty"`
+	AuditHash   string         `json:"audit_hash,omitempty"` // RFC-WC-003: 不可逃逸的审计引用
+}
+
+func (v VerdictKind) String() string {
+	switch v {
+	case VerdictApplied:
+		return "APPLIED"
+	case VerdictRejected:
+		return "REJECTED"
+	case VerdictSkipped:
+		return "SKIPPED"
+	case VerdictBlocked:
+		return "BLOCKED"
+	default:
+		return "UNKNOWN"
+	}
 }
 
 // VerdictKind 裁决类型

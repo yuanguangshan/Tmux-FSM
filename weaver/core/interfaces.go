@@ -16,6 +16,13 @@ type RealityReader interface {
 	ReadCurrent(paneID string) (Snapshot, error)
 }
 
+// EvidenceLibrary 证据库接口 (RFC-WC-003)
+// 负责持久化存储审计笔录 (AuditRecord)，并提供基于 Hash 的检索
+type EvidenceLibrary interface {
+	Commit(record *AuditRecord) (string, error)
+	Retrieve(hash string) (*AuditRecord, error)
+}
+
 // AnchorResolver Anchor 解析器接口
 // 由环境层实现（tmux, vim, etc.）
 type AnchorResolver interface {
@@ -81,6 +88,63 @@ const (
 	IntentRepeatFindReverse
 )
 
+func (k IntentKind) String() string {
+	switch k {
+	case IntentMove:
+		return "MOVE"
+	case IntentDelete:
+		return "DELETE"
+	case IntentChange:
+		return "CHANGE"
+	case IntentYank:
+		return "YANK"
+	case IntentInsert:
+		return "INSERT"
+	case IntentPaste:
+		return "PASTE"
+	case IntentUndo:
+		return "UNDO"
+	case IntentRedo:
+		return "REDO"
+	case IntentSearch:
+		return "SEARCH"
+	case IntentVisual:
+		return "VISUAL"
+	case IntentToggleCase:
+		return "TOGGLE_CASE"
+	case IntentReplace:
+		return "REPLACE"
+	case IntentRepeat:
+		return "REPEAT"
+	case IntentFind:
+		return "FIND"
+	case IntentExit:
+		return "EXIT"
+	case IntentCount:
+		return "COUNT"
+	case IntentOperator:
+		return "OPERATOR"
+	case IntentMotion:
+		return "MOTION"
+	case IntentMacro:
+		return "MACRO"
+	case IntentEnterVisual:
+		return "ENTER_VISUAL"
+	case IntentExitVisual:
+		return "EXIT_VISUAL"
+	case IntentExtendSelection:
+		return "EXTEND_SELECTION"
+	case IntentOperatorSelection:
+		return "OPERATOR_SELECTION"
+	case IntentRepeatFind:
+		return "REPEAT_FIND"
+	case IntentRepeatFindReverse:
+		return "REPEAT_FIND_REVERSE"
+	default:
+		return "NONE"
+	}
+}
+
 // TargetKind 目标类型
 type TargetKind int
 
@@ -95,6 +159,27 @@ const (
 	TargetPosition
 	TargetSearch
 )
+
+func (k TargetKind) String() string {
+	switch k {
+	case TargetChar:
+		return "CHAR"
+	case TargetWord:
+		return "WORD"
+	case TargetLine:
+		return "LINE"
+	case TargetFile:
+		return "FILE"
+	case TargetTextObject:
+		return "TEXT_OBJECT"
+	case TargetPosition:
+		return "POSITION"
+	case TargetSearch:
+		return "SEARCH"
+	default:
+		return "UNKNOWN"
+	}
+}
 
 // SemanticTarget 语义目标
 type SemanticTarget struct {
