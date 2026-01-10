@@ -18,6 +18,8 @@ func processKeyToIntent(state *FSMState, key string) Intent {
 	}
 
 	// 获取当前光标位置
+	// 注意：这是临时解决方案，直接从 tmux 获取光标位置
+	// 真正的快照感知实现应该在 Resolver 阶段从快照中获取位置信息
 	var cursorPos [2]int // [col, row]
 	if state.PaneID != "" {
 		cursorPos = GetTmuxCursorPos(state.PaneID)
@@ -30,6 +32,7 @@ func processKeyToIntent(state *FSMState, key string) Intent {
 	// 将 action string 转换为 Intent
 	// 注意：这是一个临时的反向转换，最终会被移除
 	// 使用新的函数，传入行信息以解决 projection conflict check failed: missing LineID 的问题
+	// 重要：当前实现使用临时 LineID 策略，真正的快照感知实现需要在 Resolver 阶段完成
 	return actionStringToIntentWithLineInfo(action, state.Count, state.PaneID, "", cursorPos[1], cursorPos[0])
 }
 

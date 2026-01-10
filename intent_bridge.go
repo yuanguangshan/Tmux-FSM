@@ -159,11 +159,17 @@ func actionStringToIntentWithLineInfo(action string, count int, paneID string, l
 	meta["operation"] = operation
 
 	// 注入 LineID 信息以解决 projection conflict check failed: missing LineID 的问题
-	// 如果没有提供 lineID，基于 paneID 和光标位置生成一个
+	// 注意：这里使用的是临时的 LineID 生成策略
+	// 在实际实现中，LineID 应该从快照中获取，而不是基于行号生成
+	// 因为行号可能会因为滚动/编辑而改变，导致不稳定
 	finalLineID := lineID
+
+	// 如果没有提供 lineID，我们仍然生成一个，但标记为临时的
+	// 真正的 LineID 应该在 Resolver 阶段从快照中获取
 	if finalLineID == "" && paneID != "" {
-		// Generate a line ID based on pane ID and cursor position
-		finalLineID = fmt.Sprintf("%s_line_%d", paneID, row)
+		// 临时策略：基于 paneID 和行号生成，但这不是快照感知的
+		// 在实际实现中，这里应该从快照中获取稳定的 LineID
+		finalLineID = fmt.Sprintf("%s_line_%d_temp", paneID, row)
 	}
 
 	if finalLineID != "" {
@@ -173,10 +179,10 @@ func actionStringToIntentWithLineInfo(action string, count int, paneID string, l
 	}
 
 	// 创建锚点信息，使其与新架构兼容
-	// 这样 ShellFactBuilder 就不需要从快照创建锚点
+	// 重要：这里的锚点信息是语义性的，实际的物理位置应在 Resolver 阶段确定
 	anchor := Anchor{
 		PaneID: paneID,
-		LineID: finalLineID,
+		LineID: finalLineID,  // 这是临时的，Resolver 会用快照中的真实 LineID 替换
 		Start:  col,
 		End:    col,
 		Kind:   int(TargetPosition), // 默认使用位置类型锚点
@@ -186,14 +192,15 @@ func actionStringToIntentWithLineInfo(action string, count int, paneID string, l
 	switch target.Kind {
 	case TargetLine:
 		anchor.Kind = int(TargetLine) // = 3
-		// For line operations, we might want to set the range to cover the whole line
-		// But for now, we'll keep the cursor position and let resolver handle the semantic expansion
+		// Line 操作将在 Resolver 阶段扩展到整行范围
 	case TargetWord:
 		anchor.Kind = int(TargetWord) // = 2
+		// Word 操作将在 Resolver 阶段扩展到单词边界
 	case TargetChar:
 		anchor.Kind = int(TargetChar) // = 1
 	case TargetTextObject:
 		anchor.Kind = int(TargetTextObject) // = 5
+		// TextObject 操作将在 Resolver 阶段扩展到对象边界
 	}
 
 	return Intent{
@@ -208,16 +215,21 @@ func actionStringToIntentWithLineInfo(action string, count int, paneID string, l
 
 // createIntentWithAnchor creates an intent with proper anchor information
 func createIntentWithAnchor(base Intent, paneID string, lineID string, row int, col int) Intent {
-	// Generate LineID if not provided
+	// Generate temporary LineID if not provided
+	// Note: This is a temporary solution; real LineID should come from snapshot
 	finalLineID := lineID
 	if finalLineID == "" && paneID != "" {
-		finalLineID = fmt.Sprintf("%s_line_%d", paneID, row)
+		// Temporary strategy: generate based on paneID and row number
+		// This is NOT snapshot-aware and will break with scrolling/editing
+		// Real implementation should get stable LineID from snapshot in Resolver
+		finalLineID = fmt.Sprintf("%s_line_%d_temp", paneID, row)
 	}
 
-	// Create anchor with LineID
+	// Create anchor with temporary LineID
+	// The Resolver will replace this with snapshot-based LineID
 	anchor := Anchor{
 		PaneID: paneID,
-		LineID: finalLineID,
+		LineID: finalLineID,  // Temporary - will be replaced by Resolver with snapshot LineID
 		Start:  col,
 		End:    col,
 		Kind:   int(TargetPosition), // Default position anchor
@@ -226,11 +238,11 @@ func createIntentWithAnchor(base Intent, paneID string, lineID string, row int, 
 	// Add LineID to meta if available
 	if finalLineID != "" && base.Meta == nil {
 		base.Meta = make(map[string]interface{})
-		base.Meta["line_id"] = finalLineID
+		base.Meta["line_id"] = finalLineID  // Temporary LineID
 		base.Meta["row"] = row
 		base.Meta["col"] = col
 	} else if finalLineID != "" && base.Meta != nil {
-		base.Meta["line_id"] = finalLineID
+		base.Meta["line_id"] = finalLineID  // Temporary LineID
 		base.Meta["row"] = row
 		base.Meta["col"] = col
 	}
