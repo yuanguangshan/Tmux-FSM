@@ -86,7 +86,7 @@ type Transaction struct {
 	Skipped          bool          `json:"skipped"`
 	PostSnapshotHash string        `json:"post_snapshot_hash,omitempty"` // Phase 7: State after application
 	AllowPartial     bool          `json:"allow_partial,omitempty"`      // Phase 7: Explicit flag for fuzzy match
-	ProofHash        string        `json:"proof_hash,omitempty"`        // Anchor for proof verification
+	ProofHash        string        `json:"proof_hash,omitempty"`         // Anchor for proof verification
 }
 
 // VerificationResult for verifier
@@ -125,17 +125,17 @@ type AuditEntry struct {
 
 // AuditRecord v2 - 完整的审计记录
 type AuditRecord struct {
-	Version       string         `json:"version"`
-	RequestID     string         `json:"request_id"`
-	TransactionID string         `json:"transaction_id"`
-	ActorID       string         `json:"actor_id"`
-	TimestampUTC  int64          `json:"timestamp_utc"` // Unix timestamp
+	Version       string `json:"version"`
+	RequestID     string `json:"request_id"`
+	TransactionID string `json:"transaction_id"`
+	ActorID       string `json:"actor_id"`
+	TimestampUTC  int64  `json:"timestamp_utc"` // Unix timestamp
 
-	IntentKind    string         `json:"intent_kind"`
-	DecisionPath  string         `json:"decision_path"`
+	IntentKind   string `json:"intent_kind"`
+	DecisionPath string `json:"decision_path"`
 
-	Entries       []AuditEntryV2 `json:"entries"`
-	Result        AuditResult    `json:"result"`
+	Entries []AuditEntryV2 `json:"entries"`
+	Result  AuditResult    `json:"result"`
 }
 
 // AuditEntryV2 - 结构化的审计条目 (v2)
@@ -150,7 +150,7 @@ type AuditEntryV2 struct {
 
 // AuditResult - 审计结果
 type AuditResult struct {
-	Status      string `json:"status"`       // Committed / Rejected / RolledBack
+	Status      string `json:"status"` // Committed / Rejected / RolledBack
 	WorldDrift  bool   `json:"world_drift"`
 	DriftReason string `json:"drift_reason,omitempty"`
 	Error       string `json:"error,omitempty"`

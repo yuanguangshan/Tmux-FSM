@@ -12,21 +12,21 @@ import (
 // ShadowEngine 核心执行引擎
 // 负责处理 Intent，生成并应用 Transaction，维护 History
 type ShadowEngine struct {
-	planner     Planner
-	history     History
-	resolver    AnchorResolver
-	projection  Projection
-	reality     RealityReader
+	planner      Planner
+	history      History
+	resolver     AnchorResolver
+	projection   Projection
+	reality      RealityReader
 	proofBuilder *ProofBuilder
 }
 
 func NewShadowEngine(planner Planner, resolver AnchorResolver, projection Projection, reality RealityReader) *ShadowEngine {
 	return &ShadowEngine{
-		planner:     planner,
-		history:     NewInMemoryHistory(100),
-		resolver:    resolver,
-		projection:  projection,
-		reality:     reality,
+		planner:      planner,
+		history:      NewInMemoryHistory(100),
+		resolver:     resolver,
+		projection:   projection,
+		reality:      reality,
 		proofBuilder: NewProofBuilder(),
 	}
 }
@@ -40,14 +40,14 @@ func (e *ShadowEngine) ApplyIntent(hctx HandleContext, intent Intent, snapshot S
 
 	// Initialize AuditRecord v2
 	auditRecord := &AuditRecord{
-		Version:       "v2",
-		RequestID:     requestID,
-		ActorID:       actorID,
-		TimestampUTC:  time.Now().Unix(),
-		IntentKind:    fmt.Sprintf("%d", intent.GetKind()),
-		DecisionPath:  "Intent",
-		Entries:       []AuditEntryV2{},
-		Result:        AuditResult{Status: "Pending", WorldDrift: false},
+		Version:      "v2",
+		RequestID:    requestID,
+		ActorID:      actorID,
+		TimestampUTC: time.Now().Unix(),
+		IntentKind:   fmt.Sprintf("%d", intent.GetKind()),
+		DecisionPath: "Intent",
+		Entries:      []AuditEntryV2{},
+		Result:       AuditResult{Status: "Pending", WorldDrift: false},
 	}
 
 	// Phase 6.3: Temporal Adjudication (World Drift Check)
@@ -77,16 +77,16 @@ func (e *ShadowEngine) ApplyIntent(hctx HandleContext, intent Intent, snapshot S
 				}
 
 				return &Verdict{
-					Kind:    VerdictRejected,
-					Safety:  SafetyUnsafe,
-					Message: "World drift detected",
-					Audit:   convertAuditRecordToLegacy(auditRecord),
-				}, &WorldDriftError{
-					Reason:   DriftSnapshotMismatch,
-					Expected: intent.GetSnapshotHash(),
-					Actual:   string(current.Hash),
-					Message:  "World drift detected",
-				}
+						Kind:    VerdictRejected,
+						Safety:  SafetyUnsafe,
+						Message: "World drift detected",
+						Audit:   convertAuditRecordToLegacy(auditRecord),
+					}, &WorldDriftError{
+						Reason:   DriftSnapshotMismatch,
+						Expected: intent.GetSnapshotHash(),
+						Actual:   string(current.Hash),
+						Message:  "World drift detected",
+					}
 			}
 			log.Printf("Time consistency verified for intent in pane %s", intent.GetPaneID())
 
@@ -230,16 +230,16 @@ func (e *ShadowEngine) ApplyIntent(hctx HandleContext, intent Intent, snapshot S
 		}
 
 		return &Verdict{
-			Kind:    VerdictRejected,
-			Safety:  SafetyUnsafe,
-			Message: "Fuzzy resolution disallowed by policy",
-			Audit:   convertAuditRecordToLegacy(auditRecord),
-		}, &WorldDriftError{
-			Reason:   DriftSnapshotMismatch,
-			Expected: intent.GetSnapshotHash(),
-			Actual:   intent.GetSnapshotHash(), // Not actually a snapshot mismatch, but using for policy violation
-			Message:  "Fuzzy resolution disallowed by policy",
-		}
+				Kind:    VerdictRejected,
+				Safety:  SafetyUnsafe,
+				Message: "Fuzzy resolution disallowed by policy",
+				Audit:   convertAuditRecordToLegacy(auditRecord),
+			}, &WorldDriftError{
+				Reason:   DriftSnapshotMismatch,
+				Expected: intent.GetSnapshotHash(),
+				Actual:   intent.GetSnapshotHash(), // Not actually a snapshot mismatch, but using for policy violation
+				Message:  "Fuzzy resolution disallowed by policy",
+			}
 	}
 
 	// [Phase 7] Inverse Fact Enrichment:
@@ -481,14 +481,14 @@ func (e *ShadowEngine) performUndo() (*Verdict, error) {
 
 	// Create a minimal audit record for this operation
 	auditRecord := &AuditRecord{
-		Version:       "v2",
-		RequestID:     parentRequestID + ":undo", // Derived from parent
-		ActorID:       "system", // Undo is system-triggered
-		TimestampUTC:  time.Now().Unix(),
-		IntentKind:    "Undo",
-		DecisionPath:  "System",
-		Entries:       []AuditEntryV2{},
-		Result:        AuditResult{Status: "Pending", WorldDrift: false},
+		Version:      "v2",
+		RequestID:    parentRequestID + ":undo", // Derived from parent
+		ActorID:      "system",                  // Undo is system-triggered
+		TimestampUTC: time.Now().Unix(),
+		IntentKind:   "Undo",
+		DecisionPath: "System",
+		Entries:      []AuditEntryV2{},
+		Result:       AuditResult{Status: "Pending", WorldDrift: false},
 	}
 
 	return e.performUndoWithRequestID(parentRequestID, auditRecord)
@@ -550,16 +550,16 @@ func (e *ShadowEngine) performUndoWithRequestID(parentRequestID string, auditRec
 			// Put it back to undo stack since we didn't apply it
 			e.history.PushBack(tx)
 			return &Verdict{
-				Kind:    VerdictRejected,
-				Message: "World drift: cannot undo safely",
-				Safety:  SafetyUnsafe,
-				Audit:   convertAuditRecordToLegacy(auditRecord),
-			}, &WorldDriftError{
-				Reason:   DriftUndoMismatch,
-				Expected: tx.PostSnapshotHash,
-				Actual:   string(current.Hash),
-				Message:  "World drift: cannot undo safely",
-			}
+					Kind:    VerdictRejected,
+					Message: "World drift: cannot undo safely",
+					Safety:  SafetyUnsafe,
+					Audit:   convertAuditRecordToLegacy(auditRecord),
+				}, &WorldDriftError{
+					Reason:   DriftUndoMismatch,
+					Expected: tx.PostSnapshotHash,
+					Actual:   string(current.Hash),
+					Message:  "World drift: cannot undo safely",
+				}
 		}
 		log.Printf("Undo context verified for transaction %s", tx.ID)
 
@@ -764,14 +764,14 @@ func (e *ShadowEngine) performRedo() (*Verdict, error) {
 
 	// Create a minimal audit record for this operation
 	auditRecord := &AuditRecord{
-		Version:       "v2",
-		RequestID:     parentRequestID + ":redo", // Derived from parent
-		ActorID:       "system", // Redo is system-triggered
-		TimestampUTC:  time.Now().Unix(),
-		IntentKind:    "Redo",
-		DecisionPath:  "System",
-		Entries:       []AuditEntryV2{},
-		Result:        AuditResult{Status: "Pending", WorldDrift: false},
+		Version:      "v2",
+		RequestID:    parentRequestID + ":redo", // Derived from parent
+		ActorID:      "system",                  // Redo is system-triggered
+		TimestampUTC: time.Now().Unix(),
+		IntentKind:   "Redo",
+		DecisionPath: "System",
+		Entries:      []AuditEntryV2{},
+		Result:       AuditResult{Status: "Pending", WorldDrift: false},
 	}
 
 	return e.performRedoWithRequestID(parentRequestID, auditRecord)
@@ -833,16 +833,16 @@ func (e *ShadowEngine) performRedoWithRequestID(parentRequestID string, auditRec
 
 			e.history.AddRedo(tx)
 			return &Verdict{
-				Kind:    VerdictRejected,
-				Message: "World drift: cannot redo safely",
-				Safety:  SafetyUnsafe,
-				Audit:   convertAuditRecordToLegacy(auditRecord),
-			}, &WorldDriftError{
-				Reason:   DriftRedoMismatch,
-				Expected: preHash,
-				Actual:   string(current.Hash),
-				Message:  "World drift: cannot redo safely",
-			}
+					Kind:    VerdictRejected,
+					Message: "World drift: cannot redo safely",
+					Safety:  SafetyUnsafe,
+					Audit:   convertAuditRecordToLegacy(auditRecord),
+				}, &WorldDriftError{
+					Reason:   DriftRedoMismatch,
+					Expected: preHash,
+					Actual:   string(current.Hash),
+					Message:  "World drift: cannot redo safely",
+				}
 		}
 		log.Printf("Redo context verified for transaction %s", tx.ID)
 

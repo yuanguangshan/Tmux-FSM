@@ -26,6 +26,41 @@ type FSM struct {
 func processKeyToIntent(state *FSMState, key string) Intent {
 	// 尝试使用 Native Intent Builder 处理特定命令 (dw, cw, dd)
 	intent := processKeyWithNativeBuilder(state, key)
+
+	// Phase 2.2.2: Intercept Motion Intent when PendingOp is active
+	// This supports dgg, dfa, etc.
+	if state.PendingOp != OpNone && (intent.Kind == IntentMove || intent.Kind == IntentFind || intent.Kind == IntentSearch) {
+		// Construct Operator Intent
+		var opIntent Intent
+		builder := NewIntentBuilder(state.PaneID)
+
+		// Calculate effective count
+		effectiveCount := intent.Count
+		if state.Count > 0 {
+			if effectiveCount == 0 {
+				effectiveCount = 1
+			}
+			effectiveCount *= state.Count
+		}
+
+		switch state.PendingOp {
+		case OpDelete:
+			opIntent = builder.Delete(intent.Target, effectiveCount)
+		case OpChange:
+			opIntent = builder.Change(intent.Target, effectiveCount)
+		case OpYank:
+			opIntent = builder.Yank(intent.Target, effectiveCount)
+		}
+
+		// Reset state
+		state.Mode = "NORMAL"
+		state.PendingOp = OpNone
+		state.Operator = ""
+		state.Count = 0
+		state.PendingKeys = ""
+		return opIntent
+	}
+
 	if intent.Kind != IntentNone {
 		return intent
 	}
@@ -54,6 +89,11 @@ func processKeyToIntent(state *FSMState, key string) Intent {
 	// 注意：这是一个临时的反向转换，最终会被移除
 	// 使用新的函数，传入行信息以解决 projection conflict check failed: missing LineID 的问题
 	// 重要：当前实现使用临时 LineID 策略，真正的快照感知实现需要在 Resolver 阶段完成
+
+	if StrictNativeFSM {
+		panic("StrictNativeFSM Violation: Legacy bridge triggered for action: " + action)
+	}
+
 	return actionStringToIntentWithLineInfo(action, state.Count, state.PaneID, "", cursorPos[1], cursorPos[0])
 }
 
@@ -75,6 +115,12 @@ func processKeyWithNativeBuilder(state *FSMState, key string) Intent {
 		return handleNormalWithNativeBuilder(state, key, builder)
 	case "OPERATOR_PENDING":
 		return handleOperatorPendingWithNativeBuilder(state, key, builder)
+	case "MOTION_PENDING":
+		return handleMotionPendingWithNativeBuilder(state, key, builder)
+	case "FIND_CHAR":
+		return handleFindCharWithNativeBuilder(state, key, builder)
+	case "TEXT_OBJECT_PENDING":
+		return handleTextObjectPendingWithNativeBuilder(state, key, builder)
 	}
 
 	// 对于其他模式，返回 IntentNone 以使用 legacy bridge
@@ -87,16 +133,19 @@ func handleNormalWithNativeBuilder(state *FSMState, key string, builder *IntentB
 	case "d":
 		// 设置待处理操作为删除
 		state.Operator = "delete"
+		state.PendingOp = OpDelete
 		state.Mode = "OPERATOR_PENDING"
 		return Intent{Kind: IntentNone}
 	case "c":
 		// 设置待处理操作为修改
 		state.Operator = "change"
+		state.PendingOp = OpChange
 		state.Mode = "OPERATOR_PENDING"
 		return Intent{Kind: IntentNone}
 	case "y":
 		// 设置待处理操作为复制
 		state.Operator = "yank"
+		state.PendingOp = OpYank
 		state.Mode = "OPERATOR_PENDING"
 		return Intent{Kind: IntentNone}
 	case "x":
@@ -126,25 +175,56 @@ func handleNormalWithNativeBuilder(state *FSMState, key string, builder *IntentB
 	case "N":
 		// 搜索上一个
 		return builder.Search(SemanticTarget{Kind: TargetSearch, Direction: "prev"})
+	case "i":
+		return builder.Insert(SemanticTarget{Kind: TargetPosition, Scope: "before"}, 1)
+	case "a":
+		return builder.Insert(SemanticTarget{Kind: TargetPosition, Scope: "after"}, 1)
+	case "I":
+		return builder.Insert(SemanticTarget{Kind: TargetLine, Scope: "start_of_line"}, 1)
+	case "A":
+		return builder.Insert(SemanticTarget{Kind: TargetLine, Scope: "end_of_line"}, 1)
+	case "o":
+		return builder.Insert(SemanticTarget{Kind: TargetLine, Scope: "open_below"}, 1)
+	case "O":
+		return builder.Insert(SemanticTarget{Kind: TargetLine, Scope: "open_above"}, 1)
+	case "p":
+		return builder.Paste(SemanticTarget{Kind: TargetPosition, Scope: "after"}, 1)
+	case "P":
+		return builder.Paste(SemanticTarget{Kind: TargetPosition, Scope: "before"}, 1)
+	case ".":
+		return builder.Repeat()
+	case "~":
+		return builder.ToggleCase()
 	}
 
 	// 基础移动命令
 	motions := map[string]SemanticTarget{
-		"h": {Kind: TargetChar, Direction: "left"},
-		"j": {Kind: TargetPosition, Direction: "down"},
-		"k": {Kind: TargetPosition, Direction: "up"},
-		"l": {Kind: TargetChar, Direction: "right"},
-		"w": {Kind: TargetWord, Direction: "forward"},
-		"b": {Kind: TargetWord, Direction: "backward"},
-		"e": {Kind: TargetWord, Scope: "end"},
-		"0": {Kind: TargetLine, Scope: "start"},
-		"$": {Kind: TargetLine, Scope: "end"},
-		"G": {Kind: TargetFile, Scope: "end"},
-		"^": {Kind: TargetLine, Scope: "start"},
-		"C-b": {Kind: TargetWord, Direction: "backward"},
-		"C-f": {Kind: TargetWord, Direction: "forward"},
+		"h":    {Kind: TargetChar, Direction: "left"},
+		"j":    {Kind: TargetPosition, Direction: "down"},
+		"k":    {Kind: TargetPosition, Direction: "up"},
+		"l":    {Kind: TargetChar, Direction: "right"},
+		"w":    {Kind: TargetWord, Direction: "forward"},
+		"b":    {Kind: TargetWord, Direction: "backward"},
+		"e":    {Kind: TargetWord, Scope: "end"},
+		"0":    {Kind: TargetLine, Scope: "start"},
+		"$":    {Kind: TargetLine, Scope: "end"},
+		"G":    {Kind: TargetFile, Scope: "end"},
+		"^":    {Kind: TargetLine, Scope: "start"},
+		"C-b":  {Kind: TargetWord, Direction: "backward"},
+		"C-f":  {Kind: TargetWord, Direction: "forward"},
 		"Home": {Kind: TargetLine, Scope: "start"},
 		"End":  {Kind: TargetLine, Scope: "end"},
+	}
+
+	if key == "g" {
+		state.Mode = "MOTION_PENDING"
+		return Intent{Kind: IntentNone}
+	}
+
+	if key == "f" || key == "F" || key == "t" || key == "T" {
+		state.Mode = "FIND_CHAR"
+		state.PendingKeys = key
+		return Intent{Kind: IntentNone}
 	}
 
 	if motion, ok := motions[key]; ok {
@@ -186,41 +266,45 @@ func handleOperatorPendingWithNativeBuilder(state *FSMState, key string, builder
 			count = 1
 		}
 
-		switch state.Operator {
-		case "delete":
+		switch state.PendingOp {
+		case OpDelete:
 			intent = builder.Delete(motion, count)
-		case "change":
+		case OpChange:
 			intent = builder.Change(motion, count)
-		case "yank":
+		case OpYank:
 			intent = builder.Yank(motion, count)
 		}
 
 		// 重置状态
 		state.Mode = "NORMAL"
 		state.Operator = ""
+		state.PendingOp = OpNone
 		state.Count = 0
 
 		return intent
 	}
 
 	// 检查是否是重复操作符 (例如在 d 后再按 d)
-	if key == "d" && state.Operator == "delete" {
+	if key == "d" && state.PendingOp == OpDelete {
 		// 重复删除操作符意味着对整行进行操作
 		intent := builder.Delete(SemanticTarget{Kind: TargetLine, Scope: "whole"}, 1)
 		state.Mode = "NORMAL"
 		state.Operator = ""
+		state.PendingOp = OpNone
 		return intent
-	} else if key == "c" && state.Operator == "change" {
+	} else if key == "c" && state.PendingOp == OpChange {
 		// 重复修改操作符意味着对整行进行操作
 		intent := builder.Change(SemanticTarget{Kind: TargetLine, Scope: "whole"}, 1)
 		state.Mode = "NORMAL"
 		state.Operator = ""
+		state.PendingOp = OpNone
 		return intent
-	} else if key == "y" && state.Operator == "yank" {
+	} else if key == "y" && state.PendingOp == OpYank {
 		// 重复复制操作符意味着对整行进行操作
 		intent := builder.Yank(SemanticTarget{Kind: TargetLine, Scope: "whole"}, 1)
 		state.Mode = "NORMAL"
 		state.Operator = ""
+		state.PendingOp = OpNone
 		return intent
 	}
 
@@ -229,6 +313,17 @@ func handleOperatorPendingWithNativeBuilder(state *FSMState, key string, builder
 		// 设置文本对象待处理状态
 		state.Mode = "TEXT_OBJECT_PENDING"
 		state.PendingKeys = key // 记录是 inside 还是 around
+		return Intent{Kind: IntentNone}
+	}
+
+	// Phase 2.2.2 support for complex motions in operator pending
+	if key == "g" {
+		state.Mode = "MOTION_PENDING"
+		return Intent{Kind: IntentNone}
+	}
+	if key == "f" || key == "F" || key == "t" || key == "T" {
+		state.Mode = "FIND_CHAR"
+		state.PendingKeys = key
 		return Intent{Kind: IntentNone}
 	}
 
@@ -245,8 +340,123 @@ func processKey(state *FSMState, key string) string {
 	return intent.ToActionString()
 }
 
+// handleMotionPendingWithNativeBuilder 处理 MOTION_PENDING 模式下的按键
+func handleMotionPendingWithNativeBuilder(state *FSMState, key string, builder *IntentBuilder) Intent {
+	if key == "g" {
+		// gg -> Move to start of file
+		// 如果有 count，比如 3gg -> Move to line 3
+		if state.Count > 0 {
+			// Phase 2.2: Count-based jumps
+			// Target: Line (absolute) = Value: "3"
+			return builder.Move(SemanticTarget{Kind: TargetLine, Scope: "absolute", Value: strconv.Itoa(state.Count)}, 1)
+		}
+		return builder.Move(SemanticTarget{Kind: TargetFile, Scope: "start"}, 1)
+	}
+
+	// 处理 ge, g$ 等其他 g 开头的命令
+	if key == "e" {
+		return builder.Move(SemanticTarget{Kind: TargetWord, Direction: "backward", Scope: "end"}, state.Count)
+	}
+	if key == "$" {
+		return builder.Move(SemanticTarget{Kind: TargetLine, Scope: "end"}, state.Count) // g$ often moves to end of screen line in vim, but here maybe just end?
+	}
+
+	// 如果没有匹配，返回 NORMAL 模式
+	state.Mode = "NORMAL"
+	return Intent{Kind: IntentNone}
+}
+
+// handleFindCharWithNativeBuilder 处理 FIND_CHAR 模式下的按键
+func handleFindCharWithNativeBuilder(state *FSMState, key string, builder *IntentBuilder) Intent {
+	findType := state.PendingKeys // f, F, t, T
+	state.Mode = "NORMAL"
+	state.PendingKeys = ""
+
+	// Target Value = key (the char)
+	// Target Scope = findType?
+	// The builder.Find expects SemanticTarget.
+	// We can put find type in Direction or specialized fields.
+	// SemanticTarget has Value.
+
+	// Mapping:
+	// f -> Direction: forward, Scope: inclusive?
+	// F -> Direction: backward
+	// t -> Direction: forward, Scope: before (exclusive)
+	// T -> Direction: backward, Scope: after
+
+	var direction string
+	var scope string
+
+	switch findType {
+	case "f":
+		direction = "next" // or forward
+		scope = "inclusive"
+	case "F":
+		direction = "prev" // or backward
+		scope = "inclusive"
+	case "t":
+		direction = "next"
+		scope = "exclusive"
+	case "T":
+		direction = "prev"
+		scope = "exclusive"
+	}
+
+	return builder.Find(SemanticTarget{
+		Kind:      TargetSearch, // or TargetChar? TargetSearch fits better for "find"
+		Direction: direction,
+		Scope:     scope,
+		Value:     key,
+	})
+}
+
+// handleTextObjectPendingWithNativeBuilder 处理 TEXT_OBJECT_PENDING 模式下的按键
+func handleTextObjectPendingWithNativeBuilder(state *FSMState, key string, builder *IntentBuilder) Intent {
+	modifier := state.PendingKeys // i or a
+
+	// Construct text object value, e.g. "iw"
+	textObject := modifier + key
+
+	target := SemanticTarget{
+		Kind:  TargetTextObject,
+		Value: textObject,
+		// Phase 5: Resolver will parse "iw" -> Inner Word
+	}
+
+	var intent Intent
+	count := state.Count
+	if count == 0 {
+		count = 1
+	}
+
+	// 根据 Operator 构建 Intent
+	switch state.PendingOp {
+	case OpDelete:
+		intent = builder.Delete(target, count)
+	case OpChange:
+		intent = builder.Change(target, count)
+	case OpYank:
+		intent = builder.Yank(target, count)
+	default:
+		// 如果没有 pending op (比如 visual 模式进入？但现在只从 operator 进入)
+		// Return IntentNone
+	}
+
+	// Reset State
+	state.Mode = "NORMAL"
+	state.Operator = ""
+	state.PendingOp = OpNone
+	state.Count = 0
+	state.PendingKeys = ""
+
+	return intent
+}
+
 // processKeyLegacy 是原来的 processKey 实现
 // 重命名以保留原有逻辑
+// DEPRECATED (Phase 2):
+// processKeyLegacy MUST NOT be extended.
+// Any new key handling MUST go through Native Intent Builder.
 func processKeyLegacy(state *FSMState, key string) string {
 	var res string
 	switch state.Mode {

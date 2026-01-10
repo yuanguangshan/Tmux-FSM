@@ -33,8 +33,8 @@ type Kernel struct {
 // ✅ Kernel 的唯一上下文入口（现在先很薄，未来可扩展）
 type HandleContext struct {
 	Ctx       context.Context
-	RequestID string  // Unique identifier for this user request
-	ActorID   string  // User / pane / client identifier
+	RequestID string // Unique identifier for this user request
+	ActorID   string // User / pane / client identifier
 }
 
 func NewKernel(fsmEngine *fsm.Engine, exec IntentExecutor) *Kernel {

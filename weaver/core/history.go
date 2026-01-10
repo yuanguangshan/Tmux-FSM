@@ -46,7 +46,7 @@ type InMemoryHistory struct {
 	undoStack      []*Transaction
 	redoStack      []*Transaction
 	transactionIDs map[*Transaction]TransactionID // Track transaction IDs
-	lastTxID       TransactionID                 // Track the last transaction ID
+	lastTxID       TransactionID                  // Track the last transaction ID
 	capacity       int
 	mu             sync.RWMutex
 }
@@ -167,7 +167,7 @@ func (h *InMemoryHistory) AddRedo(tx *Transaction) {
 	if len(h.redoStack) >= h.capacity {
 		oldestTx := h.redoStack[0]
 		delete(h.transactionIDs, oldestTx) // Clean up old transaction ID
-		h.redoStack = h.redoStack[1:] // Drop oldest redo? Or drop newest? Usually drop oldest.
+		h.redoStack = h.redoStack[1:]      // Drop oldest redo? Or drop newest? Usually drop oldest.
 	}
 	h.redoStack = append(h.redoStack, tx)
 }

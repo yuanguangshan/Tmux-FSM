@@ -20,6 +20,7 @@ type Cursor struct {
 type FSMState struct {
 	Mode                 string                 `json:"mode"`
 	Operator             string                 `json:"operator"`
+	PendingOp            PendingOp              `json:"-"` // Native pending op (Phase 2)
 	Count                int                    `json:"count"`
 	PendingKeys          string                 `json:"pending_keys"`
 	Register             string                 `json:"register"`
@@ -42,6 +43,9 @@ var (
 	transMgr    *TransactionManager
 	txJournal   *TxJournal // 新增：事务日志
 	socketPath  = "/tmp/tmux-fsm.sock"
+	// Feature Flags
+	StrictNativeFSM      = false // Phase 2.3: Panic on legacy fallback
+	StrictNativeResolver = false // Phase 2.0.2: Panic on legacy anchors
 )
 
 func init() {
@@ -62,6 +66,17 @@ func loadState() FSMState {
 		return FSMState{Mode: "NORMAL", Count: 0, Cursor: Cursor{Row: 0, Col: 0}}
 	}
 	json.Unmarshal([]byte(out), &state)
+
+	// Hydrate PendingOp from Operator (Phase 2 compatibility)
+	switch state.Operator {
+	case "delete":
+		state.PendingOp = OpDelete
+	case "change":
+		state.PendingOp = OpChange
+	case "yank":
+		state.PendingOp = OpYank
+	}
+
 	return state
 }
 

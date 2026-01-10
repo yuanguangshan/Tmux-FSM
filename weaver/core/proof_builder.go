@@ -49,13 +49,13 @@ func (pb *ProofBuilder) calculateFactsHash(facts []Fact) string {
 	if len(facts) == 0 {
 		return ""
 	}
-	
+
 	// Serialize facts to JSON for consistent hashing
 	factsJSON, err := json.Marshal(facts)
 	if err != nil {
 		return ""
 	}
-	
+
 	hash := sha256.Sum256(factsJSON)
 	return hex.EncodeToString(hash[:])
 }
@@ -65,13 +65,13 @@ func (pb *ProofBuilder) calculateAuditHash(auditRecord *AuditRecord) string {
 	if auditRecord == nil {
 		return ""
 	}
-	
+
 	// Serialize audit record to JSON for consistent hashing
 	auditJSON, err := json.Marshal(auditRecord)
 	if err != nil {
 		return ""
 	}
-	
+
 	hash := sha256.Sum256(auditJSON)
 	return hex.EncodeToString(hash[:])
 }

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"testing"
 	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 // testSnapshot 创建测试用的快照
@@ -20,7 +20,7 @@ func testSnapshot() Snapshot {
 // TestResolve_LegacyDeleteWord 测试解析遗留的删除单词意图
 func TestResolve_LegacyDeleteWord(t *testing.T) {
 	snap := testSnapshot()
-	
+
 	intent := Intent{
 		Kind: IntentDelete,
 		Target: SemanticTarget{
@@ -171,10 +171,10 @@ func TestResolvedIntent_NoLegacyLeak(t *testing.T) {
 			require.Equal(t, "legacy anchor leaked past resolver", r)
 		}
 	}()
-	
+
 	// 这会触发 panic，因为我们有遗留锚点
 	resolved.AssertNoLegacy()
-	
+
 	// 如果没有 panic，测试失败
 	t.Error("Expected panic from AssertNoLegacy due to legacy anchor")
 }

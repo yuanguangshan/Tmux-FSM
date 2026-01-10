@@ -160,6 +160,28 @@ func (i Intent) ToActionString() string {
 		}
 		return ""
 	case IntentFind:
+		// Native Target support
+		if i.Target.Value != "" {
+			char := i.Target.Value
+			var fType string
+			if i.Target.Direction == "next" {
+				if i.Target.Scope == "inclusive" {
+					fType = "f"
+				} else {
+					fType = "t"
+				}
+			} else {
+				if i.Target.Scope == "inclusive" {
+					fType = "F"
+				} else {
+					fType = "T"
+				}
+			}
+			if fType != "" {
+				return "find_" + fType + "_" + char
+			}
+		}
+
 		if i.Meta != nil {
 			if fType, ok := i.Meta["find_type"].(string); ok {
 				if char, ok := i.Meta["char"].(string); ok {

@@ -27,12 +27,12 @@ func (sm *SnapshotManager) PerformUndo() (Snapshot, error) {
 	if !sm.history.HasUndo() {
 		return sm.history.present, errors.New("nothing to undo")
 	}
-	
+
 	snapshot, success := sm.history.Undo()
 	if !success {
 		return sm.history.present, errors.New("failed to undo")
 	}
-	
+
 	return snapshot, nil
 }
 
@@ -41,12 +41,12 @@ func (sm *SnapshotManager) PerformRedo() (Snapshot, error) {
 	if !sm.history.HasRedo() {
 		return sm.history.present, errors.New("nothing to redo")
 	}
-	
+
 	snapshot, success := sm.history.Redo()
 	if !success {
 		return sm.history.present, errors.New("failed to redo")
 	}
-	
+
 	return snapshot, nil
 }
 
@@ -83,7 +83,7 @@ func (te *TransactionalEditor) ApplyIntent(intent Intent, currentSnapshot Snapsh
 	// 为了简化，我们只是将当前快照推送到历史记录
 	newSnapshot := te.simulateEdit(currentSnapshot, intent)
 	te.manager.PushSnapshot(newSnapshot)
-	
+
 	return newSnapshot, nil
 }
 
@@ -118,7 +118,7 @@ func (te *TransactionalEditor) simulateEdit(snapshot Snapshot, intent Intent) Sn
 				Text: newLines[0].Text + "_inserted",
 			}
 		}
-	// 其他意图类型的处理...
+		// 其他意图类型的处理...
 	}
 
 	return Snapshot{

@@ -145,7 +145,7 @@ func ApplyResolvedOperation(ctx *ExecutionContext, op ResolvedOperation) error {
 	// Validate range for delete operations
 	if op.Kind == OpDelete && op.Range != nil {
 		if op.Range.Start.Row < 0 || op.Range.Start.Row >= buf.LineCount() ||
-		   op.Range.End.Row < 0 || op.Range.End.Row >= buf.LineCount() {
+			op.Range.End.Row < 0 || op.Range.End.Row >= buf.LineCount() {
 			err := fmt.Errorf("delete range out of bounds: start row %d, end row %d, total rows %d",
 				op.Range.Start.Row, op.Range.End.Row, buf.LineCount())
 			log.Printf("Validation error: %v", err)

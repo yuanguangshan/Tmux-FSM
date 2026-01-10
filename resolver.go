@@ -15,6 +15,13 @@ type ResolveContext struct {
 type ResolvedIntent struct {
 	Intent
 	Anchors []ResolvedAnchor
+	Ranges  []ResolvedRange
+}
+
+// ResolvedRange 表示解析后的范围（跨行）
+type ResolvedRange struct {
+	Start ResolvedAnchor
+	End   ResolvedAnchor
 }
 
 // ResolvedAnchor 表示解析后的锚点
@@ -76,7 +83,78 @@ func ResolveIntent(ctx ResolveContext, intent Intent) (ResolvedIntent, error) {
 		}
 	}
 
+	if StrictNativeResolver {
+		resolved.AssertNoLegacy()
+	}
+
+	// Phase 5: Handle Text Objects
+	if intent.Target.Kind == TargetTextObject {
+		// Ensure we have a cursor anchor to start from
+		if len(resolved.Anchors) == 0 {
+			if StrictNativeResolver {
+				panic("TargetTextObject requires at least one anchor")
+			}
+			return resolved, nil
+		}
+
+		// Use the first anchor as cursor (Multi-cursor support in Phase 11)
+		cursorAnchor := resolved.Anchors[0]
+
+		// Map ResolvedAnchor (LineID) to Loc (LineIdx)
+		lineIdx, err := findLineIndexByID(ctx.Snapshot, cursorAnchor.LineID)
+		if err != nil {
+			if StrictNativeResolver {
+				panic(err)
+			}
+			return resolved, err
+		}
+
+		cursorLoc := Loc{
+			Line: lineIdx,
+			Col:  cursorAnchor.Range.Start, // Assuming Start is rune offset
+		}
+
+		// Parse Spec
+		spec := ParseTextObject(intent.Target.Value)
+
+		// Create Document wrapper
+		doc := Document{Snapshot: ctx.Snapshot}
+
+		// Resolve
+		locRange := ResolveTextObject(doc, cursorLoc, spec)
+
+		// Map back to ResolvedRange
+		startRowID := ctx.Snapshot.Lines[locRange.Start.Line].ID
+		endRowID := ctx.Snapshot.Lines[locRange.End.Line].ID
+
+		resRange := ResolvedRange{
+			Start: ResolvedAnchor{
+				PaneID: intent.PaneID,
+				LineID: startRowID,
+				Range:  TextRange{Start: locRange.Start.Col, End: locRange.Start.Col},
+				Origin: AnchorOriginNative,
+			},
+			End: ResolvedAnchor{
+				PaneID: intent.PaneID,
+				LineID: endRowID,
+				Range:  TextRange{Start: locRange.End.Col, End: locRange.End.Col},
+				Origin: AnchorOriginNative,
+			},
+		}
+
+		resolved.Ranges = append(resolved.Ranges, resRange)
+	}
+
 	return resolved, nil
+}
+
+func findLineIndexByID(snap Snapshot, id string) (int, error) {
+	for i, line := range snap.Lines {
+		if line.ID == id {
+			return i, nil
+		}
+	}
+	return -1, errors.New(ErrLineNotFound)
 }
 
 // isLegacyAnchor 检查锚点是否为遗留锚点

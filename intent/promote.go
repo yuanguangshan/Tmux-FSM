@@ -74,7 +74,7 @@ func populateLegacyMotionMeta(meta map[string]interface{}, motion *Motion) {
 		case DirectionLeft:
 			motionStr = "goto_line_start" // 对应 $ 或 0
 		case DirectionRight:
-			motionStr = "goto_line_end"   // 对应 $
+			motionStr = "goto_line_end" // 对应 $
 		}
 	case MotionFind:
 		// Find 类型的运动

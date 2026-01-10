@@ -183,7 +183,7 @@ func actionStringToIntentWithLineInfo(action string, count int, paneID string, l
 	// These anchors will be replaced by Resolver with snapshot-based anchors
 	anchor := Anchor{
 		PaneID: paneID,
-		LineID: finalLineID,  // Will be replaced by Resolver with real snapshot LineID
+		LineID: finalLineID, // Will be replaced by Resolver with real snapshot LineID
 		Start:  col,
 		End:    col,
 		Kind:   int(TargetPosition), // Basic position anchor
@@ -226,7 +226,7 @@ func createIntentWithAnchor(base Intent, paneID string, lineID string, row int, 
 	// These will be replaced by Resolver with snapshot-based anchors
 	anchor := Anchor{
 		PaneID: paneID,
-		LineID: finalLineID,  // Will be replaced by Resolver with real snapshot LineID
+		LineID: finalLineID, // Will be replaced by Resolver with real snapshot LineID
 		Start:  col,
 		End:    col,
 		Kind:   int(TargetPosition), // Basic position anchor
@@ -235,15 +235,15 @@ func createIntentWithAnchor(base Intent, paneID string, lineID string, row int, 
 	// Add minimal metadata for projection satisfaction
 	if finalLineID != "" && base.Meta == nil {
 		base.Meta = make(map[string]interface{})
-		base.Meta["line_id"] = finalLineID  // Legacy-generated LineID
+		base.Meta["line_id"] = finalLineID // Legacy-generated LineID
 		base.Meta["row"] = row
 		base.Meta["col"] = col
-		base.Meta["epoch"] = time.Now().UnixNano()  // Add temporal context
+		base.Meta["epoch"] = time.Now().UnixNano() // Add temporal context
 	} else if finalLineID != "" && base.Meta != nil {
-		base.Meta["line_id"] = finalLineID  // Legacy-generated LineID
+		base.Meta["line_id"] = finalLineID // Legacy-generated LineID
 		base.Meta["row"] = row
 		base.Meta["col"] = col
-		base.Meta["epoch"] = time.Now().UnixNano()  // Add temporal context
+		base.Meta["epoch"] = time.Now().UnixNano() // Add temporal context
 	}
 
 	base.Anchors = []Anchor{anchor}

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"testing"
 	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 // TestNativeIntentBuilderCompatibility 测试 Native Intent Builder 与 Legacy Intent 的兼容性
