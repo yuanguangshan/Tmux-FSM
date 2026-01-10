@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 	"tmux-fsm/fsm"
 	"tmux-fsm/intent"
@@ -81,6 +82,16 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 			switch decision.Kind {
 			case DecisionIntent:
 				log.Printf("Processing intent for key '%s': RequestID=%s, ActorID=%s", key, requestID, actorID)
+
+				// Critical Fix: Inject PaneID from Context if missing in Intent
+				// Grammar generates pure intents without context. We must bind them here.
+				if decision.Intent.PaneID == "" {
+					parts := strings.Split(actorID, "|")
+					if len(parts) > 0 {
+						decision.Intent.PaneID = parts[0]
+					}
+				}
+
 				k.ProcessIntentWithContext(hctx, decision.Intent)
 				return
 

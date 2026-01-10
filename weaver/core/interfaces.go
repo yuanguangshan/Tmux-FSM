@@ -62,7 +62,9 @@ const (
 	IntentUndo
 	IntentRedo
 	IntentSearch
-	IntentVisual
+	IntentEnterVisual
+	IntentExitVisual
+	IntentVisual // Deprecated? Or generic? Keeping for safety.
 	IntentToggleCase
 	IntentReplace
 	IntentRepeat

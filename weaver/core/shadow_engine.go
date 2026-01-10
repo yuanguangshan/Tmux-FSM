@@ -170,7 +170,14 @@ func (e *ShadowEngine) ApplyIntent(hctx HandleContext, intent Intent, snapshot S
 	// [Phase 5.4] 包含 Reconciliation 检查
 	// [Phase 6.3] 包含 World Drift 检查 (SnapshotHash)
 	log.Printf("Resolving facts for intent in pane %s", intent.GetPaneID())
-	resolvedFacts, err := e.resolver.ResolveFacts(facts, intent.GetSnapshotHash())
+	// Contextual Logic: If intent doesn't specify an expected state (fresh intent),
+	// we bind it to the snapshot we just took (Current Reality).
+	// This ensures consistency between Planning (using snapshot) and Resolution.
+	expectedHash := intent.GetSnapshotHash()
+	if expectedHash == "" {
+		expectedHash = string(snapshot.Hash)
+	}
+	resolvedFacts, err := e.resolver.ResolveFacts(facts, expectedHash)
 	if err != nil {
 		log.Printf("Failed to resolve facts for intent in pane %s: %v", intent.GetPaneID(), err)
 

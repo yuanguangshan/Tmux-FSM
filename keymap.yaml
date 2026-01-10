@@ -1,18 +1,44 @@
 states:
   NAV:
-    hint: "h/j/k/l move · 0/$ line · g goto · : cmd · q quit"
+    hint: "Vm mode: h/j/k/l · d/y/c ops · v/V visual"
     keys:
-      h: { action: "move_left" }
-      j: { action: "move_down" }
-      k: { action: "move_up" }
-      l: { action: "move_right" }
-      "0": { action: "goto_line_start" }
-      "$": { action: "goto_line_end" }
-      g: { layer: "GOTO", timeout_ms: 800 }
+      # Navigation (Delegated to Grammar)
+      h: { action: "" }
+      j: { action: "" }
+      k: { action: "" }
+      l: { action: "" }
+      "0": { action: "" }
+      "$": { action: "" }
+      "^": { action: "" }
+      w: { action: "" }
+      b: { action: "" }
+      e: { action: "" }
+      G: { action: "" }
+      
+      # Operators (Delegated to Grammar)
+      d: { action: "" }
+      y: { action: "" }
+      c: { action: "" }
+      
+      # Visual Mode
+      v: { action: "" }
+      V: { action: "" }
+      
+      # Prefix Keys
+      g: { action: "" } # Handles gg, ge, etc via grammar
+      f: { action: "" }
+      F: { action: "" }
+      t: { action: "" }
+      T: { action: "" }
+      
+      # Misc
+      u: { action: "" } # Delegated to Grammar
+      "C-r": { action: "" } # Delegated to Grammar
+      Escape: { action: "exit" }
       q: { action: "exit" }
       ":": { action: "prompt" }
 
-  GOTO:
+  GOTO: # Legacy GOTO layer might be redundant if 'g' is handled by Grammar, but keeping for safety if 'g' timeout logic exists
     hint: "h far-left · l far-right · g top · G bottom"
     keys:
       h: { action: "far_left" }

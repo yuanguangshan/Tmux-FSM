@@ -215,9 +215,14 @@ func (e *Engine) CanHandle(key string) bool {
 func (e *Engine) Dispatch(key string) bool {
 	// 检查是否是数字键，即使当前层没有定义
 	if isDigit(key) {
-		e.count = e.count*10 + int(key[0]-'0')
-		e.emitInternal(RawToken{Kind: TokenDigit, Value: key})
-		return true
+		// Fix: Treat '0' as a motion/key if current count is 0
+		if key == "0" && e.count == 0 {
+			// Fall through to CanHandle check
+		} else {
+			e.count = e.count*10 + int(key[0]-'0')
+			e.emitInternal(RawToken{Kind: TokenDigit, Value: key})
+			return true
+		}
 	}
 
 	// 检查是否是重复键
