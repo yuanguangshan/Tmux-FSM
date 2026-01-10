@@ -1,0 +1,5 @@
+rhm
+rhm-server
+*.exe
+*.test
+*.out
