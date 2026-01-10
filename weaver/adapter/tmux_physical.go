@@ -89,9 +89,9 @@ func PerformPhysicalMove(motion string, count int, targetPane string) {
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-N", cStr, "Left").Run()
 	case "right":
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-N", cStr, "Right").Run()
-	case "start_of_line": // 0
+	case "start_of_line", "goto_line_start": // 0
 		exec.Command("tmux", "send-keys", "-t", targetPane, "C-a").Run()
-	case "end_of_line": // $
+	case "end_of_line", "goto_line_end": // $
 		exec.Command("tmux", "send-keys", "-t", targetPane, "C-e").Run()
 	case "word_forward": // w
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-N", cStr, "M-f").Run()
