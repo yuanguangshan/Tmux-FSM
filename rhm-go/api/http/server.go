@@ -1,24 +1,22 @@
 package httpapi
 
 import (
-	"encoding/json"
+	"fmt"
 	"net/http"
-	"rhm-go/core/solver"
-	"rhm-go/internal/formatter"
-	"rhm-go/internal/loader"
 )
 
 func Start(addr string) {
-	http.HandleFunc("/solve", func(w http.ResponseWriter, r *http.Request) {
-		dag, tipA, tipB := loader.LoadDemoScenario() // Mocked loader
-		plan := solver.Solve(dag, tipA, tipB)
+	// Register handlers from handlers.go
+	http.HandleFunc("/solve", solveHandler)
 
-		if r.URL.Query().Get("format") == "markdown" {
-			w.Header().Set("Content-Type", "text/markdown")
-			w.Write([]byte(formatter.ToMarkdown(plan.Narrative)))
-			return
-		}
-		json.NewEncoder(w).Encode(plan)
+	// Add Health check
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		w.Write([]byte("OK"))
 	})
-	http.ListenAndServe(addr, nil)
+
+	fmt.Printf("🚀 RHM Server listening on %s\n", addr)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		panic(err)
+	}
 }
