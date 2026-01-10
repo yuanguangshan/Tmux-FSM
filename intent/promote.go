@@ -93,6 +93,15 @@ func populateLegacyMotionMeta(meta map[string]interface{}, motion *Motion) {
 				}
 			}
 		}
+	case MotionRange:
+		if motion.Range != nil {
+			switch motion.Range.Kind {
+			case RangeLineStart:
+				motionStr = "goto_line_start"
+			case RangeLineEnd:
+				motionStr = "goto_line_end"
+			}
+		}
 	}
 
 	// 如果生成了运动字符串，将其添加到 Meta 中
