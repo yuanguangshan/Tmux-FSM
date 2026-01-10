@@ -1,0 +1,181 @@
+这次日志里**关键信息其实已经非常明确了**，而且它和你前面贴的那段 `actionStringToIntent / parseMotionToTarget` 代码是**直接相关的**。
+
+---
+
+## ✅ 关键失败原因（结论先给）
+
+> **projection conflict check failed: missing LineID**
+
+不是 tmux、不是 zsh、也不是安装脚本的问题。  
+**是 Intent 在进入 Projection 阶段时，缺少一个必需的结构化上下文字段：`LineID`。**
+
+---
+
+## 🔍 失败发生的准确阶段
+
+按日志顺序：
+
+1. ✅ Intent 被成功解析  
+2. ✅ 事务创建成功（`tx-1768019562245291000`）
+3. ✅ Facts resolved（**1 resolved fact**）
+4. ❌ Projection 阶段失败  
+   ```
+   Failed to project facts for intent in pane:
+   projection conflict check failed: missing LineID
+   ```
+
+这说明：
+
+- **Intent 本身合法**
+- **FSM / Weaver 正常**
+- **但 Projection 需要 Line-level identity，而 Intent 没提供**
+
+---
+
+## 🧠 为什么会缺 LineID？
+
+### 看你的 `parseMotionToTarget`
+
+你大量返回了这种 Target：
+
+```go
+SemanticTarget{Kind: TargetLine, Scope: "start"}
+SemanticTarget{Kind: TargetLine, Scope: "end"}
+SemanticTarget{Kind: TargetLine, Scope: "whole"}
+```
+
+**但注意：**
+
+> `TargetLine` ≠ “当前行的具体 ID”
+
+FSM Projection 不是 Vim，它不能靠“当前光标行”隐式推断。
+
+---
+
+## ✅ Projection 需要什么？
+
+在 tmux-fsm / Weaver 模型里：
+
+- **Projection 是确定性、可审计的**
+- 所以它需要 **显式 Line Identity**
+
+通常是其中之一：
+
+```go
+LineID
+Row
+AnchorFact{LineID: ...}
+CursorFact{LineID: ...}
+```
+
+但你当前的 Intent **只描述了语义，没有绑定具体行**。
+
+---
+
+## ❌ 当前 Intent 的问题示例
+
+比如这个 Intent：
+
+```go
+Intent{
+  Kind:   IntentMove,
+  Target: SemanticTarget{Kind: TargetLine, Scope: "start"},
+}
+```
+
+在 Projection 看来就是：
+
+> “移动到某一行的开始 —— **但哪一行？**”
+
+→ **冲突检查直接失败**
+
+---
+
+## ✅ 正确的修复方向（重要）
+
+### ✅ 方案 1（推荐）：在 Intent 阶段绑定 LineID
+
+在 `actionStringToIntent` 中：
+
+```go
+base := Intent{
+    PaneID: paneID,
+    Meta: map[string]interface{}{
+        "line_id": currentLineID,
+    },
+}
+```
+
+或者更明确：
+
+```go
+Intent{
+  Kind: IntentMove,
+  Target: SemanticTarget{Kind: TargetLine, Scope: "start"},
+  Meta: map[string]interface{}{
+      "LineID": lineID,
+  },
+}
+```
+
+> ✅ Projection 会直接通过  
+> ✅ Undo / Audit 也会完整
+
+---
+
+### ✅ 方案 2：Cursor → Line Fact 注入（更 Weaver 风格）
+
+如果你**不想在 legacy bridge 里污染 Intent**，可以在 Projection 前插入：
+
+```go
+CursorFact{
+    PaneID: paneID,
+    LineID: resolvedLineID,
+}
+```
+
+Projection 会从 CursorFact 推导 LineID。
+
+---
+
+### ❌ 不要做的事
+
+- ❌ 不要在 Projection 阶段“猜当前行”
+- ❌ 不要 fallback 到 `TargetNone`
+- ❌ 不要 silent ignore（会破坏 Undo / Audit）
+
+---
+
+## 🧪 为什么你看到 “Undo failed”？
+
+因为：
+
+> **Undo = replay inverse facts**
+
+而 inverse facts **也需要 LineID**。
+
+你这里日志已经说明：
+
+```
+Generated 0 inverse facts for intent
+```
+
+所以：
+
+- ✅ Intent 执行失败
+- ✅ Undo 无法生成
+- ✅ Audit 提示你按 `?`
+
+---
+
+## ✅ 一句话总结
+
+> **你的 legacy action → Intent 映射是“语义正确的”，但不是“投影完备的”。**
+
+只要你在 **Intent 或 Facts 阶段补上 LineID（或 Cursor → Line 的可推导事实）**：
+
+✅ projection 冲突立刻消失  
+✅ Undo 恢复  
+✅ Audit 合法  
+
+如果你愿意，我可以直接帮你**设计一个最小侵入的 LineID 注入方案**，不破坏你“LEGACY — DO NOT EXTEND”的原则。
