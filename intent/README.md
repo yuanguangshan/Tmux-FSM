@@ -1,81 +1,418 @@
-# intent 模块
 
-## 模块职责概述
+# Intent & Builder Modules — Implementation Documentation
 
-`intent/` 是 **Tmux-FSM 的语义契约层**，负责描述"用户想做什么"这一层的抽象表示。Intent 关注的问题是："用户的真实目的是什么？"而不是按键、命令或API调用。Intent 是系统中最稳定、最长期存在的语义层。
+> 本文档描述的是 **Intent 构建与语义表示层**，  
+> 它位于 **FSM RawToken 之后、执行层之前**，  
+> 负责把“动作语义”稳定地表达为 **可迁移、可比较的 Intent**。
 
-主要职责包括：
-- 定义用户"想做什么"的语义契约
-- 提供意图的序列化和反序列化
-- 支持复合意图的构建
-- 作为 Kernel 决策的唯一输入语义
+---
 
-## 核心设计思想
+# 一、总体结构关系
 
-- **语义契约**: Intent 是契约，不是实现（架构戒律 5）
-- **意图抽象**: 将具体操作抽象为高层意图
-- **类型安全**: 使用强类型定义各种意图
-- **可组合性**: 支持简单意图组合成复杂操作
-- **可序列化**: 意图可以被序列化传输和存储
-- **与后端无关**: Intent 与后端实现无关，可记录、可重放
+```
+FSM RawToken / Action
+        ↓
+    BuildContext
+        ↓
+CompositeBuilder
+        ↓
+     Intent
+        ↓
+  (Promote / Migrate)
+        ↓
+ Execution Layer
+```
 
-## 文件结构说明
+---
 
-### `intent.go`
-- 意图的基础定义和核心类型
-- 主要结构体：
-  - `Intent`: 根意图类型
-  - `Motion`: 运动意图
-  - `Action`: 动作意图
-  - `TextObject`: 文本对象意图
-  - `FindMotion`: 查找运动意图
-- 主要函数：
-  - 各种意图类型的构造函数
-  - 意图的验证和规范化函数
-- 定义了意图的基本结构和语义
+# 二、Builder 子系统
 
-### `grammar_intent.go`
-- Grammar 专用意图类型
-- 主要结构体：
-  - `GrammarIntent`: 语法意图，只包含 Grammar 可以设置的字段
-- Grammar 不允许直接构造 Intent，只能构造 GrammarIntent
+> **Builder 是唯一合法的新 Intent 构造路径**
 
-### `promote.go`
-- GrammarIntent → Intent 的提升函数
-- 主要函数：
-  - `Promote(g *GrammarIntent) *Intent`: 将语法意图提升为标准意图
-- 这是 GrammarIntent → Intent 的唯一合法通道
-- 确保 Grammar 与 Intent 之间的类型安全转换
+---
 
-### `intent_bridge.go`
-- 意图与底层执行系统之间的桥接层
-- 主要函数：
-  - 意图到具体操作的转换函数
-  - 意图解析和验证函数
-  - 意图执行结果的反馈处理
-- 负责将高层意图转换为可执行的操作
+## `builder/doc.go` —— 权威声明
 
-## 意图类型详解
+代码中的规则是**强约束**：
 
-### Motion（运动意图）
-- `MotionRange`: 范围运动
-- `MotionWord`: 单词运动  
-- `MotionLine`: 行运动
-- `MotionChar`: 字符运动
-- `MotionGoto`: 跳转运动
-- `MotionFind`: 查找运动
+- ✅ Builder 是 **唯一** 原生 Intent 构建方式
+- ❌ 不得引入 legacy 构造逻辑
+- ✅ Builder 只做 **语义判断**
+- ✅ Priority 决定匹配顺序
 
-### Action（动作意图）
-- 编辑动作（删除、复制、粘贴、改变等）
-- 导航动作
-- 模式切换动作
+---
 
-### TextObject（文本对象）
-- `Word`: 单词
-- `Paren`: 括号
-- `QuoteDouble`: 双引号
-- 支持 `Inner` 和 `Outer` 两种范围
+## `builder/builder.go`
 
-## 在整体架构中的角色
+### BuildContext（输入）
 
-Intent 模块是整个系统的语义层，它将用户的原始输入（如键盘按键）转换为具有明确语义的意图。这些意图随后被传递给 Engine 和 Kernel 进行处理。Intent 的抽象使得系统可以支持不同的输入方式和编辑模式，同时保持核心逻辑的一致性。
+```go
+type BuildContext struct {
+    Action       string
+    Command      string
+    Count        int
+    PaneID       string
+    SnapshotHash string
+    Meta         map[string]interface{}
+}
+```
+
+**事实说明：**
+
+| 字段 | 当前用途 |
+|----|----|
+| Action | 核心匹配字段（字符串） |
+| Count | Vim 风格计数 |
+| PaneID | 路由信息 |
+| Meta | 传递 register / operator 等 |
+| Command | 预留（未使用） |
+| SnapshotHash | 预留（未使用） |
+
+---
+
+### Builder 接口
+
+```go
+type Builder interface {
+    Priority() int
+    Build(ctx BuildContext) (*intent.Intent, bool)
+}
+```
+
+- `Build` **必须是纯函数**
+- 返回 `(intent, true)` 即表示匹配成功
+- 不允许副作用
+
+---
+
+## `builder/composite_builder.go`
+
+### CompositeBuilder
+
+```go
+type CompositeBuilder struct {
+    builders []Builder
+}
+```
+
+默认注册顺序（按优先级排序后）：
+
+| Builder | Priority |
+|----|----|
+| TextObjectBuilder | 15 |
+| MoveBuilder | 10 |
+| MacroBuilder | 8 |
+| OperatorBuilder | 5 |
+
+---
+
+### Build 行为
+
+```go
+func (cb *CompositeBuilder) Build(ctx BuildContext)
+```
+
+- **按优先级顺序**
+- 第一个成功即返回
+- 不做回溯、不合并
+
+---
+
+## `builder/move_builder.go`
+
+### MoveBuilder（立即 Motion）
+
+- **最高即时执行优先级**
+- 不依赖 operator
+
+构造的 Intent 特点：
+
+```go
+Kind   = IntentMove
+Target = SemanticTarget{Kind: TargetChar / TargetLine}
+Count  = ctx.Count
+```
+
+方向通过 `Target.Direction` 表达。
+
+---
+
+## `builder/operator_builder.go`
+
+### OperatorBuilder（等待 motion）
+
+- 优先级最低
+- 仅声明“我要做什么操作”
+
+```go
+Kind   = IntentOperator
+Target = TargetChar (占位)
+Meta["operator"] = OpDelete / OpYank / OpChange
+```
+
+⚠️ **重要事实**
+
+> Operator 仍然编码在 `Meta` 中  
+> 这是明确标注的迁移态实现
+
+---
+
+## `builder/text_object.go`
+
+### TextObjectBuilder（最高优先级）
+
+- 明确语义范围
+- 直接生成 **完整 operator intent**
+
+```go
+Target.Kind  = TargetTextObject
+Target.Value = "inner_paren" / "around_word" 等
+Meta["operator"] = OpDelete / OpChange / OpYank
+```
+
+📌 **这是当前系统中语义最完整的一类 Intent**
+
+---
+
+## `builder/macro_builder.go`
+
+### MacroBuilder
+
+生成：
+
+```go
+Kind = IntentMacro
+Target.Scope = start | stop | play
+Meta["operation"]
+Meta["register"]
+```
+
+- register 缺省为 `"a"`
+- 不涉及 motion / operator
+
+---
+
+## `builder/intent_diff.go`
+
+### IntentDiff（迁移对比工具）
+
+```go
+type IntentDiff struct {
+    Field
+    Legacy
+    Native
+}
+```
+
+用于：
+
+- 对比 legacy intent vs builder intent
+- **只比较可观测语义字段**
+- 不比较 Meta 深层结构
+
+---
+
+## `builder/semantic_equal.go`
+
+### SemanticEqual
+
+支持两种模式：
+
+| 模式 | 行为 |
+|----|----|
+| CompareMigration | 忽略 PaneID |
+| CompareStrict | PaneID 也必须一致 |
+
+比较字段：
+
+- Kind
+- Target.*
+- Count
+
+---
+
+# 三、Intent 核心模型
+
+---
+
+## `intent/grammar_intent.go`
+
+### GrammarIntent（受限 Intent）
+
+```go
+type GrammarIntent struct {
+    Kind
+    Count
+    Motion
+    Op
+}
+```
+
+规则：
+
+- Grammar **只能构造这个**
+- Grammar **不能触碰 Intent**
+
+---
+
+## `intent/promote.go`
+
+### Promote（唯一合法提升路径）
+
+```go
+func Promote(g *GrammarIntent) *Intent
+```
+
+行为：
+
+1. 初始化空 Meta
+2. 若存在 Motion：
+   - 同时保留强类型 Motion
+   - 生成 legacy Meta["motion"]
+3. 设置：
+   - Kind
+   - Count
+   - Operator（强类型）
+4. AllowPartial = true（仅 IntentMove）
+
+📌 **Promote 是迁移桥的“闸门”**
+
+---
+
+### populateLegacyMotionMeta（桥接层）
+
+- 将强类型 Motion 映射为旧字符串 motion
+- 只覆盖当前已支持的 motion
+- 未生成字符串 → Meta 不写入
+
+---
+
+## `intent/intent.go`
+
+### Intent 结构（真实执行模型）
+
+```go
+type Intent struct {
+    Kind
+    Target        // ⚠️ deprecated
+    Count
+    Meta          // ⚠️ deprecated
+    PaneID
+    SnapshotHash
+    AllowPartial
+    Anchors
+    UseRange
+    Motion        // ✅ 强类型
+    Operator      // ✅ 强类型
+}
+```
+
+**事实状态**
+
+| 字段 | 状态 |
+|----|----|
+| Target | 迁移期 |
+| Meta | 迁移期 |
+| Motion | ✅ 新主通道 |
+| Operator | ✅ 新主通道 |
+| Range / Anchors | 未被使用 |
+
+---
+
+## IntentKind / TargetKind
+
+- 直接 re-export `weaver/core`
+- Intent 层 **不定义语义，只承载**
+
+---
+
+## Getter 方法
+
+- 全部是薄封装
+- 没有副作用
+- 主要用于接口适配
+
+---
+
+# 四、Motion / Range / TextObject
+
+---
+
+## `intent/motion.go`
+
+### Motion
+
+```go
+type Motion struct {
+    Kind
+    Count
+    Direction
+    Find
+    Range
+}
+```
+
+- 强类型 motion 表达
+- `Find` / `Range` 互斥
+- Count 可独立于 Intent.Count
+
+---
+
+## `intent/range.go`
+
+### RangeMotion
+
+当前仅支持：
+
+- 行首 (`0`)
+- 行尾 (`$`)
+- 文本对象（预留）
+
+---
+
+## `intent/text_object.go`
+
+### TextObject
+
+```go
+type TextObject struct {
+    Scope  Inner | Around
+    Object Word | Paren | Quote...
+}
+```
+
+⚠️ 当前 **Builder 未使用此强类型结构**  
+TextObjectBuilder 仍通过字符串 Value 表达
+
+---
+
+# 五、当前系统的真实状态总结
+
+✅ **已经成立的事实**
+
+- Builder 是 Intent 构建唯一入口
+- Intent 已支持强类型 Motion / Operator
+- Promote 是 Grammar → Intent 的硬边界
+- 迁移态被清晰标注（Meta / Target）
+
+❌ **尚未完成**
+
+- TextObject 强类型化
+- Operator 完全脱离 Meta
+- Range-based 执行
+- 多 Anchor / 多光标
+
+---
+
+# 六、一句话定性
+
+> **这是一个处于“语义冻结 + 表达升级”阶段的 Intent 系统：**
+>
+> - Builder 负责“我想干什么”
+> - Grammar 负责“我看懂了什么”
+> - Intent 负责“我能被执行什么”
+>
+> 所有迁移路径都被显式标注，没有隐式魔法。
+
+---
+
