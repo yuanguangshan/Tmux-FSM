@@ -46,8 +46,11 @@ func (b *ShellFactBuilder) Build(intent core.Intent, snapshot core.Snapshot) ([]
 			anchor.Kind = core.AnchorWord
 		case 3: // Line
 			anchor.Kind = core.AnchorLine
-		case 5: // TextObject
-			anchor.Kind = core.AnchorWord // Fallback or sophisticated resolution
+		case 6: // TextObject
+			anchor.Kind = core.AnchorTextObject
+			// We need to attach the text object spec to the anchor.
+			// Anchor has 'Ref'. usage: Ref = "iw"
+			anchor.Ref = target.Value
 		}
 
 		anchors = []core.Anchor{anchor}
@@ -66,9 +69,23 @@ func (b *ShellFactBuilder) Build(intent core.Intent, snapshot core.Snapshot) ([]
 				Meta:    meta,
 			})
 
-		// Note: IntentDelete and IntentChange intentionally omitted for Shell.
-		// We rely on high-fidelity legacy capture and reverse-bridge injection
-		// because semantic word-boundary resolution in the shell is imprecise.
+		case core.IntentDelete:
+			// Phase 5.5: Support Text Object Delete in shell builder
+			// If target is Text Object, we must generate a FactDelete with AnchorTextObject
+			if target.Kind == 6 { // TextObject (TargetTextObject=6)
+				// Extract "iw", "ap" etc from value
+				// The semantic target value for TextObject is the spec string (e.g. "iw")
+				meta["text_object"] = target.Value
+
+				facts = append(facts, core.Fact{
+					Kind:   core.FactDelete,
+					Anchor: anchor, // This anchor needs to be Kind=AnchorTextObject
+					Meta:   meta,
+				})
+			} else {
+				// Fallback or other delete types?
+				// For now, only enabling TextObject delete in this path as requested.
+			}
 
 		case core.IntentMove:
 			// Move is FactMove.

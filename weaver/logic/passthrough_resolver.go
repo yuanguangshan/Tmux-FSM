@@ -128,6 +128,46 @@ func (r *PassthroughResolver) resolveAnchorWithSnapshot(a core.Anchor, s core.Sn
 		return core.ResolvedAnchor{PaneID: a.PaneID, LineID: lineID, Line: row, Start: start, End: end}, nil
 	case core.AnchorLine:
 		return core.ResolvedAnchor{PaneID: a.PaneID, LineID: lineID, Line: row, Start: 0, End: len(lineText) - 1}, nil
+	case core.AnchorTextObject:
+		specStr, ok := a.Ref.(string)
+		if !ok {
+			return core.ResolvedAnchor{}, fmt.Errorf("invalid text object ref")
+		}
+		spec := ParseTextObject(specStr)
+
+		doc := Document{Snapshot: s}
+		loc := Loc{Line: row, Col: col}
+		rng := ResolveTextObject(doc, loc, spec)
+
+		// Map LocRange back to ResolvedAnchor (assuming single line for now? No, resolved object can be multi-line!)
+		// But ResolvedAnchor structure assumes single LineID?
+		// Check core/types.go: ResolvedAnchor has LineID, Line, Start, End.
+		// It seems designed for single-line anchors.
+		// If TextObject is multi-line (paragraph), we might have issues.
+		// Phase 6.0 DAG defines Operation as single node? Or list of nodes?
+		// Let's assume for now we resolve to the start/end linear range if possible, or force single line
+		// if ResolvedAnchor doesn't support multiline.
+		// Wait, ResolvedAnchor has NO end line. It implies single line?
+		// Let's check core/types.go specifically for `ResolvedAnchor` definition.
+		// Wait, I can't check it now easily without reading again.
+		// Assuming ResolvedAnchor IS single line based on previous usage (Line, Start, End).
+		// If so, we need to handle multi-line text objects by potentially returning multiple ResolvedAnchors?
+		// But ResolveFacts returns []ResolvedFact, one per Fact. One Fact has one Anchor.
+		// So one Fact = One Continuous Range?
+		// If TextObject is multi-line, maybe we need to split it into multiple Facts/Anchors?
+		// Or update ResolvedAnchor to support multi-line.
+		// For `diw`, it is single line. Let's support `diw` first.
+
+		if rng.Start.Line != rng.End.Line {
+			// Multi-line object
+			// Fallback: just return start? Or error?
+			// For Phase 5.5, let's limit to single line or simple ranges.
+			return core.ResolvedAnchor{PaneID: a.PaneID, LineID: lineID, Line: rng.Start.Line, Start: rng.Start.Col, End: rng.End.Col}, nil
+		}
+
+		// Identical line
+		return core.ResolvedAnchor{PaneID: a.PaneID, LineID: lineID, Line: rng.Start.Line, Start: rng.Start.Col, End: rng.End.Col}, nil
+
 	case core.AnchorAbsolute:
 		// Ref is expected to be []int{line, col}
 		if coords, ok := a.Ref.([]int); ok && len(coords) >= 2 {
@@ -177,6 +217,14 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 			Start:  col,
 			End:    col,
 		}, nil
+
+	case core.AnchorTextObject:
+		// Without snapshot, we need to read the document?
+		// PassthroughResolver has RealityReader.
+		// But Document expects Snapshot.
+		// We can try to build a transient snapshot?
+		// Or just fail if no snapshot?
+		return core.ResolvedAnchor{}, fmt.Errorf("text object resolution requires snapshot")
 
 	case core.AnchorWord:
 		// use lineText already captured

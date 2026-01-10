@@ -45,7 +45,12 @@ func (p *TmuxProjection) Apply(resolved []core.ResolvedAnchor, facts []core.Reso
 
 		switch fact.Kind {
 		case core.FactDelete:
-			PerformPhysicalDelete(motion, targetPane)
+			// Phase 5.5: Support Text Object execution
+			if to, ok := fact.Meta["text_object"].(string); ok {
+				PerformPhysicalDelete(to, targetPane)
+			} else {
+				PerformPhysicalDelete(motion, targetPane)
+			}
 
 		case core.FactInsert:
 			// Insert 有两种情况：真正的插入文本，或者进入插入模式动作

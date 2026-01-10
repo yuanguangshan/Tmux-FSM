@@ -14,6 +14,7 @@ const (
 	AnchorLine
 	AnchorAbsolute
 	AnchorLegacyRange
+	AnchorTextObject
 )
 
 // SafetyLevel 安全级别

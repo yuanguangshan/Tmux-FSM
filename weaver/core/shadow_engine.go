@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"time"
+	"tmux-fsm/editor"
 )
 
 // ShadowEngine 核心执行引擎
@@ -18,6 +19,7 @@ type ShadowEngine struct {
 	projection   Projection
 	reality      RealityReader
 	proofBuilder *ProofBuilder
+	dag          *editor.OperationDAG
 }
 
 func NewShadowEngine(planner Planner, resolver AnchorResolver, projection Projection, reality RealityReader) *ShadowEngine {
@@ -28,6 +30,7 @@ func NewShadowEngine(planner Planner, resolver AnchorResolver, projection Projec
 		projection:   projection,
 		reality:      reality,
 		proofBuilder: NewProofBuilder(),
+		dag:          editor.NewOperationDAG(),
 	}
 }
 
@@ -443,7 +446,53 @@ func (e *ShadowEngine) ApplyIntent(hctx HandleContext, intent Intent, snapshot S
 		log.Printf("Bound ProofHash to transaction %s: %s", txID, tx.ProofHash)
 	}
 
-	log.Printf("Successfully applied intent for pane %s, transaction %s", intent.GetPaneID(), txID)
+	// Phase 6.0: Populate DAG
+	if e.dag != nil && len(resolvedFacts) > 0 {
+		// Use the first fact as the primary operation? or Create a node for each?
+		// Usually atomic intent -> atomic DAG node.
+		// If multiple facts (e.g. multiple cursors), we might need composite node or multiple nodes.
+		// For now, let's assume 1:1 or 1:N mapping where intent is the grouper.
+		// But DAGNode stores 'ResolvedOperation'.
+		// If we store the *Intent* as the semantic parent, we might want one Node per Intent.
+		// However, editor.ResolvedOperation is fine-grained.
+
+		parentIDs := e.dag.Tips // Use current tips as parents
+
+		for _, rf := range resolvedFacts {
+			op := convertFactToOp(rf)
+			_, err := e.dag.AddNode(op, parentIDs)
+			if err != nil {
+				log.Printf("Failed to add node to DAG: %v", err)
+			}
+			// Sequence them? If we add all with same parents, they are concurrent.
+			// Facts in a transaction are atomic/simultaneous.
+			// So using same 'parentIDs' (previous tips) is correct for "parallel" application on state?
+			// Or should they be sequenced?
+			// If facts are ordered (e.g. sequential edits), we should chain them.
+			// Current Planner usually produces independent facts or sequenced?
+			// Assumption: Sequenced.
+			// Let's update parentIDs for next fact to chain them.
+			// But Transaction is Atomic.
+			// Let's chain them for safety.
+			// Actually, reusing same parents means they are parallel forks.
+			// Ideally, we want a single DAG Node representing the Transaction?
+			// But DAGNode holds ResolvedOperation (singular).
+			// Let's chain them.
+			// Note: We need to retrieve the new node's ID to use as parent for next.
+			// But AddNode returns *DAGNode.
+			// Since we just added it, it becomes a Tip.
+			// So for the next iteration, we should use the *new* tips?
+			// e.dag.Tips will be updated by AddNode.
+			// So if we just pass e.dag.Tips, are we implicitly chaining?
+			// e.dag.Tips will contain the *newly added node*.
+			// So yes, chaining happens naturally if we use e.dag.Tips.
+			// But for the *first* fact, we use pre-tx tips.
+			// For *subsequent* facts in same tx, we use the tip created by previous fact.
+			parentIDs = e.dag.Tips
+		}
+	}
+
+	log.Printf("Successfully applied intent for pane %s, transaction %s", intent.GetPaneID(), intent.GetPaneID())
 	return &Verdict{
 		Kind:        VerdictApplied,
 		Message:     "Applied via Smart Projection",
@@ -1042,4 +1091,29 @@ func HashProof(p *Proof) string {
 	}
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
+}
+
+// Convert ResolvedFact to Editor Operation for DAG
+func convertFactToOp(f ResolvedFact) editor.ResolvedOperation {
+	var op editor.ResolvedOperation
+	
+	op.BufferID = editor.BufferID(f.Anchor.PaneID)
+	op.Anchor = editor.Cursor{Row: f.Anchor.Line, Col: f.Anchor.Start}
+	
+	switch f.Kind {
+	case FactInsert:
+		op.Kind = editor.OpInsert
+		op.Text = f.Payload.Text
+	case FactDelete:
+		op.Kind = editor.OpDelete
+		op.Range = &editor.TextRange{
+			Start: editor.Cursor{Row: f.Anchor.Line, Col: f.Anchor.Start},
+			End:   editor.Cursor{Row: f.Anchor.Line, Col: f.Anchor.End},
+		}
+		op.DeletedText = f.Payload.OldText
+	case FactMove:
+		op.Kind = editor.OpMove
+	}
+	
+	return op
 }
