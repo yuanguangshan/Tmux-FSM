@@ -40,6 +40,10 @@ func ParseTextObject(input string) TextObjectSpec {
 		panic("invalid text object input length")
 	}
 
+	if input[0] != 'i' && input[0] != 'a' {
+		panic("invalid text object modifier: " + string(input[0]))
+	}
+
 	spec := TextObjectSpec{}
 	spec.Inner = (input[0] == 'i')
 
@@ -188,7 +192,7 @@ func (d Document) LineIsWhitespace(lineIdx int) bool {
 // Helpers
 
 func isWhitespace(r rune) bool {
-	return unicode.IsSpace(r) || r == 0 // Treat 0 (OOB) as safe boundary?
+	return unicode.IsSpace(r)
 }
 
 func isAlphaNum(r rune) bool {
@@ -240,14 +244,30 @@ func resolveWord(doc Document, cursor Loc, inner bool, big bool) LocRange {
 
 	pos := cursor
 	if !isWord(doc.RuneAt(pos)) {
-		// If strict panic:
-		// panic("cursor not on word")
-		// Or try to select whitespace block?
-		// For now, implementing as isWord check is true for whatever is under cursor if we want generic grouping?
-		// But spec says "assert isWord".
-		// Let's implement robust check: if whitespace, use isWhitespace as predicate?
-		// No, let's treat it as "word" logic strictly.
-		// If strict, panic.
+		if inner {
+			panic("cursor not on word")
+		}
+		// Minimal correct behavior for aw on whitespace: select contiguous whitespace
+		// This consumes the whitespace around cursor?
+		// User instruction: "Minimal correct behavior: panic if inner, resolve whitespace if outer"
+		// But resolveWord logic assumes word chars.
+		// If we are on whitespace, we should treat whitespace as the "word".
+		// Let's implement robust handling for outer.
+		if !big { // only for 'w', 'W' handles non-whitespace constraint differently (big=true means !whitespace)
+			// For 'w', word chars are alnum + _.
+			// If on whitespace, vim treats the block of whitespace as a word.
+			// Re-define isWord for this execution scope.
+			isWord = func(r rune) bool {
+				return isWhitespace(r)
+			}
+		} else {
+			// for 'W', it's non-whitespace. So if we are on whitespace, it's not a WORD?
+			// Vim 'iW' on whitespace -> selects whitespace block.
+			// So fundamentally, if on whitespace, we select whitespace block.
+			isWord = func(r rune) bool {
+				return isWhitespace(r)
+			}
+		}
 	}
 
 	left := pos
@@ -361,7 +381,7 @@ func resolveParagraph(doc Document, cursor Loc, inner bool) LocRange {
 
 func resolveDelimited(doc Document, cursor Loc, spec TextObjectSpec) LocRange {
 	depth := 0
-	left := cursor
+	left := doc.MoveLeft(cursor)
 
 	// Find opening
 	for !doc.IsBOF(left) {
@@ -384,7 +404,7 @@ func resolveDelimited(doc Document, cursor Loc, spec TextObjectSpec) LocRange {
 
 	// Find closing
 	depth = 0
-	right := cursor
+	right := doc.MoveRight(cursor)
 
 	for !doc.IsEOF(right) {
 		r := doc.RuneAt(right) // Note: doc.RuneAt(left) checked exact char.

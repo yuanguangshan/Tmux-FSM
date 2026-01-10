@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"strings"
+	"tmux-fsm/editor"
 )
 
 // ResolveContext 包含 Resolver 所需的上下文信息
@@ -22,6 +23,74 @@ type ResolvedIntent struct {
 type ResolvedRange struct {
 	Start ResolvedAnchor
 	End   ResolvedAnchor
+}
+
+// PrimaryRange Returns the first range from results
+func (r ResolvedIntent) PrimaryRange() *ResolvedRange {
+	if len(r.Ranges) == 0 {
+		return nil
+	}
+	return &r.Ranges[0]
+}
+
+// BuildResolvedOperation converts ResolvedIntent to executable Operation
+func BuildResolvedOperation(res ResolvedIntent, snapshot Snapshot) (editor.ResolvedOperation, error) {
+	var op editor.ResolvedOperation
+
+	// Default BufferID (Phase 5 assumed single buffer)
+	op.BufferID = editor.BufferID("default")
+
+	switch res.Intent.Kind {
+	case IntentDelete:
+		op.Kind = editor.OpDelete
+	case IntentInsert:
+		op.Kind = editor.OpInsert
+	case IntentChange:
+		op.Kind = editor.OpInsert // Change = Delete + Insert
+		op.DeleteBeforeInsert = true
+	case IntentMove:
+		op.Kind = editor.OpMove
+	case IntentYank:
+		// Yank is not an Editor Operation (it affects Register, not Buffer)
+		// But in Phase 6 DAG it might be OpYank.
+		// editor.ResolvedOperation currently supports Insert/Delete/Move.
+		// We might need to extend it or handle Yank separately.
+		// For now, return error or handle?
+		// User instruction: "TextObject -> Delete / Change / Yank"
+		// If OpYank is missing in editor.types, we should skip or use OpMove + side effect?
+		// Let's assume OpMove for now or skip.
+		// Actually, let's look at editor/types.go again.
+		// OpInsert, OpDelete, OpMove. No OpYank.
+		// So Yank is likely handled outside Applied Operation (since it doesn't change buffer).
+		return op, nil
+	}
+
+	// Map Range
+	if pr := res.PrimaryRange(); pr != nil {
+		startRow, err := findLineIndexByID(snapshot, pr.Start.LineID)
+		if err != nil {
+			return op, err
+		}
+		endRow, err := findLineIndexByID(snapshot, pr.End.LineID)
+		if err != nil {
+			return op, err
+		}
+
+		op.Range = &editor.TextRange{
+			Start: editor.Cursor{Row: startRow, Col: pr.Start.Range.Start},
+			End:   editor.Cursor{Row: endRow, Col: pr.End.Range.End},
+		}
+		op.Anchor = op.Range.Start
+	} else if len(res.Anchors) > 0 {
+		anchor := res.Anchors[0]
+		row, err := findLineIndexByID(snapshot, anchor.LineID)
+		if err != nil {
+			return op, err
+		}
+		op.Anchor = editor.Cursor{Row: row, Col: anchor.Range.Start}
+	}
+
+	return op, nil
 }
 
 // ResolvedAnchor 表示解析后的锚点
