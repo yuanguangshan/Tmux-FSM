@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
+	"strings"
 	"sync"
 	"time"
 	"tmux-fsm/backend"
@@ -27,6 +29,8 @@ type FSMState struct {
 	LastUndoFailure      string                 `json:"last_undo_failure,omitempty"`
 	LastUndoSafetyLevel  string                 `json:"last_undo_safety_level,omitempty"`
 	AllowPartial         bool                   `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
+	PaneID               string                 `json:"pane_id"`       // Current pane ID for intent processing
+	Cursor               Cursor                 `json:"cursor"`        // Current cursor position
 }
 
 var (
@@ -52,10 +56,18 @@ func loadState() FSMState {
 	out, err := backend.GlobalBackend.GetUserOption("@tmux_fsm_state")
 	var state FSMState
 	if err != nil || len(out) == 0 {
-		return FSMState{Mode: "NORMAL", Count: 0}
+		return FSMState{Mode: "NORMAL", Count: 0, Cursor: Cursor{Row: 0, Col: 0}}
 	}
 	json.Unmarshal([]byte(out), &state)
 	return state
+}
+
+// GetTmuxCursorPos 获取 tmux 光标位置 [col, row]
+func GetTmuxCursorPos(paneID string) [2]int {
+	out, _ := exec.Command("tmux", "display-message", "-p", "-t", paneID, "#{pane_cursor_x},#{pane_cursor_y}").Output()
+	var x, y int
+	fmt.Sscanf(strings.TrimSpace(string(out)), "%d,%d", &x, &y)
+	return [2]int{x, y}
 }
 
 func saveStateRaw(data []byte) {

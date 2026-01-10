@@ -1,13 +1,5 @@
 package main
 
-// Anchor 是“我指的不是光标，而是这段文本”
-type Anchor struct {
-	PaneID   string  `json:"pane_id"`
-	LineHint int     `json:"line_hint"`
-	LineHash string  `json:"line_hash"`
-	Cursor   *[2]int `json:"cursor_hint,omitempty"`
-}
-
 type Range struct {
 	Anchor      Anchor `json:"anchor"`
 	StartOffset int    `json:"start_offset"`

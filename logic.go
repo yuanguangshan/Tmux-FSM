@@ -17,9 +17,20 @@ func processKeyToIntent(state *FSMState, key string) Intent {
 		return Intent{Kind: IntentNone}
 	}
 
+	// 获取当前光标位置
+	var cursorPos [2]int // [col, row]
+	if state.PaneID != "" {
+		cursorPos = GetTmuxCursorPos(state.PaneID)
+	} else {
+		// 如果没有 pane ID，使用状态中的光标位置
+		cursorPos[0] = state.Cursor.Col
+		cursorPos[1] = state.Cursor.Row
+	}
+
 	// 将 action string 转换为 Intent
 	// 注意：这是一个临时的反向转换，最终会被移除
-	return actionStringToIntent(action, state.Count, "") // PaneID 暂时为空，由 context 注入
+	// 使用新的函数，传入行信息以解决 projection conflict check failed: missing LineID 的问题
+	return actionStringToIntentWithLineInfo(action, state.Count, state.PaneID, "", cursorPos[1], cursorPos[0])
 }
 
 // processKey 保持原有签名，内部调用 processKeyToIntent

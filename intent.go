@@ -79,6 +79,17 @@ const (
 	TargetSearch
 )
 
+// Anchor 锚点结构 (Phase 11.0)
+type Anchor struct {
+	PaneID string      `json:"pane_id"`
+	Kind   int         `json:"kind"`
+	Ref    interface{} `json:"ref,omitempty"`
+	Hash   string      `json:"hash,omitempty"`    // Phase 5.4: Reconciliation Expectation
+	LineID string      `json:"line_id,omitempty"` // Phase 9: Stable line identifier
+	Start  int         `json:"start,omitempty"`   // Phase 11: Start position in line
+	End    int         `json:"end,omitempty"`     // Phase 11: End position in line
+}
+
 // ToActionString 将 Intent 转换为 legacy action string
 // 这是过渡期的桥接函数，最终会被移除
 func (i Intent) ToActionString() string {

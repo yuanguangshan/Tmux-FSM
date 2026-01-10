@@ -3,7 +3,10 @@
 // Any new behavior MUST be implemented via native Intent builders.
 package main
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // actionStringToIntent 将 legacy action string 转换为 Intent
 // 这是阶段 1 的临时桥接函数，用于保持向后兼容
@@ -12,6 +15,12 @@ import "strings"
 // 这是阶段 1 的临时桥接函数，用于保持向后兼容
 // 最终会被移除，直接从 handleXXX 函数返回 Intent
 func actionStringToIntent(action string, count int, paneID string) Intent {
+	return actionStringToIntentWithLineInfo(action, count, paneID, "", 0, 0)
+}
+
+// actionStringToIntentWithLineInfo 将 legacy action string 转换为 Intent，包含行信息
+// 这是为了解决 projection conflict check failed: missing LineID 的问题
+func actionStringToIntentWithLineInfo(action string, count int, paneID string, lineID string, row int, col int) Intent {
 	base := Intent{PaneID: paneID}
 
 	if action == "" {
@@ -149,12 +158,47 @@ func actionStringToIntent(action string, count int, paneID string) Intent {
 	meta["motion"] = motion
 	meta["operation"] = operation
 
-	return Intent{
-		Kind:   kind,
-		Target: target,
-		Count:  count,
+	// 注入 LineID 信息以解决 projection conflict check failed: missing LineID 的问题
+	// 如果没有提供 lineID，基于 paneID 和光标位置生成一个
+	finalLineID := lineID
+	if finalLineID == "" && paneID != "" {
+		// Generate a line ID based on pane ID and cursor position
+		finalLineID = fmt.Sprintf("%s_line_%d", paneID, row)
+	}
+
+	if finalLineID != "" {
+		meta["line_id"] = finalLineID
+		meta["row"] = row
+		meta["col"] = col
+	}
+
+	// 创建锚点信息，使其与新架构兼容
+	// 这样 ShellFactBuilder 就不需要从快照创建锚点
+	anchor := Anchor{
 		PaneID: paneID,
-		Meta:   meta,
+		LineID: finalLineID,
+		Start:  col,
+		End:    col,
+		Kind:   int(TargetPosition), // 使用位置类型锚点
+	}
+
+	// 根据动作类型调整锚点类型
+	switch target.Kind {
+	case TargetLine:
+		anchor.Kind = int(TargetLine)
+	case TargetWord:
+		anchor.Kind = int(TargetWord)
+	case TargetChar:
+		anchor.Kind = int(TargetChar)
+	}
+
+	return Intent{
+		Kind:    kind,
+		Target:  target,
+		Count:   count,
+		PaneID:  paneID,
+		Meta:    meta,
+		Anchors: []Anchor{anchor}, // 添加锚点信息
 	}
 }
 
