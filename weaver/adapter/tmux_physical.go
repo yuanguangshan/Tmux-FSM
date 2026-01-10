@@ -81,9 +81,9 @@ func PerformPhysicalToggleCase(targetPane string) {
 func PerformPhysicalMove(motion string, count int, targetPane string) {
 	cStr := fmt.Sprint(count)
 	switch motion {
-	case "up":
+	case "up", "line_up":
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-N", cStr, "Up").Run()
-	case "down":
+	case "down", "line_down":
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-N", cStr, "Down").Run()
 	case "left":
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-N", cStr, "Left").Run()
