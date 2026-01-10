@@ -21,6 +21,8 @@ func Promote(g *GrammarIntent) *Intent {
 		Count:  g.Count,
 		Motion: g.Motion,
 		Meta:   meta, // 添加初始化的 Meta 映射
+		// 对于基本的移动意图，允许部分匹配（模糊解析）
+		AllowPartial: g.Kind == IntentMove,
 	}
 
 	// Operator 提升（强类型）
