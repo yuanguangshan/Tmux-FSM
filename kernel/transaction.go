@@ -62,7 +62,10 @@ func (tr *TransactionRunner) updateSelectionsAfterOps(ops []editor.ResolvedOpera
 	// 按 BufferID 分组操作
 	opsByBuffer := make(map[editor.BufferID][]editor.ResolvedOperation)
 	for _, op := range ops {
-		opsByBuffer[op.BufferID] = append(opsByBuffer[op.BufferID], op)
+		fp := op.Footprint()
+		for _, bid := range fp.Buffers {
+			opsByBuffer[bid] = append(opsByBuffer[bid], op)
+		}
 	}
 
 	// 对每个受影响的 buffer 更新其 selections

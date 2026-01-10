@@ -1095,25 +1095,53 @@ func HashProof(p *Proof) string {
 
 // Convert ResolvedFact to Editor Operation for DAG
 func convertFactToOp(f ResolvedFact) editor.ResolvedOperation {
-	var op editor.ResolvedOperation
-	
-	op.BufferID = editor.BufferID(f.Anchor.PaneID)
-	op.Anchor = editor.Cursor{Row: f.Anchor.Line, Col: f.Anchor.Start}
-	
+	opID := editor.OperationID(fmt.Sprintf("fact_%d", time.Now().UnixNano()))
+	bufferID := editor.BufferID(f.Anchor.PaneID)
+	anchor := editor.Cursor{Row: f.Anchor.Line, Col: f.Anchor.Start}
+
 	switch f.Kind {
 	case FactInsert:
-		op.Kind = editor.OpInsert
-		op.Text = f.Payload.Text
-	case FactDelete:
-		op.Kind = editor.OpDelete
-		op.Range = &editor.TextRange{
-			Start: editor.Cursor{Row: f.Anchor.Line, Col: f.Anchor.Start},
-			End:   editor.Cursor{Row: f.Anchor.Line, Col: f.Anchor.End},
+		return &editor.InsertOperation{
+			ID:     opID,
+			Buffer: bufferID,
+			At:     anchor,
+			Text:   f.Payload.Text,
 		}
-		op.DeletedText = f.Payload.OldText
+	case FactDelete:
+		return &editor.DeleteOperation{
+			ID:     opID,
+			Buffer: bufferID,
+			Range: editor.TextRange{
+				Start: anchor,
+				End:   editor.Cursor{Row: f.Anchor.Line, Col: f.Anchor.End},
+			},
+			DeletedText: f.Payload.OldText,
+		}
+	case FactReplace:
+		// Replace = Delete + Insert
+		delOp := &editor.DeleteOperation{
+			ID:     editor.OperationID(fmt.Sprintf("%s_del", opID)),
+			Buffer: bufferID,
+			Range: editor.TextRange{
+				Start: anchor,
+				End:   editor.Cursor{Row: f.Anchor.Line, Col: f.Anchor.End},
+			},
+			DeletedText: f.Payload.OldText,
+		}
+		insOp := &editor.InsertOperation{
+			ID:     editor.OperationID(fmt.Sprintf("%s_ins", opID)),
+			Buffer: bufferID,
+			At:     anchor,
+			Text:   f.Payload.NewText,
+		}
+		return &editor.CompositeOperation{
+			ID:       opID,
+			Children: []editor.ResolvedOperation{delOp, insOp},
+		}
 	case FactMove:
-		op.Kind = editor.OpMove
+		// For now, treat Move as incomplete if we don't have To position
+		return nil
+	default:
+		return nil
 	}
-	
-	return op
 }

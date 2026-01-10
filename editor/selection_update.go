@@ -2,7 +2,6 @@ package editor
 
 import "sort"
 
-// UpdateSelections 根据已执行的操作更新选区
 // 这是确定性的、可预测的选区更新算法
 // 输入：当前选区列表 + 已执行的操作记录
 // 输出：更新后的选区列表
@@ -13,20 +12,26 @@ func UpdateSelections(selections []Selection, ops []ResolvedOperation) []Selecti
 
 	// 逐条应用物理修改
 	for _, op := range ops {
-		switch op.Kind {
-		case OpDelete:
-			if op.Range != nil {
-				selections = applyDelete(selections, op.Range.Start, op.Range.End)
-			}
+		switch actualOp := op.(type) {
+		case *DeleteOperation:
+			selections = applyDelete(selections, actualOp.Range.Start, actualOp.Range.End)
 
-		case OpInsert:
-			// 计算插入文本的长度（简化版，假设单行）
-			textLen := len(op.Text)
-			selections = applyInsert(selections, op.Anchor, textLen)
+		case *InsertOperation:
+			// 计算插入文本的长度
+			textLen := len(actualOp.Text)
+			selections = applyInsert(selections, actualOp.At, textLen)
 
-		// OpMove 不影响 selections
-		case OpMove:
-			// 移动光标不改变选区
+		case *MoveOperation:
+			// Move 相当于先删除后插入
+			selections = applyDelete(selections, actualOp.From.Start, actualOp.From.End)
+			selections = applyInsert(selections, actualOp.To, len(actualOp.Text))
+
+		case *CompositeOperation:
+			// 递归应用子操作
+			selections = UpdateSelections(selections, actualOp.Children)
+
+		default:
+			// OpMoveCursor 不影响 selections
 			continue
 		}
 	}

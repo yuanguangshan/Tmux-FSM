@@ -47,12 +47,11 @@ func main() {
 		ID: 1,
 		Records: []types.OperationRecord{
 			{
-				ResolvedOp: editor.ResolvedOperation{
-					Kind:     editor.OpInsert,
-					BufferID: "main",
-					WindowID: "main-win",
-					Anchor:   editor.Cursor{Row: 0, Col: 6},
-					Text:     "Beautiful ",
+				ResolvedOp: &editor.InsertOperation{
+					ID:     "demo_insert_1",
+					Buffer: "main",
+					At:     editor.Cursor{Row: 0, Col: 6},
+					Text:   "Beautiful ",
 				},
 			},
 		},
@@ -76,11 +75,10 @@ func main() {
 		ID: 2,
 		Records: []types.OperationRecord{
 			{
-				ResolvedOp: editor.ResolvedOperation{
-					Kind:     editor.OpDelete,
-					BufferID: "main",
-					WindowID: "main-win",
-					Range: &editor.TextRange{
+				ResolvedOp: &editor.DeleteOperation{
+					ID:     "demo_delete_1",
+					Buffer: "main",
+					Range: editor.TextRange{
 						Start: editor.Cursor{Row: 0, Col: 0},
 						End:   editor.Cursor{Row: 0, Col: 6},
 					},

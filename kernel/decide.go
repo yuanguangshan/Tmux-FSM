@@ -15,6 +15,21 @@ const (
 	DecisionIntent
 )
 
+func (k DecisionKind) String() string {
+	switch k {
+	case DecisionNone:
+		return "None"
+	case DecisionFSM:
+		return "FSM"
+	case DecisionLegacy:
+		return "Legacy"
+	case DecisionIntent:
+		return "Intent"
+	default:
+		return "Unknown"
+	}
+}
+
 type Decision struct {
 	Kind   DecisionKind
 	Intent *intent.Intent

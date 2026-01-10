@@ -2,7 +2,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 	"tmux-fsm/editor"
 )
 
@@ -15,6 +17,7 @@ type ResolveContext struct {
 // ResolvedIntent 表示解析后的意图
 type ResolvedIntent struct {
 	Intent
+	Text    string // The text content for Insert/Change
 	Anchors []ResolvedAnchor
 	Ranges  []ResolvedRange
 }
@@ -35,62 +38,92 @@ func (r ResolvedIntent) PrimaryRange() *ResolvedRange {
 
 // BuildResolvedOperation converts ResolvedIntent to executable Operation
 func BuildResolvedOperation(res ResolvedIntent, snapshot Snapshot) (editor.ResolvedOperation, error) {
-	var op editor.ResolvedOperation
+	// Generate a temporary ID or use a UUID
+	opID := editor.OperationID(fmt.Sprintf("op_%d", time.Now().UnixNano()))
+	bufferID := editor.BufferID("default")
 
-	// Default BufferID (Phase 5 assumed single buffer)
-	op.BufferID = editor.BufferID("default")
+	// Map Range or Anchor
+	var textRange *editor.TextRange
+	var anchor editor.Cursor
 
-	switch res.Intent.Kind {
-	case IntentDelete:
-		op.Kind = editor.OpDelete
-	case IntentInsert:
-		op.Kind = editor.OpInsert
-	case IntentChange:
-		op.Kind = editor.OpInsert // Change = Delete + Insert
-		op.DeleteBeforeInsert = true
-	case IntentMove:
-		op.Kind = editor.OpMove
-	case IntentYank:
-		// Yank is not an Editor Operation (it affects Register, not Buffer)
-		// But in Phase 6 DAG it might be OpYank.
-		// editor.ResolvedOperation currently supports Insert/Delete/Move.
-		// We might need to extend it or handle Yank separately.
-		// For now, return error or handle?
-		// User instruction: "TextObject -> Delete / Change / Yank"
-		// If OpYank is missing in editor.types, we should skip or use OpMove + side effect?
-		// Let's assume OpMove for now or skip.
-		// Actually, let's look at editor/types.go again.
-		// OpInsert, OpDelete, OpMove. No OpYank.
-		// So Yank is likely handled outside Applied Operation (since it doesn't change buffer).
-		return op, nil
-	}
-
-	// Map Range
 	if pr := res.PrimaryRange(); pr != nil {
 		startRow, err := findLineIndexByID(snapshot, pr.Start.LineID)
 		if err != nil {
-			return op, err
+			return nil, err
 		}
 		endRow, err := findLineIndexByID(snapshot, pr.End.LineID)
 		if err != nil {
-			return op, err
+			return nil, err
 		}
 
-		op.Range = &editor.TextRange{
+		textRange = &editor.TextRange{
 			Start: editor.Cursor{Row: startRow, Col: pr.Start.Range.Start},
 			End:   editor.Cursor{Row: endRow, Col: pr.End.Range.End},
 		}
-		op.Anchor = op.Range.Start
+		anchor = textRange.Start
 	} else if len(res.Anchors) > 0 {
-		anchor := res.Anchors[0]
-		row, err := findLineIndexByID(snapshot, anchor.LineID)
+		anch := res.Anchors[0]
+		row, err := findLineIndexByID(snapshot, anch.LineID)
 		if err != nil {
-			return op, err
+			return nil, err
 		}
-		op.Anchor = editor.Cursor{Row: row, Col: anchor.Range.Start}
+		anchor = editor.Cursor{Row: row, Col: anch.Range.Start}
 	}
 
-	return op, nil
+	switch res.Intent.Kind {
+	case IntentDelete:
+		if textRange == nil {
+			return nil, errors.New("delete operation requires a range")
+		}
+		return &editor.DeleteOperation{
+			ID:     opID,
+			Buffer: bufferID,
+			Range:  *textRange,
+		}, nil
+
+	case IntentInsert:
+		return &editor.InsertOperation{
+			ID:     opID,
+			Buffer: bufferID,
+			At:     anchor,
+			Text:   res.Text, // Assuming res.Text contains text to insert
+		}, nil
+
+	case IntentChange:
+		// Change = DeleteRange + InsertAt
+		if textRange == nil {
+			return nil, errors.New("change operation requires a range")
+		}
+		delOp := &editor.DeleteOperation{
+			ID:     editor.OperationID(fmt.Sprintf("%s_del", opID)),
+			Buffer: bufferID,
+			Range:  *textRange,
+		}
+		insOp := &editor.InsertOperation{
+			ID:     editor.OperationID(fmt.Sprintf("%s_ins", opID)),
+			Buffer: bufferID,
+			At:     textRange.Start,
+			Text:   res.Text,
+		}
+		return &editor.CompositeOperation{
+			ID:       opID,
+			Children: []editor.ResolvedOperation{delOp, insOp},
+		}, nil
+
+	case IntentMove:
+		// Current IntentMove is often cursor move in tmux-fsm
+		return &editor.MoveCursorOperation{
+			ID:       opID,
+			WindowID: editor.WindowID(res.PaneID),
+			To:       anchor,
+		}, nil
+
+	case IntentYank:
+		return nil, nil // Yank handled separately
+
+	default:
+		return nil, fmt.Errorf("unsupported intent kind: %v", res.Intent.Kind)
+	}
 }
 
 // ResolvedAnchor 表示解析后的锚点

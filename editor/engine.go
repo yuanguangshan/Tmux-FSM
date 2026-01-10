@@ -111,96 +111,46 @@ func (sb *SimpleBuffer) DeleteRange(start, end Cursor) (string, error) {
 // 严格按照预定义的操作类型执行，无任何语义判断
 func ApplyResolvedOperation(ctx *ExecutionContext, op ResolvedOperation) error {
 	// Log the operation for audit trail
-	log.Printf("Executing operation: Kind=%s, BufferID=%s, WindowID=%s, Anchor=%v",
-		op.Kind, op.BufferID, op.WindowID, op.Anchor)
+	log.Printf("Executing operation: Kind=%v, ID=%s", op.Kind(), op.OpID())
 
-	// Stronger validation of operation parameters
-	if op.BufferID == "" {
-		err := errors.New("operation requires a valid buffer ID")
-		log.Printf("Validation error: %v", err)
-		return err
-	}
+	// Handle generic buffer operations
+	// Most operations (Insert, Delete, Move) follow the Buffer interface
+	// For operations that need special context (like MoveCursor needing WindowStore),
+	// we handle them via type switch or extension.
 
-	buf := ctx.Buffers.Get(op.BufferID)
-	if buf == nil {
-		err := fmt.Errorf("buffer %s not found", op.BufferID)
-		log.Printf("Execution error: %v", err)
-		return err
-	}
-
-	// Validate cursor position for insert operations
-	if op.Kind == OpInsert {
-		if op.Anchor.Row < 0 || op.Anchor.Row >= buf.LineCount() {
-			err := fmt.Errorf("insert position out of bounds: row %d, total rows %d", op.Anchor.Row, buf.LineCount())
-			log.Printf("Validation error: %v", err)
-			return err
-		}
-		if op.Anchor.Col < 0 || op.Anchor.Col > buf.LineLength(op.Anchor.Row) {
-			err := fmt.Errorf("insert position out of bounds: col %d, line length %d", op.Anchor.Col, buf.LineLength(op.Anchor.Row))
-			log.Printf("Validation error: %v", err)
-			return err
-		}
-	}
-
-	// Validate range for delete operations
-	if op.Kind == OpDelete && op.Range != nil {
-		if op.Range.Start.Row < 0 || op.Range.Start.Row >= buf.LineCount() ||
-			op.Range.End.Row < 0 || op.Range.End.Row >= buf.LineCount() {
-			err := fmt.Errorf("delete range out of bounds: start row %d, end row %d, total rows %d",
-				op.Range.Start.Row, op.Range.End.Row, buf.LineCount())
-			log.Printf("Validation error: %v", err)
-			return err
-		}
-	}
-
-	switch op.Kind {
-	case OpInsert:
-		log.Printf("Applying insert operation: text='%s' at %v", op.Text, op.Anchor)
-		if op.DeleteBeforeInsert && op.Range != nil {
-			deletedText, err := buf.DeleteRange(op.Range.Start, op.Range.End)
-			if err != nil {
-				log.Printf("Failed to delete before insert: %v", err)
-				return err
-			}
-			log.Printf("Deleted text before insert: '%s'", deletedText)
-		}
-		err := buf.InsertAt(op.Anchor, op.Text)
-		if err != nil {
-			log.Printf("Failed to insert text: %v", err)
-			return err
-		}
-		log.Printf("Successfully inserted text: '%s' at %v", op.Text, op.Anchor)
-		return nil
-
-	case OpDelete:
-		if op.Range == nil {
-			err := errors.New("delete operation requires a range")
-			log.Printf("Validation error: %v", err)
-			return err
-		}
-		deletedText, err := buf.DeleteRange(op.Range.Start, op.Range.End)
-		if err != nil {
-			log.Printf("Failed to delete range: %v", err)
-			return err
-		}
-		log.Printf("Successfully deleted text: '%s' from range %v to %v", deletedText, op.Range.Start, op.Range.End)
-		return nil
-
-	case OpMove:
-		win := ctx.Windows.Get(op.WindowID)
+	switch actualOp := op.(type) {
+	case *MoveCursorOperation:
+		win := ctx.Windows.Get(actualOp.WindowID)
 		if win != nil {
-			log.Printf("Moving cursor from %v to %v", win.Cursor, op.Anchor)
-			win.Cursor = op.Anchor
+			log.Printf("Moving cursor in window %s from %v to %v", actualOp.WindowID, win.Cursor, actualOp.To)
+			win.Cursor = actualOp.To
 		} else {
-			log.Printf("Window %s not found for move operation", op.WindowID)
+			log.Printf("Window %s not found for move cursor operation", actualOp.WindowID)
 		}
 		return nil
+
+	case *CompositeOperation:
+		return applyInterface(ctx, op)
 
 	default:
-		err := errors.New("unsupported operation kind")
-		log.Printf("Execution error: %v", err)
-		return err
+		return applyInterface(ctx, op)
 	}
+}
+
+func applyInterface(ctx *ExecutionContext, op ResolvedOperation) error {
+	// Determine BufferID from Footprint
+	fp := op.Footprint()
+	if len(fp.Buffers) == 0 {
+		return op.Apply(nil) // Some operations might be context-free
+	}
+
+	bufferID := fp.Buffers[0]
+	buf := ctx.Buffers.Get(bufferID)
+	if buf == nil {
+		return fmt.Errorf("buffer %s not found", bufferID)
+	}
+
+	return op.Apply(buf)
 }
 
 // clamp 限制值在范围内
