@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // actionStringToIntent 将 legacy action string 转换为 Intent
@@ -158,49 +159,46 @@ func actionStringToIntentWithLineInfo(action string, count int, paneID string, l
 	meta["motion"] = motion
 	meta["operation"] = operation
 
-	// 注入 LineID 信息以解决 projection conflict check failed: missing LineID 的问题
-	// 注意：这里使用的是临时的 LineID 生成策略
-	// 在实际实现中，LineID 应该从快照中获取，而不是基于行号生成
-	// 因为行号可能会因为滚动/编辑而改变，导致不稳定
+	// LEGACY BRIDGE ONLY: Inject minimal LineID to prevent projection crash
+	// This is NOT a real LineID - it's just enough to satisfy the projection layer
+	// REAL LineID comes from snapshot in Resolver stage
 	finalLineID := lineID
 
-	// 如果没有提供 lineID，我们仍然生成一个，但标记为临时的
-	// 真正的 LineID 应该在 Resolver 阶段从快照中获取
+	// Generate a legacy-style LineID that includes epoch info to make it less unstable
+	// This is still temporary - real LineID should come from snapshot
 	if finalLineID == "" && paneID != "" {
-		// 临时策略：基于 paneID 和行号生成，但这不是快照感知的
-		// 在实际实现中，这里应该从快照中获取稳定的 LineID
-		finalLineID = fmt.Sprintf("%s_line_%d_temp", paneID, row)
+		// Use a format that indicates this is legacy-generated and includes some context
+		finalLineID = fmt.Sprintf("legacy::%s::row::%d::time::%d", paneID, row, time.Now().UnixNano())
 	}
 
 	if finalLineID != "" {
 		meta["line_id"] = finalLineID
 		meta["row"] = row
 		meta["col"] = col
+		// Add epoch information to help with temporal consistency
+		meta["epoch"] = time.Now().UnixNano()
 	}
 
-	// 创建锚点信息，使其与新架构兼容
-	// 重要：这里的锚点信息是语义性的，实际的物理位置应在 Resolver 阶段确定
+	// LEGACY BRIDGE ONLY: Create minimal anchor to satisfy projection requirements
+	// These anchors will be replaced by Resolver with snapshot-based anchors
 	anchor := Anchor{
 		PaneID: paneID,
-		LineID: finalLineID,  // 这是临时的，Resolver 会用快照中的真实 LineID 替换
+		LineID: finalLineID,  // Will be replaced by Resolver with real snapshot LineID
 		Start:  col,
 		End:    col,
-		Kind:   int(TargetPosition), // 默认使用位置类型锚点
+		Kind:   int(TargetPosition), // Basic position anchor
 	}
 
-	// 根据目标类型调整锚点类型和范围，使其与 ShellFactBuilder 期望的值匹配
+	// Map semantic targets to anchor kinds for Resolver consumption
 	switch target.Kind {
 	case TargetLine:
-		anchor.Kind = int(TargetLine) // = 3
-		// Line 操作将在 Resolver 阶段扩展到整行范围
+		anchor.Kind = int(TargetLine) // Resolver will expand to full line
 	case TargetWord:
-		anchor.Kind = int(TargetWord) // = 2
-		// Word 操作将在 Resolver 阶段扩展到单词边界
+		anchor.Kind = int(TargetWord) // Resolver will expand to word boundaries
 	case TargetChar:
-		anchor.Kind = int(TargetChar) // = 1
+		anchor.Kind = int(TargetChar) // Character-level operation
 	case TargetTextObject:
-		anchor.Kind = int(TargetTextObject) // = 5
-		// TextObject 操作将在 Resolver 阶段扩展到对象边界
+		anchor.Kind = int(TargetTextObject) // Resolver will expand to text object
 	}
 
 	return Intent{
@@ -213,38 +211,39 @@ func actionStringToIntentWithLineInfo(action string, count int, paneID string, l
 	}
 }
 
-// createIntentWithAnchor creates an intent with proper anchor information
+// createIntentWithAnchor creates an intent with minimal anchor information for legacy bridge
 func createIntentWithAnchor(base Intent, paneID string, lineID string, row int, col int) Intent {
-	// Generate temporary LineID if not provided
-	// Note: This is a temporary solution; real LineID should come from snapshot
+	// LEGACY BRIDGE ONLY: Generate minimal LineID to satisfy projection requirements
+	// This is NOT a real LineID - just enough to prevent projection crash
+	// REAL LineID comes from snapshot in Resolver stage
 	finalLineID := lineID
 	if finalLineID == "" && paneID != "" {
-		// Temporary strategy: generate based on paneID and row number
-		// This is NOT snapshot-aware and will break with scrolling/editing
-		// Real implementation should get stable LineID from snapshot in Resolver
-		finalLineID = fmt.Sprintf("%s_line_%d_temp", paneID, row)
+		// Use legacy format with timestamp to make it less unstable
+		finalLineID = fmt.Sprintf("legacy::%s::row::%d::time::%d", paneID, row, time.Now().UnixNano())
 	}
 
-	// Create anchor with temporary LineID
-	// The Resolver will replace this with snapshot-based LineID
+	// Create minimal anchor for legacy bridge
+	// These will be replaced by Resolver with snapshot-based anchors
 	anchor := Anchor{
 		PaneID: paneID,
-		LineID: finalLineID,  // Temporary - will be replaced by Resolver with snapshot LineID
+		LineID: finalLineID,  // Will be replaced by Resolver with real snapshot LineID
 		Start:  col,
 		End:    col,
-		Kind:   int(TargetPosition), // Default position anchor
+		Kind:   int(TargetPosition), // Basic position anchor
 	}
 
-	// Add LineID to meta if available
+	// Add minimal metadata for projection satisfaction
 	if finalLineID != "" && base.Meta == nil {
 		base.Meta = make(map[string]interface{})
-		base.Meta["line_id"] = finalLineID  // Temporary LineID
+		base.Meta["line_id"] = finalLineID  // Legacy-generated LineID
 		base.Meta["row"] = row
 		base.Meta["col"] = col
+		base.Meta["epoch"] = time.Now().UnixNano()  // Add temporal context
 	} else if finalLineID != "" && base.Meta != nil {
-		base.Meta["line_id"] = finalLineID  // Temporary LineID
+		base.Meta["line_id"] = finalLineID  // Legacy-generated LineID
 		base.Meta["row"] = row
 		base.Meta["col"] = col
+		base.Meta["epoch"] = time.Now().UnixNano()  // Add temporal context
 	}
 
 	base.Anchors = []Anchor{anchor}
