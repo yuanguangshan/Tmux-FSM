@@ -33,16 +33,16 @@
   - `Merge(other Selection) Selection`: 合并选择区域
 - 定义选择区域的基本操作
 
-### `manager.go`
-- 选择区域管理器
+### `store.go`
+- 选择存储管理器
 - 主要结构体：
-  - `SelectionManager`: 选择区域管理器
+  - `SelectionStore`: 选择存储接口
+  - `SimpleSelectionStore`: 简单选择存储实现
 - 主要函数：
-  - `NewSelectionManager() *SelectionManager`: 创建选择管理器
-  - `ApplySelection(actor ActorID, fact SetSelectionFact)`: 应用选择区域变更
-  - `GetSelection(cursorID CursorID) (Selection, bool)`: 获取选择区域
-  - `GetAllSelections() map[CursorID]Selection`: 获取所有选择区域
-  - `UpdateSelection(cursorID CursorID, newSel Selection)`: 更新选择区域
+  - `NewSimpleSelectionStore() *SimpleSelectionStore`: 创建简单选择存储
+  - `GetSelection(actorID string) (Selection, bool)`: 获取选择区域
+  - `SetSelection(actorID string, selection Selection)`: 设置选择区域
+  - `DeleteSelection(actorID string)`: 删除选择区域
 - 管理系统中的所有选择区域
 
 ### `calculator.go`

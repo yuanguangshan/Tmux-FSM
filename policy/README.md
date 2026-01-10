@@ -76,7 +76,7 @@
 
 ### 信任级别
 - `TrustLevel_Trusted`: 受信任的参与者
-- `TrustLevel_Untrusted`: 不受信任的参与者  
+- `TrustLevel_Untrusted`: 不受信任的参与者
 - `TrustLevel_System`: 系统级权限
 - 基于信任级别实施差异化策略
 

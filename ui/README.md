@@ -32,16 +32,6 @@
   - `HandleInput() (UIEvent, error)`: 处理用户输入
 - 定义界面的核心接口和抽象
 
-### `renderer.go`
-- 界面渲染器
-- 主要函数：
-  - `NewRenderer(backend Backend) Renderer`: 创建渲染器
-  - `DrawText(x, y int, text string) error`: 绘制文本
-  - `DrawBox(x, y, width, height int) error`: 绘制框
-  - `ClearScreen() error`: 清屏
-  - `Refresh() error`: 刷新显示
-- 负责具体的界面绘制操作
-
 ### `status_bar.go`
 - 状态栏管理器
 - 主要函数：
@@ -70,6 +60,15 @@
   - `ApplyTheme(theme *Theme) error`: 应用主题
   - `SetColor(foreground, background Color) error`: 设置颜色
 - 管理界面的主题和样式
+
+### `ui_stub.go`
+- UI 桩实现
+- 主要函数：
+  - `UpdateUI(args ...any)`: 更新UI显示
+  - `HideUI()`: 隐藏UI
+  - `SetUIDriver(driver UIDriver)`: 设置UI驱动
+  - `setTmuxOption(option, value string)`: 设置tmux选项
+- 提供UI功能的桩实现，用于与tmux集成
 
 ## 界面特性
 

@@ -36,6 +36,17 @@
   - `ValidatePlan(plan *Plan) error`: 验证执行计划
 - 负责核心的规划逻辑
 
+### `resolver.go`
+- 意图解析器
+- 主要结构体：
+  - `Resolver`: 解析器主结构
+  - `ResolverExecutor`: 解析器执行器
+- 主要函数：
+  - `NewResolver(adapter EngineAdapter) *Resolver`: 创建解析器
+  - `ResolveGrammar(grammar Grammar) Intent`: 解析语法为意图
+  - `NewResolverExecutor() *ResolverExecutor`: 创建解析器执行器
+- 负责将语法结构转换为可执行意图
+
 ### `optimizer.go`
 - 计划优化器
 - 主要函数：

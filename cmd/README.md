@@ -19,68 +19,41 @@
 
 ## 文件结构说明
 
-### `root.go`
-- CLI 根命令定义
+### `main.go`
+- CLI 主入口定义
 - 主要函数：
-  - `NewRootCmd() *cobra.Command`: 创建根命令
-  - `Execute() error`: 执行命令
-  - `InitConfig()`: 初始化配置
+  - `main()`: 主函数入口
+  - `NewServer() *Server`: 创建服务器实例
+  - `runClient(key, paneAndClient string)`: 运行客户端
 - 负责：
-  - 初始化配置
-  - 注册子命令
-  - 统一处理 flags
-
-### `fsm.go`
-- FSM 相关命令定义
-- 主要函数：
-  - `NewFsmCmd() *cobra.Command`: 创建 FSM 命令
-  - `StartFsmMode() error`: 启动 FSM 模式
-  - `StopFsmMode() error`: 停止 FSM 模式
-- 对应：
-  - 启动 tmux-fsm 服务
-  - 进入 FSM 监听/事件循环
-
-### `debug.go`
-- 调试相关命令
-- 主要函数：
-  - `NewDebugCmd() *cobra.Command`: 创建调试命令
-  - `PrintFsmState()`: 打印当前 FSM 状态
-  - `DumpIntents()`: 导出 Intent / Transaction
-  - `TriggerReplay()`: 手动触发回放
-- 用于：
-  - 打印当前 FSM 状态
-  - Dump Intent / Transaction
-  - 手动触发回放
-
-### `replay.go`
-- 历史回放相关命令
-- 主要函数：
-  - `NewReplayCmd() *cobra.Command`: 创建回放命令
-  - `ReplayHistory(from, to string) error`: 执行历史回放
-  - `ValidateReplay() error`: 验证回放结果
-- 通常会调用 replay/ 和 verifier/ 模块
-- 用于调试一致性问题
+  - 解析命令行参数
+  - 初始化系统组件
+  - 启动服务器或执行客户端命令
 
 ### `server.go`
-- 服务器相关命令
+- 服务器相关功能
 - 主要函数：
-  - `NewServerCmd() *cobra.Command`: 创建服务器命令
-  - `StartServer() error`: 启动服务器
-  - `StopServer() error`: 停止服务器
-- 用于启动 HTTP/gRPC 服务
+  - `Server.Run(ctx context.Context) error`: 运行服务器
+  - `handleClient(conn net.Conn)`: 处理客户端连接
+  - `handleSignals(ctx context.Context, ln net.Listener)`: 处理系统信号
+- 对应：
+  - 启动 tmux-fsm 服务
+  - 处理客户端请求
 
-### `test.go`
-- 测试相关命令
+### `client.go`
+- 客户端相关功能
 - 主要函数：
-  - `NewTestCmd() *cobra.Command`: 创建测试命令
-  - `RunIntegrationTests()`: 运行集成测试
-  - `GenerateTestData()`: 生成测试数据
-- 用于测试和实验性功能
+  - `runClient(key, paneAndClient string)`: 运行客户端
+  - `isServerRunning() bool`: 检查服务器是否运行
+- 用于：
+  - 发送命令到服务器
+  - 与服务器通信
 
 ## 使用场景
 
 - **本地调试**: 调试 FSM 行为和状态
-- **手动回放**: 手动 replay 一段历史
+- **服务器模式**: 启动后台服务
+- **客户端模式**: 发送命令到服务器
 - **CI/CD**: 在持续集成中运行一致性校验
 - **开发验证**: 开发阶段快速验证 Intent → 执行路径
 - **运维操作**: 系统监控、状态查询等运维任务

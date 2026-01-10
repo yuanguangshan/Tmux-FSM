@@ -8,7 +8,9 @@ import (
 	"rhm-go/core/history"
 	"rhm-go/core/narrative"
 	"rhm-go/core/rewrite"
+	"rhm-go/core/scheduler"
 	"rhm-go/core/search"
+	"time"
 )
 
 type ResolutionPlan struct {
@@ -19,21 +21,33 @@ type ResolutionPlan struct {
 
 // Solve 核心入口：寻找最优时间线
 func Solve(dag *history.HistoryDAG, tipA, tipB history.NodeID) ResolutionPlan {
-	costModel := cost.DefaultModel{}
+	startTime := time.Now()
+	costModel := cost.GetModel("default")
 	pq := &search.PriorityQueue{}
 	heap.Init(pq)
+
+	lca, err := dag.FindLCA(tipA, tipB)
+	if err != nil {
+		// Fallback to roots if LCA fails
+		lca = "root"
+	}
 
 	// closedSet 用于存储已探索过的状态指纹，避免指数爆炸
 	closedSet := make(map[uint64]bool)
 
 	// 1. 初始化空状态 (没有突变的状态)
 	heap.Push(pq, &search.State{
-		Mutations: []change.Mutation{},
-		Cost:      0,
+		Mutations:   []change.Mutation{},
+		Cost:        0,
+		Heuristic:   0,
 		Fingerprint: 0,
 	})
 
 	for pq.Len() > 0 {
+		// 超时保护
+		if time.Since(startTime) > 5*time.Second {
+			break
+		}
 		// 取出当前 Cost 最低的状态进行扩展
 		current := heap.Pop(pq).(*search.State)
 
@@ -44,8 +58,7 @@ func Solve(dag *history.HistoryDAG, tipA, tipB history.NodeID) ResolutionPlan {
 		closedSet[current.Fingerprint] = true
 
 		// 2. 环境重构：在沙盒中应用当前的突变计划
-		// 这里的 "root" 应该通过 LCA 算法计算，为了演示简化为 "root"
-		sandbox := rewrite.RewriteBatch(dag, "root", current.Mutations)
+		sandbox := rewrite.RewriteBatch(dag, lca, current.Mutations)
 
 		// 3. 冲突分析：利用 Footprint 代数检查新环境是否还有冲突
 		res := analysis.AnalyzeMerge(sandbox, tipA, tipB)
@@ -63,37 +76,45 @@ func Solve(dag *history.HistoryDAG, tipA, tipB history.NodeID) ResolutionPlan {
 			}
 		}
 
-		// 4. 定向扩展：只处理第一个被检测到的冲突
-		conflict := res.Conflicts[0]
-		involved := []history.NodeID{conflict.NodeA, conflict.NodeB}
+		// 4. 定向扩展：利用冲突调度器处理所有冲突 (取优先级最高的)
+		sched := scheduler.NewScheduler()
+		for _, c := range res.Conflicts {
+			sched.AddConflict(c)
+		}
 
-		for _, offenderID := range involved {
-			// 定向获取该节点的候选变体 (Downgrade/NoOp)
-			candidates := generateTargetedCandidates(sandbox, offenderID)
+		if sched.HasNext() {
+			conflict := sched.Next()
+			involved := []history.NodeID{conflict.NodeA, conflict.NodeB}
 
-			for _, mut := range candidates {
-				c := costModel.Calculate(mut, cost.Context{})
+			for _, offenderID := range involved {
+				// 定向获取该节点的候选变体 (Downgrade/NoOp)
+				candidates := generateTargetedCandidates(sandbox, offenderID)
 
-				// 记录决策轨迹
-				step := narrative.DecisionStep{
-					ProblemContext: conflict.Reason,
-					Decision:       mut.String(),
-					DecisionCost:   int(c),
+				for _, mut := range candidates {
+					c := costModel.Calculate(mut, cost.Context{})
+
+					// 记录决策轨迹
+					step := narrative.DecisionStep{
+						ProblemContext: conflict.Reason,
+						Decision:       mut.String(),
+						DecisionCost:   int(c),
+					}
+
+					// 创建新状态并入队
+					nextMutations := make([]change.Mutation, len(current.Mutations))
+					copy(nextMutations, current.Mutations)
+					nextMutations = append(nextMutations, mut)
+
+					nextState := &search.State{
+						Mutations:   nextMutations,
+						Cost:        current.Cost + c,
+						Heuristic:   cost.Cost(len(res.Conflicts)-1) * cost.Tweak,
+						Narrative:   append(append([]narrative.DecisionStep{}, current.Narrative...), step),
+						Fingerprint: search.ComputeFingerprint(nextMutations),
+					}
+
+					heap.Push(pq, nextState)
 				}
-
-				// 创建新状态并入队
-				nextMutations := make([]change.Mutation, len(current.Mutations))
-				copy(nextMutations, current.Mutations)
-				nextMutations = append(nextMutations, mut)
-
-				nextState := &search.State{
-					Mutations:   nextMutations,
-					Cost:        current.Cost + c,
-					Narrative:   append(append([]narrative.DecisionStep{}, current.Narrative...), step),
-					Fingerprint: search.ComputeFingerprint(nextMutations),
-				}
-
-				heap.Push(pq, nextState)
 			}
 		}
 	}

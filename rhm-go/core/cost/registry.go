@@ -15,6 +15,19 @@ const (
 
 type Context struct{}
 
+var modelRegistry = make(map[string]Model)
+
+func RegisterModel(name string, model Model) {
+	modelRegistry[name] = model
+}
+
+func GetModel(name string) Model {
+	if model, ok := modelRegistry[name]; ok {
+		return model
+	}
+	return DefaultModel{}
+}
+
 type Model interface {
 	Calculate(m change.Mutation, ctx Context) Cost
 }

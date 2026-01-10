@@ -83,6 +83,26 @@
   - `ReplaceLine(lineNum int, content string)`: 替换行
 - 管理文本缓冲区
 
+### `execution_context.go`
+- 执行上下文管理
+- 主要结构体：
+  - `ExecutionContext`: 执行上下文
+  - `BufferStore`: 缓冲区存储
+  - `WindowStore`: 窗口存储
+  - `SelectionStore`: 选择存储
+- 主要函数：
+  - `NewExecutionContext(bufferStore BufferStore, windowStore WindowStore, selectionStore SelectionStore) *ExecutionContext`: 创建执行上下文
+  - `ExecuteOperation(op ResolvedOperation) error`: 执行解析后的操作
+- 管理编辑操作的执行上下文
+
+### `resolved_operation.go`
+- 解析后的操作定义
+- 主要结构体：
+  - `ResolvedOperation`: 解析后的操作
+- 主要函数：
+  - `ApplyResolvedOperation(ctx *ExecutionContext, op ResolvedOperation) error`: 应用解析后的操作
+- 定义可执行的操作结构
+
 ## 编辑特性
 
 ### 精确定位

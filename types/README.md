@@ -29,6 +29,9 @@
   - `SemanticEvent`: 语义事件
   - `Intent`: 意图类型
   - `Operation`: 操作类型
+  - `Transaction`: 事务类型
+  - `TransactionID`: 事务标识符
+  - `OperationRecord`: 操作记录
 - 主要函数：
   - 类型的构造函数和验证函数
   - 类型转换和格式化函数

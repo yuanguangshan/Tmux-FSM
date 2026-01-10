@@ -7,7 +7,7 @@ A flexible, configuration-driven FSM (Finite State Machine) based keybinding sys
 ### 🏗️ **Modular Architecture**
 - **FSM Engine**: Core state machine logic with layer and timeout support
 - **Configurable Keymap**: YAML-based configuration for all key bindings
-- **UI Abstraction**: Pluggable UI backends (popup, status, etc.)
+- **UI Abstraction**: Status line integration for state display
 - **Neovim Integration**: Bidirectional mode synchronization
 
 ### 🎛️ **Configuration-Driven**
@@ -29,18 +29,18 @@ A flexible, configuration-driven FSM (Finite State Machine) based keybinding sys
 
 ### Prerequisites
 - Go 1.24+
-- tmux 3.3+ (for popup UI support)
+- tmux 3.3+
 
 ### Installation Steps
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/tmux-fsm.git ~/.tmux/plugins/tmux-fsm
+git clone https://github.com/tmux-plugins/tmux-fsm.git ~/.tmux/plugins/tmux-fsm
 ```
 
 2. Add to your `~/.tmux.conf`:
 ```tmux
-set -g @plugin 'your-username/tmux-fsm'
+set -g @plugin '~/.tmux/plugins/tmux-fsm'
 ```
 
 3. Install TPM (Tmux Plugin Manager) if not already installed:
@@ -62,32 +62,34 @@ The keymap is defined in `keymap.yaml` using a YAML format:
 # layer transition does not trigger action
 states:
   NAV:
-    hint: "h/j/k/l move · g goto · : cmd · q quit"
+    hint: "h/j/k/l move · 0/$ line · g goto · : cmd · q quit"
     keys:
-      h: { action: pane_left }
-      j: { action: pane_down }
-      k: { action: pane_up }
-      l: { action: pane_right }
-      g: { layer: GOTO, timeout_ms: 800 }
-      ":": { action: prompt }
-      q: { action: exit }
-      Escape: { action: exit }
+      h: { action: "move_left" }
+      j: { action: "move_down" }
+      k: { action: "move_up" }
+      l: { action: "move_right" }
+      "0": { action: "goto_line_start" }
+      "$": { action: "goto_line_end" }
+      g: { layer: "GOTO", timeout_ms: 800 }
+      ":": { action: "prompt" }
+      q: { action: "exit" }
+      Escape: { action: "exit" }
 
   GOTO:
     hint: "h far-left · l far-right · g top · G bottom"
     keys:
-      h: { action: far_left }
-      l: { action: far_right }
-      g: { action: goto_top }
-      G: { action: goto_bottom }
-      q: { action: exit }
-      Escape: { action: exit }
+      h: { action: "far_left" }
+      l: { action: "far_right" }
+      g: { action: "goto_top" }
+      G: { action: "goto_bottom" }
+      q: { action: "exit" }
+      Escape: { action: "exit" }
 ```
 
 ### Keymap Structure
 
 - **states**: Define different FSM states
-- **hint**: Display text shown in UI
+- **hint**: Display text shown in status line
 - **keys**: Key-to-action mappings
   - `action`: Direct action to execute
   - `layer`: Switch to another FSM state
@@ -97,7 +99,7 @@ states:
 
 ### Basic Commands
 
-- `Prefix + f`: Enter FSM mode
+- `Prefix + f`: Enter FSM mode (typically bound in tmux config)
 - `Escape` or `q`: Exit FSM mode
 - `C-c`: Exit FSM mode (alternative)
 
@@ -106,6 +108,7 @@ states:
 In FSM mode, the following keys are available based on your configuration:
 
 - `h/j/k/l`: Move between panes
+- `0/$`: Move to line start/end
 - `g` + `h/l/g/G`: GOTO layer for extended navigation
 - `:`: Command prompt
 - `q` or `Escape`: Exit FSM
@@ -124,33 +127,44 @@ The `tmux-fsm` binary supports the following commands:
 - `-enter`: Enter FSM mode
 - `-exit`: Exit FSM mode
 - `-key <key>`: Dispatch key to FSM
-- `-nvim-mode <mode>`: Handle Neovim mode change
 - `-reload`: Reload keymap configuration
 - `-server`: Run as daemon server
-- `-stop`: Stop the running daemon
-- `-ui-show`: Show UI
-- `-ui-hide`: Hide UI
 - `-config <path>`: Path to keymap configuration file
+- `-debug`: Enable debug logging
+- `-help`: Show help information
+
+Additional functionality is accessible through the server protocol:
+- `__SHUTDOWN__`: Stop the running daemon
+- `__PING__`: Check server status
+- `__CLEAR_STATE__`: Reset FSM state
 
 ## 🏗️ Architecture
 
 ### Core Components
 
-1. **Engine**: Manages FSM state, transitions, and key dispatch
-2. **Keymap**: Handles YAML configuration loading and validation
-3. **UI**: Abstract interface for different UI backends
-4. **Neovim**: Integration for bidirectional mode synchronization
+1. **Engine**: Manages FSM state, transitions, and key dispatch (`fsm/engine.go`)
+2. **Keymap**: Handles YAML configuration loading and validation (`config.go`)
+3. **Kernel**: Central processing unit coordinating components (`kernel/`)
+4. **Weaver**: System composition and fact resolution (`weaver/`)
+5. **Backend**: Tmux command execution layer (`backend/`)
+6. **UI**: Status line integration for state display (`fsm/ui_stub.go`)
 
 ### Design Principles
 
 - **Configuration-Driven**: Behavior defined in external YAML files
 - **State Isolation**: Each FSM state is independent
-- **UI Decoupling**: UI and logic are completely separated
+- **UI Decoupling**: UI and logic are separated
 - **Extensibility**: Easy to add new actions and states
+- **Modularity**: Components are loosely coupled with clear interfaces
 
 ## 🧪 Testing
 
 Run the full test suite:
+```bash
+go test ./...
+```
+
+Or run specific tests:
 ```bash
 bash test_fsm.sh
 ```
@@ -160,7 +174,7 @@ The test suite covers:
 - Keymap validation
 - Server mode
 - FSM lifecycle
-- UI functionality
+- Component integration
 
 ## 🤝 Contributing
 
@@ -196,9 +210,9 @@ This project builds upon the concepts of finite state machines applied to termin
 - **Decoupling**: Reduced coupling between components
 
 ### 4. **UI/FSM Decoupling**
-- **No Fallback Logic**: UI components no longer guess FSM state
+- **Status Line Integration**: Uses tmux status variables to display FSM state
 - **Clean Interfaces**: UI only displays when FSM state is valid
-- **State Provider**: Abstract interface for UI to access FSM state
+- **Separation of Concerns**: UI updates are triggered by FSM state changes
 
 ### 5. **Layer and Timeout Management**
 - **Proper State Transitions**: Layer transitions are handled correctly

@@ -25,7 +25,8 @@
   - `Backend`: 后端执行接口
 - 主要函数：
   - `Init() error`: 初始化后端
-  - `Execute(operation.Operation) error`: 执行操作
+  - `ExecRaw(command string) error`: 执行原始命令
+  - `ExecRawWithOutput(command string) (string, error)`: 执行命令并返回输出
   - `GetState() StateSnapshot`: 获取当前状态
   - `Close() error`: 关闭后端
 - 是 Kernel / Engine 面向 backend 的唯一依赖点

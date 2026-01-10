@@ -46,6 +46,24 @@ func (w *OpWrapper) Hash() string {
 	return string(w.op.OpID())
 }
 
+func (w *OpWrapper) GetFootprints() []change.Footprint {
+	fp := w.op.Footprint()
+	res := make([]change.Footprint, 0, len(fp.Buffers))
+	mode := change.Shared
+	for _, e := range fp.Effects {
+		if e == editor.EffectWrite || e == editor.EffectDelete {
+			mode = change.Exclusive
+		}
+		if e == editor.EffectCreate {
+			mode = change.Create
+		}
+	}
+	for _, b := range fp.Buffers {
+		res = append(res, change.Footprint{ResourceID: string(b), Mode: mode})
+	}
+	return res
+}
+
 // NoOpWrapper 代表被中和的操作
 type NoOpWrapper struct {
 	id editor.OperationID
@@ -55,6 +73,7 @@ func (w *NoOpWrapper) Describe() string                   { return "NoOp(Neutral
 func (w *NoOpWrapper) ToNoOp() change.ReversibleChange    { return w }
 func (w *NoOpWrapper) Downgrade() change.ReversibleChange { return nil }
 func (w *NoOpWrapper) Hash() string                       { return "noop:" + string(w.id) }
+func (w *NoOpWrapper) GetFootprints() []change.Footprint  { return nil }
 
 // DowngradeWrapper 代表降级后的操作
 type DowngradeWrapper struct {
@@ -67,6 +86,10 @@ func (w *DowngradeWrapper) Describe() string {
 func (w *DowngradeWrapper) ToNoOp() change.ReversibleChange    { return &NoOpWrapper{id: w.op.OpID()} }
 func (w *DowngradeWrapper) Downgrade() change.ReversibleChange { return nil }
 func (w *DowngradeWrapper) Hash() string                       { return "down:" + string(w.op.OpID()) }
+func (w *DowngradeWrapper) GetFootprints() []change.Footprint {
+	// 降级通常意味着将 Exclusive 变为 Shared 或更弱的形式
+	return []change.Footprint{{ResourceID: "trash", Mode: change.Shared}}
+}
 
 // MapToDAG 将主项目的一组操作及其因果关系映射为 RHM 的 HistoryDAG
 func (a *RHMAdapter) MapToDAG(ops []editor.ResolvedOperation, dependencies map[editor.OperationID][]editor.OperationID) *history.HistoryDAG {
