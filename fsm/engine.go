@@ -380,10 +380,12 @@ func (e *Engine) RunAction(name string) {
 	}
 }
 
+// tmux 函数现在只记录需要执行的命令
+// 实际执行将由 Kernel 或 Executor 层处理
 func tmux(cmd string) {
-	// Use GlobalBackend to execute the command
-	// 由于循环导入问题，这里暂时使用占位符
-	// 实际执行应该由上层处理
+	// 注意：根据架构原则，FSM 不应直接执行命令
+	// 这个函数现在是一个占位符，实际执行应由 Kernel 层处理
+	fmt.Printf("FSM would execute tmux command: %s\n", cmd)
 }
 
 // DispatchIntent 分发意图给解析器

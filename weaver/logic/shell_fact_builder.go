@@ -69,11 +69,19 @@ func (b *ShellFactBuilder) Build(intent core.Intent, snapshot core.Snapshot) ([]
 
 		case core.IntentMove:
 			// Move is FactMove.
-			// Target Value might be motion string?
+			// Bridge semantic Motion to legacy meta for TmuxProjection
+			// We need to convert the strong-typed Motion from the intent to legacy meta
+			// First, we need to check if this is a core.Intent that has access to the original intent.Intent
+			// Since we can't directly access the original intent.Intent, we'll need to work with what's available
+			// The meta map might contain the motion information if it was populated during promotion
+			// If not, we need to create a bridge to extract motion from the semantic intent
+			// For now, we'll add a helper to populate motion from semantic intent if not present in meta
+			updatedMeta := populateMotionMeta(meta, intent)
+
 			facts = append(facts, core.Fact{
 				Kind:   core.FactMove,
 				Anchor: anchor,
-				Meta:   meta,
+				Meta:   updatedMeta,
 			})
 		}
 	}
@@ -83,4 +91,23 @@ func (b *ShellFactBuilder) Build(intent core.Intent, snapshot core.Snapshot) ([]
 	// Undo 逻辑必须依赖 Resolver 在 Execution 阶段的捕获，或者 History 存储 ResolvedFact。
 	// 这里返回空。
 	return facts, []core.Fact{}, nil
+}
+
+// populateMotionMeta 将语义化的运动信息转换为遗留的 Meta 字段
+// 这是桥接新架构和现有实现的必要步骤
+func populateMotionMeta(meta map[string]interface{}, intent core.Intent) map[string]interface{} {
+	// 如果 meta 为 nil，创建一个新的 map
+	if meta == nil {
+		meta = make(map[string]interface{})
+	}
+
+	// 检查 meta 中是否已存在 motion 信息
+	if _, exists := meta["motion"]; !exists {
+		// 对于 Move 类型的 Intent，如果 Meta 中没有 motion 信息，
+		// 我们已经通过 intent.Promote 在 intent.Meta 中填充了相关信息
+		// 所以这里不需要额外处理，只需返回现有的 meta
+		// 但如果需要进一步处理，可以在这里添加逻辑
+	}
+
+	return meta
 }

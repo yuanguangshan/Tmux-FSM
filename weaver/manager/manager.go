@@ -180,7 +180,19 @@ func (a *intentAdapter) IsPartialAllowed() bool {
 
 func (a *intentAdapter) GetAnchors() []core.Anchor {
 	// 简化处理，返回空切片
-	return []core.Anchor{}
+	anchors := make([]core.Anchor, len(a.intent.Anchors))
+	for i, anchor := range a.intent.Anchors {
+		anchors[i] = core.Anchor{
+			PaneID: anchor.PaneID,
+			Kind:   core.AnchorKind(anchor.Kind),
+			Ref:    anchor.Ref,
+			Hash:   anchor.Hash,
+			LineID: core.LineID(anchor.Hash), // 使用 Hash 作为 LineID，简化处理
+			Start:  anchor.Start,
+			End:    anchor.End,
+		}
+	}
+	return anchors
 }
 
 // GetWeaverManager 获取全局 Weaver 管理器实例
