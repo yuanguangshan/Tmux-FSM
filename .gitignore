@@ -3,3 +3,4 @@ docs/project-20260105-docs.md
 todo.md
 start-claude-proxy.sh
 .DS_Store
+.weaver/evidence.log
