@@ -111,6 +111,14 @@ func saveFSMState() {
 }
 
 func updateStatusBar(state FSMState, clientName string) {
+	if clientName == "" || clientName == "default" {
+		// Try to find the active client if "default" is passed
+		out, err := exec.Command("tmux", "display-message", "-p", "#{client_name}").Output()
+		if err == nil {
+			clientName = strings.TrimSpace(string(out))
+		}
+	}
+
 	modeMsg := state.Mode
 	if modeMsg == "" {
 		modeMsg = "NORMAL"

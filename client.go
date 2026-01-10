@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 )
@@ -47,32 +48,28 @@ func runClient(key, paneAndClient string) {
 
 	if paneAndClient == "" || paneAndClient == "|" {
 		// 尝试获取当前pane和client
-		// 注意：这里不能直接调用 tmux 命令，因为这可能导致循环依赖
-		// 我们需要确保参数格式正确
+		// Invariant 11: Command line tool should detect context if possible
+		out, err := exec.Command("tmux", "display-message", "-p", "#{pane_id}|#{client_name}").Output()
+		if err == nil {
+			paneAndClient = strings.TrimSpace(string(out))
+		}
+	}
+
+	if paneAndClient == "" || paneAndClient == "|" {
 		paneID = "default"
 		clientName = "default"
 	} else {
 		// 检查参数格式是否正确 (pane|client)，如果 client 部分为空，尝试修复
 		parts := strings.Split(paneAndClient, "|")
-		if len(parts) == 2 {
+		if len(parts) >= 2 {
 			paneID = parts[0]
 			clientName = parts[1]
 			if clientName == "" {
-				// client 部分为空，使用默认值
 				clientName = "default"
 			}
 		} else if len(parts) == 1 {
-			// 只有 pane 部分，添加默认 client
 			paneID = parts[0]
 			clientName = "default"
-		} else {
-			// 更复杂的格式，使用第一部分作为 paneID，第二部分作为 clientName
-			paneID = parts[0]
-			if len(parts) > 1 {
-				clientName = parts[1]
-			} else {
-				clientName = "default"
-			}
 		}
 	}
 

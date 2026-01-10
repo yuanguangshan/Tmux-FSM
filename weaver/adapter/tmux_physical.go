@@ -30,13 +30,16 @@ import (
 
 // PerformPhysicalInsert 插入操作
 func PerformPhysicalInsert(motion, targetPane string) {
+	if targetPane == "default" || targetPane == "{current}" {
+		targetPane = ""
+	}
 	switch motion {
 	case "after":
 		exec.Command("tmux", "send-keys", "-t", targetPane, "Right").Run()
 	case "start_of_line":
 		exec.Command("tmux", "send-keys", "-t", targetPane, "Home").Run()
 	case "end_of_line":
-		exec.Command("tmux", "send-keys", "-t", targetPane, "End").Run()
+		exec.Command("tmux", "send-keys", "-t", targetPane, "C-e").Run()
 	case "open_below":
 		exec.Command("tmux", "send-keys", "-t", targetPane, "End", "Enter").Run()
 	case "open_above":
@@ -46,6 +49,9 @@ func PerformPhysicalInsert(motion, targetPane string) {
 
 // PerformPhysicalPaste 粘贴操作
 func PerformPhysicalPaste(motion, targetPane string) {
+	if targetPane == "default" || targetPane == "{current}" {
+		targetPane = ""
+	}
 	if motion == "after" {
 		exec.Command("tmux", "send-keys", "-t", targetPane, "Right").Run()
 	}
@@ -54,11 +60,17 @@ func PerformPhysicalPaste(motion, targetPane string) {
 
 // PerformPhysicalReplace 替换字符
 func PerformPhysicalReplace(char, targetPane string) {
+	if targetPane == "default" || targetPane == "{current}" {
+		targetPane = ""
+	}
 	exec.Command("tmux", "send-keys", "-t", targetPane, "Delete", char).Run()
 }
 
 // PerformPhysicalToggleCase 切换大小写
 func PerformPhysicalToggleCase(targetPane string) {
+	if targetPane == "default" || targetPane == "{current}" {
+		targetPane = ""
+	}
 	// Captures the char under cursor, toggles it, and replaces it.
 	pos := TmuxGetCursorPos(targetPane) // Use helper from tmux_utils.go
 	out, _ := exec.Command("tmux", "capture-pane", "-p", "-t", targetPane, "-S", fmt.Sprint(pos[1]), "-E", fmt.Sprint(pos[1])).Output()
@@ -79,6 +91,9 @@ func PerformPhysicalToggleCase(targetPane string) {
 
 // PerformPhysicalMove 移动操作
 func PerformPhysicalMove(motion string, count int, targetPane string) {
+	if targetPane == "default" || targetPane == "{current}" {
+		targetPane = ""
+	}
 	cStr := fmt.Sprint(count)
 	switch motion {
 	case "up", "line_up":
@@ -92,7 +107,7 @@ func PerformPhysicalMove(motion string, count int, targetPane string) {
 	case "start_of_line", "goto_line_start": // 0
 		exec.Command("tmux", "send-keys", "-t", targetPane, "Home").Run()
 	case "end_of_line", "goto_line_end": // $
-		exec.Command("tmux", "send-keys", "-t", targetPane, "End").Run()
+		exec.Command("tmux", "send-keys", "-t", targetPane, "C-e").Run()
 	case "word_forward": // w
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-N", cStr, "M-f").Run()
 	case "word_backward": // b
@@ -108,6 +123,9 @@ func PerformPhysicalMove(motion string, count int, targetPane string) {
 
 // PerformExecuteSearch 执行搜索
 func PerformExecuteSearch(query string, targetPane string) {
+	if targetPane == "default" || targetPane == "{current}" {
+		targetPane = ""
+	}
 	// 1. Enter copy mode if not in it
 	// 2. Start search-forward
 	exec.Command("tmux", "copy-mode", "-t", targetPane).Run()
@@ -116,6 +134,9 @@ func PerformExecuteSearch(query string, targetPane string) {
 
 // PerformPhysicalDelete 删除操作
 func PerformPhysicalDelete(motion string, targetPane string) {
+	if targetPane == "default" || targetPane == "{current}" {
+		targetPane = ""
+	}
 	// 首先取消任何现有的选择
 	exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "cancel").Run()
 
@@ -158,6 +179,9 @@ func PerformPhysicalDelete(motion string, targetPane string) {
 
 // PerformPhysicalTextObject 文本对象操作
 func PerformPhysicalTextObject(op, motion, targetPane string) {
+	if targetPane == "default" || targetPane == "{current}" {
+		targetPane = ""
+	}
 	// 1. Capture current line
 	out, _ := exec.Command("tmux", "display-message", "-p", "-t", targetPane, "#{pane_cursor_x}").Output()
 	var cursorX int
@@ -209,6 +233,9 @@ func PerformPhysicalTextObject(op, motion, targetPane string) {
 
 // PerformPhysicalFind 字符查找
 func PerformPhysicalFind(fType, char string, count int, targetPane string) {
+	if targetPane == "default" || targetPane == "{current}" {
+		targetPane = ""
+	}
 	out, _ := exec.Command("tmux", "display-message", "-p", "-t", targetPane, "#{pane_cursor_x}").Output()
 	var cursorX int
 	fmt.Sscanf(strings.TrimSpace(string(out)), "%d", &cursorX)
@@ -281,6 +308,9 @@ func PerformPhysicalFind(fType, char string, count int, targetPane string) {
 
 // HandleVisualAction 视觉模式操作
 func HandleVisualAction(action string, stateCount int, targetPane string) {
+	if targetPane == "default" || targetPane == "{current}" {
+		targetPane = ""
+	}
 	parts := strings.Split(action, "_")
 	if len(parts) < 2 {
 		return
@@ -320,6 +350,9 @@ func HandleVisualAction(action string, stateCount int, targetPane string) {
 
 // ExitFSM 退出 FSM
 func ExitFSM(targetPane string) {
+	if targetPane == "default" || targetPane == "{current}" {
+		targetPane = ""
+	}
 	exec.Command("tmux", "set", "-g", "@fsm_active", "false").Run()
 	exec.Command("tmux", "set", "-g", "@fsm_state", "").Run()
 	exec.Command("tmux", "set", "-g", "@fsm_keys", "").Run()
@@ -436,6 +469,9 @@ func findBracketRange(line string, x int, motion string, around bool) (int, int)
 
 // PerformPhysicalRawInsert 物理插入原始文本
 func PerformPhysicalRawInsert(text, targetPane string) {
+	if targetPane == "default" || targetPane == "{current}" {
+		targetPane = ""
+	}
 	// 使用 set-buffer + paste-buffer 是最稳健的，避免 shell 转义问题
 	exec.Command("tmux", "set-buffer", "--", text).Run()
 	exec.Command("tmux", "paste-buffer", "-t", targetPane).Run()

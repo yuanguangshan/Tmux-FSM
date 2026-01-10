@@ -362,6 +362,19 @@ func (s *Server) handleClient(conn net.Conn) {
 				ActorID:   actorID,
 			}
 			kernelInstance.HandleKey(hctx, key)
+
+			// Phase 4.1: Re-assert FSM key table and refresh UI
+			// This ensures we don't "drop out" of FSM mode after one action.
+			// Extract clientName again to be sure
+			actualClient := clientName
+			if actualClient == "" || actualClient == "default" {
+				// Try to parse from actorID if it was "pane|client"
+				parts := strings.Split(actorID, "|")
+				if len(parts) >= 2 {
+					actualClient = parts[1]
+				}
+			}
+			updateStatusBar(loadState(), actualClient)
 		}
 
 		conn.Write([]byte("ok"))
