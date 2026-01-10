@@ -2,6 +2,7 @@ package manager
 
 import (
 	"fmt"
+	"os"
 	"time"
 	"tmux-fsm/intent"
 	"tmux-fsm/weaver/adapter"
@@ -57,8 +58,19 @@ func InitWeaver(mode ExecutionMode) {
 		proj = &adapter.NoopProjection{}
 	}
 
-	// Phase 6.3: Evidence Library for Audit persistence
-	evidence := core.NewInMemoryEvidenceLibrary()
+	// Phase 6.4: Evidence Vault v1 (Physical Evidence Preservation)
+	// RFC-WC-003: "Justice must be seen to be done"
+	// Ensure the directory exists
+	os.MkdirAll(".weaver", 0755)
+	var evidence core.EvidenceLibrary
+	physicalVault, err := core.NewFileAppenderEvidenceLibrary(".weaver/evidence.log")
+	if err != nil {
+		fmt.Printf("[WEAVER] CRITICAL: Failed to initialize Evidence Vault: %v\n", err)
+		// Fallback to memory if physical vault fails
+		evidence = core.NewInMemoryEvidenceLibrary()
+	} else {
+		evidence = physicalVault
+	}
 
 	engine := core.NewShadowEngine(planner, resolver, proj, reality, evidence)
 

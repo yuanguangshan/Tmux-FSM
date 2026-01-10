@@ -46,3 +46,19 @@ func (l *InMemoryEvidenceLibrary) Retrieve(hash string) (*AuditRecord, error) {
 	}
 	return record, nil
 }
+
+func (l *InMemoryEvidenceLibrary) Traverse(fn func(meta EvidenceMeta) error) error {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	for h, r := range l.store {
+		meta := EvidenceMeta{
+			Hash:      h,
+			Timestamp: r.TimestampUTC,
+		}
+		if err := fn(meta); err != nil {
+			return err
+		}
+	}
+	return nil
+}

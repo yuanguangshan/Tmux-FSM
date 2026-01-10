@@ -21,6 +21,17 @@ type RealityReader interface {
 type EvidenceLibrary interface {
 	Commit(record *AuditRecord) (string, error)
 	Retrieve(hash string) (*AuditRecord, error)
+
+	// Traverse 巡回复核能力: 允许第三方审计按照物理顺序遍历所有证据
+	Traverse(fn func(meta EvidenceMeta) error) error
+}
+
+// EvidenceMeta 证据元数据
+type EvidenceMeta struct {
+	Hash      string `json:"hash"`
+	Offset    int64  `json:"offset"`
+	Timestamp int64  `json:"timestamp"`
+	Size      int64  `json:"size"`
 }
 
 // AnchorResolver Anchor 解析器接口
