@@ -1,80 +1,286 @@
-# crdt 模块
 
-## 模块职责概述
 
-`crdt/` 是 **Tmux-FSM 的事实合并与冲突解决系统**，负责处理多重合法历史的合并问题。该模块关注的问题是："当出现冲突的历史时，如何将它们'编织'成一个全新的、统一的、合法的历史？"，是系统解决"主权内战"（多重合法历史）的根本大法。
+# CRDT 模块文档 ⇄ 代码映射表
 
-主要职责包括：
-- 实现 CRDT 数据结构（如有序树、向量时钟等）
-- 处理并发编辑的合并逻辑
-- 维护因果关系和版本向量
-- 提供高效的位置分配和比较算法
-- 将冲突的历史"编织"成统一的合法历史
+---
 
-## 核心设计思想
+## 1. 模块职责概述
 
-- **无冲突**: 确保并发操作能够自动合并而不会产生冲突
-- **强一致性**: 保证所有副本最终收敛到相同状态
-- **因果有序**: 维护事件间的因果关系
-- **高效同步**: 支持增量同步和压缩
+> “将多个事件历史合并为一个因果一致、确定性的事件序列”
 
-## 文件结构说明
+### ✅ 对应代码
 
-### `crdt.go`
-- CRDT 核心类型定义
-- 主要结构体：
-  - `PositionID`: 位置标识符
-  - `EventID`: 事件标识符  
-  - `ActorID`: 参与者标识符
-  - `SemanticEvent`: 语义事件
-- 主要函数：
-  - `ComparePos(a, b PositionID) int`: 比较两个位置
-  - `AllocateBetween(after, before *PositionID, actor ActorID) PositionID`: 在两个位置间分配新位置
-  - `MergeEvents(events []SemanticEvent) []SemanticEvent`: 合并事件
-- 定义了 CRDT 的基础数据类型和操作
+- `EventStore.Merge(e SemanticEvent)`
+- `TopoSort() []SemanticEvent`
+- `TopoSortByCausality(events map[EventID]SemanticEvent)`
 
-### `event_store.go`
-- 事件存储实现
-- 主要结构体：
-  - `EventStore`: 事件存储器
-  - `EventLog`: 事件日志
-- 主要函数：
-  - `NewEventStore() *EventStore`: 创建事件存储
-  - `Merge(event SemanticEvent)`: 合并事件
-  - `TopoSort() []SemanticEvent`: 拓扑排序事件
-  - `Query(filter QueryFilter) []SemanticEvent`: 查询事件
-- 负责存储和检索 CRDT 事件
+```go
+func (s *EventStore) Merge(e SemanticEvent)
+func (s *EventStore) TopoSort() []SemanticEvent
+func TopoSortByCausality(events map[EventID]SemanticEvent) []SemanticEvent
+```
 
-### `position.go`
-- 位置管理实现
-- 主要函数：
-  - `NewPosition(actor ActorID, seq uint64) PositionID`: 创建新位置
-  - `ParsePosition(str string) (PositionID, error)`: 解析位置字符串
-  - `String() string`: 位置转字符串
-- 管理文档中的逻辑位置
+### 🧠 设计体现
 
-### `vector_clock.go`
-- 向量时钟实现
-- 主要结构体：
-  - `VectorClock`: 向量时钟
-- 主要函数：
-  - `Increment(actor ActorID)`: 递增参与者时钟
-  - `Compare(other VectorClock) ClockRelation`: 比较时钟关系
-  - `Merge(other VectorClock)`: 合并向量时钟
-- 维护因果关系和版本信息
+- 不依赖事件到达顺序
+- 只依赖事件集合 + 因果边
+- 输出顺序完全由数据决定
 
-## CRDT 算法特性
+---
 
-### 位置分配算法
-- 支持在两个位置之间分配新位置
-- 保证位置的全序关系
-- 支持高效的插入操作
+## 2. 无冲突合并（Conflict‑Free）
 
-### 事件合并规则
-- 基于因果关系的事件排序
-- 支持并发操作的自动合并
-- 保证操作的交换律和结合律
+> “合并操作满足幂等性”
 
-## 在整体架构中的角色
+### ✅ 对应代码
 
-CRDT 模块为整个系统提供了强一致性的数据基础，特别是在支持多用户并发编辑的场景下。它确保了即使在网络分区或并发操作的情况下，系统仍能保持数据的一致性和可预测的行为，是实现可回放和可验证特性的关键技术基础。
+```go
+func (s *EventStore) Merge(e SemanticEvent) {
+    if existing, ok := s.Events[e.ID]; ok {
+        if e.Version > existing.Version {
+            s.Events[e.ID] = e
+        }
+        return
+    }
+    s.Events[e.ID] = e
+}
+```
+
+### 🧠 设计体现
+
+- `EventID` 作为全局主键
+- 重复事件不会改变集合
+- Merge 顺序不影响最终结果
+
+---
+
+## 3. 确定性收敛（Deterministic Convergence）
+
+> “相同事件集合 → 相同事件顺序”
+
+### ✅ 对应代码
+
+```go
+sort.Slice(queue, func(i, j int) bool {
+    return queue[i] < queue[j]
+})
+```
+
+（位于 `TopoSortByCausality`）
+
+### 🧠 设计体现
+
+- 对入度为 0 的并发事件进行稳定排序
+- 排序键是 `EventID`（字符串全序）
+- 保证跨副本顺序一致
+
+⚠️ **这是一个系统性保证，不是单一函数**
+
+---
+
+## 4. 因果有序（Causal Ordering）
+
+> “严格遵循 CausalParents”
+
+### ✅ 对应代码
+
+```go
+for _, e := range events {
+    for _, p := range e.CausalParents {
+        if _, ok := events[p]; ok {
+            graph[p] = append(graph[p], e.ID)
+            inDegree[e.ID]++
+        }
+    }
+}
+```
+
+```go
+if len(result) != len(events) {
+    panic("causal cycle detected")
+}
+```
+
+### 🧠 设计体现
+
+- 明确建模因果 DAG
+- 禁止因果环
+- 所有排序必须满足因果约束
+
+---
+
+## 5. 本地历史与全局历史分离
+
+> “LocalParent 不参与 CRDT 合并”
+
+### ✅ 对应代码
+
+- **未出现在任何合并 / 排序逻辑中**
+
+```go
+// SemanticEvent
+CausalParents []EventID
+LocalParent   EventID
+```
+
+```go
+// TopoSortByCausality 中完全未使用 LocalParent
+```
+
+### 🧠 设计体现
+
+- LocalParent 是“结构性忽略”
+- 这是设计约束，而不是实现疏漏
+
+---
+
+## 6. crdt.go：核心类型定义
+
+### ✅ PositionID 顺序定义
+
+```go
+func ComparePos(a, b PositionID) int
+```
+
+比较顺序：
+
+1. Path
+2. Actor
+3. Epoch
+
+### ✅ 位置分配
+
+```go
+func AllocateBetween(a, b *PositionID, actor ActorID) PositionID
+```
+
+### 🧠 设计体现
+
+- 无需全局协调
+- 支持并发插入
+- 始终可分配新位置
+
+---
+
+## 7. event_store.go：事件集合与排序
+
+> “不是 WAL，不是 append‑only log”
+
+### ✅ 对应代码
+
+```go
+type EventStore struct {
+    Events map[EventID]SemanticEvent
+}
+```
+
+- 使用 map 而非 slice
+- 不记录插入顺序
+- 不暴露 offset / index
+
+### ✅ TopoSort
+
+```go
+func (s *EventStore) TopoSort() []SemanticEvent
+```
+
+只是 `TopoSortByCausality` 的薄封装。
+
+---
+
+## 8. position.go：逻辑位置管理
+
+### ✅ 对应代码
+
+```go
+type PositionID struct {
+    Path  []uint32
+    Actor ActorID
+    Epoch int
+}
+```
+
+```go
+func AllocateBetween(a, b *PositionID, actor ActorID) PositionID
+```
+
+### 🧠 设计体现
+
+- 路径型位置（Prefix Ordering）
+- Actor + Epoch 作为最终裁决维度
+
+---
+
+## 9. vector_clock.go：向量时钟（存在但未强制）
+
+> “结构存在，但未参与合并裁决”
+
+### ✅ 对应代码
+
+```go
+type VectorClock struct { ... }
+func (vc *VectorClock) Compare(...)
+func (vc *VectorClock) Merge(...)
+```
+
+（未在 `Merge` / `TopoSort` 中调用）
+
+### 🧠 设计体现
+
+- 为未来的 delta sync / frontier 对齐预留
+- 当前系统不依赖它保证正确性
+
+---
+
+## 10. Undo / Redo 行为
+
+> “Undo 是执行时过滤，而非历史修改”
+
+### ✅ 对应代码
+
+```go
+func UndoFilter(
+    me ActorID,
+    undoPoint EventID,
+    events map[EventID]SemanticEvent,
+) func(SemanticEvent) bool
+```
+
+```go
+func LocalHistory(events map[EventID]SemanticEvent, me ActorID) []SemanticEvent
+func BuildLocalChain(events []SemanticEvent) []SemanticEvent
+```
+
+### 🧠 设计体现
+
+- Undo 只影响本 Actor
+- 不删除事件
+- 不破坏 CRDT 收敛性
+
+---
+
+## 11. 在整体架构中的角色（结构性结论）
+
+> “为可回放、可验证系统提供基础”
+
+### ✅ 对应代码事实
+
+- 所有事件不可变
+- 因果关系显式
+- 排序可重放
+- Merge 无副作用
+
+⚠️ **这是跨文件的整体性质，而非某一函数**
+
+---
+
+# 总结性一句话（非常关键）
+
+> **这份文档不是“抽象描述代码”，  
+> 而是“把代码里隐含的系统约束写成了人类可读的形式”。**
+
+文档与实现现在是：
+
+✅ 同一抽象层级  
+✅ 同一能力边界  
+✅ 同一责任划分  
