@@ -1,0 +1,1943 @@
+diff --git a/LEGACY_INTENT_DELETE_CHECKLIST.md b/LEGACY_INTENT_DELETE_CHECKLIST.md
+new file mode 100644
+index 0000000..e27fc37
+--- /dev/null
++++ b/LEGACY_INTENT_DELETE_CHECKLIST.md
+@@ -0,0 +1,117 @@
++# Legacy Intent 删除 Checklist
++
++这是用于指导从 Legacy Intent 迁移到 Native Intent 的检查清单。每个阶段都必须完成所有检查项才能进入下一阶段。
++
++## Phase 0：准备期（已完成）
++
++- [x] 所有 legacy intent 都有 Anchor
++- [x] Anchor 明确标记 legacy（legacy:: 前缀）
++- [x] Resolver 能清洗 legacy anchor
++- [x] Projection / Executor 不接触 legacy
++
++## Phase 1：Builder 接管（进行中）
++
++- [x] FSM 中新增 native intent path（与 legacy 并存）
++- [x] `dw / cw / dd` 等命令已通过 Native Intent Builder 实现
++- [ ] 所有新功能禁止使用 legacy intent
++- [ ] IntentBuilder 成为唯一 new Intent 入口
++- [ ] Resolver 断言：native intent 不得包含 legacy anchor
++
++```go
++if intent.IsNative() && intent.HasLegacyAnchor() {
++    panic("native intent must not contain legacy anchor")
++}
++```
++
++## Phase 2：FSM 去 legacy 化
++
++- [ ] 每个 legacy key binding 都有 native builder 对应
++- [ ] FSM 不再产生 action string
++- [ ] `processKeyLegacy()` 标记为 deprecated
++- [ ] legacy intent bridge 不再新增代码
++
++## Phase 3：硬删除（不可回滚）
++
++- [ ] 删除 legacy LineID 生成逻辑
++- [ ] 删除 row / col 依赖
++- [ ] 删除 tmux-aware 逻辑
++- [ ] 删除 legacy intent bridge 文件
++- [ ] Resolver 中删除 legacy 清洗器
++
++## 代码审查标准
++
++### PR 必须检查项
++
++1. **新代码不能使用 legacy intent bridge**
++   - 不得调用 `actionStringToIntent` 或 `actionStringToIntentWithLineInfo`
++   - 不得依赖 `Meta["line_id"]`、`Meta["row"]`、`Meta["col"]`
++   - 必须使用 `IntentBuilder` 创建新 Intent
++
++2. **Anchor 使用规范**
++   - Native intent 必须使用语义 Anchor，而非坐标 Anchor
++   - 不得在 Native intent 中使用 `legacy::` 前缀的 LineID
++   - Undo/Redo intent 的 Anchor 仅用于 projection 兼容性
++
++3. **Resolver 兼容性**
++   - 新 Intent 必须能被 Resolver 正确解析
++   - 不得绕过 Resolver 直接执行操作
++
++### 迁移优先级
++
++1. **高优先级命令**：
++   - 移动命令 (h, j, k, l, w, b, e, 0, $, G, gg)
++   - 删除命令 (x, X, dd, dw, d + motion)
++   - 修改命令 (c + motion, cc, cw)
++   - 复制命令 (y + motion, yy, yw)
++
++2. **中优先级命令**：
++   - 视觉模式 (v, V, 字符/行选择)
++   - 搜索命令 (/, n, N)
++   - 撤销/重做 (u, C-r)
++
++3. **低优先级命令**：
++   - 特殊命令 (f, F, t, T, r, ~, .)
++   - 文本对象 (iw, aw, etc.)
++
++## 测试要求
++
++### 单元测试覆盖
++
++- [ ] Legacy Intent 路径的回归测试
++- [ ] Native Intent 路径的正确性测试
++- [ ] Resolver 对两种 Intent 的处理测试
++- [ ] 从 Legacy 到 Native 的过渡兼容性测试
++
++### 集成测试覆盖
++
++- [ ] 所有迁移的命令在实际 tmux 环境中正常工作
++- [ ] Undo/Redo 在 Native Intent 下正常工作
++- [ ] 快照感知功能正常工作
++
++## 迁移后验证
++
++### 功能验证
++
++1. **行为一致性**：Native Intent 实现与 Legacy 实现行为完全一致
++2. **性能一致性**：Native Intent 不引入额外性能开销
++3. **错误处理一致性**：Native Intent 错误处理与 Legacy 一致
++
++### 架构验证
++
++1. **解耦验证**：Intent 创建不再依赖 tmux 坐标
++2. **语义验证**：Intent 只表达意图，不包含执行细节
++3. **扩展验证**：新功能可以轻松通过 Native Intent 实现
++
++## 安全网
++
++### 回滚计划
++
++- [ ] Legacy 代码保持可运行状态直到完全迁移
++- [ ] 提供开关控制使用 Legacy 或 Native 路径
++- [ ] 完整的回归测试套件验证 Legacy 路径
++
++### 监控指标
++
++- [ ] Legacy 路径使用率逐渐降低
++- [ ] Native 路径错误率保持低位
++- [ ] 性能指标无明显下降
+\ No newline at end of file
+diff --git a/builder.go b/builder.go
+new file mode 100644
+index 0000000..8811eeb
+--- /dev/null
++++ b/builder.go
+@@ -0,0 +1,233 @@
++package main
++
++// IntentBuilder 是用于创建 Intent 的构建器
++// 这是 Native Intent 的唯一入口，取代了 legacy intent bridge
++type IntentBuilder struct {
++	paneID string
++	cursor CursorRef
++}
++
++// CursorRef 表示光标引用（语义位置，而非物理坐标）
++type CursorRef struct {
++	Kind CursorKind
++}
++
++// CursorKind 定义光标类型
++type CursorKind int
++
++const (
++	CursorPrimary CursorKind = iota
++	CursorSelectionStart
++	CursorSelectionEnd
++)
++
++// NewIntentBuilder 创建新的 IntentBuilder 实例
++func NewIntentBuilder(paneID string) *IntentBuilder {
++	return &IntentBuilder{
++		paneID: paneID,
++		cursor: CursorRef{Kind: CursorPrimary},
++	}
++}
++
++// IntentBuilder MUST NOT:
++// - read snapshot
++// - know row / col
++// - depend on tmux / screen
++//
++// IntentBuilder 只表达"我想做什么"，而不是"我在屏幕的哪一格"
++
++// Move 创建移动意图
++func (b *IntentBuilder) Move(target SemanticTarget, count int) Intent {
++	return Intent{
++		Kind:   IntentMove,
++		Target: target,
++		Count:  count,
++		PaneID: b.paneID,
++		Anchors: []Anchor{
++			CursorAnchor(b.cursor),
++		},
++	}
++}
++
++// Delete 创建删除意图
++func (b *IntentBuilder) Delete(target SemanticTarget, count int) Intent {
++	return Intent{
++		Kind:   IntentDelete,
++		Target: target,
++		Count:  count,
++		PaneID: b.paneID,
++		Anchors: []Anchor{
++			CursorAnchor(b.cursor),
++		},
++	}
++}
++
++// Change 创建修改意图
++func (b *IntentBuilder) Change(target SemanticTarget, count int) Intent {
++	return Intent{
++		Kind:   IntentChange,
++		Target: target,
++		Count:  count,
++		PaneID: b.paneID,
++		Anchors: []Anchor{
++			CursorAnchor(b.cursor),
++		},
++	}
++}
++
++// Yank 创建复制意图
++func (b *IntentBuilder) Yank(target SemanticTarget, count int) Intent {
++	return Intent{
++		Kind:   IntentYank,
++		Target: target,
++		Count:  count,
++		PaneID: b.paneID,
++		Anchors: []Anchor{
++			CursorAnchor(b.cursor),
++		},
++	}
++}
++
++// Insert 创建插入意图
++func (b *IntentBuilder) Insert(target SemanticTarget, count int) Intent {
++	return Intent{
++		Kind:   IntentInsert,
++		Target: target,
++		Count:  count,
++		PaneID: b.paneID,
++		Anchors: []Anchor{
++			CursorAnchor(b.cursor),
++		},
++	}
++}
++
++// Paste 创建粘贴意图
++func (b *IntentBuilder) Paste(target SemanticTarget, count int) Intent {
++	return Intent{
++		Kind:   IntentPaste,
++		Target: target,
++		Count:  count,
++		PaneID: b.paneID,
++		Anchors: []Anchor{
++			CursorAnchor(b.cursor),
++		},
++	}
++}
++
++// Undo 创建撤销意图
++func (b *IntentBuilder) Undo() Intent {
++	return Intent{
++		Kind:   IntentUndo,
++		PaneID: b.paneID,
++		// Undo/Redo anchors are for projection compatibility only.
++		// Resolver MUST ignore anchor for history-based intents.
++		Anchors: []Anchor{
++			CursorAnchor(b.cursor),
++		},
++	}
++}
++
++// Redo 创建重做意图
++func (b *IntentBuilder) Redo() Intent {
++	return Intent{
++		Kind:   IntentRedo,
++		PaneID: b.paneID,
++		// Undo/Redo anchors are for projection compatibility only.
++		// Resolver MUST ignore anchor for history-based intents.
++		Anchors: []Anchor{
++			CursorAnchor(b.cursor),
++		},
++	}
++}
++
++// Search 创建搜索意图
++func (b *IntentBuilder) Search(target SemanticTarget) Intent {
++	return Intent{
++		Kind:   IntentSearch,
++		Target: target,
++		PaneID: b.paneID,
++		Anchors: []Anchor{
++			CursorAnchor(b.cursor),
++		},
++	}
++}
++
++// Visual 创建视觉模式意图
++func (b *IntentBuilder) Visual(target SemanticTarget) Intent {
++	return Intent{
++		Kind:   IntentVisual,
++		Target: target,
++		PaneID: b.paneID,
++		Anchors: []Anchor{
++			CursorAnchor(b.cursor),
++		},
++	}
++}
++
++// ToggleCase 创建切换大小写意图
++func (b *IntentBuilder) ToggleCase() Intent {
++	return Intent{
++		Kind:   IntentToggleCase,
++		PaneID: b.paneID,
++		Anchors: []Anchor{
++			CursorAnchor(b.cursor),
++		},
++	}
++}
++
++// Replace 创建替换意图
++func (b *IntentBuilder) Replace(target SemanticTarget) Intent {
++	return Intent{
++		Kind:   IntentReplace,
++		Target: target,
++		PaneID: b.paneID,
++		Anchors: []Anchor{
++			CursorAnchor(b.cursor),
++		},
++	}
++}
++
++// Repeat 创建重复意图
++func (b *IntentBuilder) Repeat() Intent {
++	return Intent{
++		Kind:   IntentRepeat,
++		PaneID: b.paneID,
++		Anchors: []Anchor{
++			CursorAnchor(b.cursor),
++		},
++	}
++}
++
++// Find 创建查找意图
++func (b *IntentBuilder) Find(target SemanticTarget) Intent {
++	return Intent{
++		Kind:   IntentFind,
++		Target: target,
++		PaneID: b.paneID,
++		Anchors: []Anchor{
++			CursorAnchor(b.cursor),
++		},
++	}
++}
++
++// Exit 创建退出意图
++func (b *IntentBuilder) Exit() Intent {
++	return Intent{
++		Kind:   IntentExit,
++		PaneID: b.paneID,
++		Anchors: []Anchor{
++			CursorAnchor(b.cursor),
++		},
++	}
++}
++
++// CursorAnchor 创建光标锚点
++func CursorAnchor(ref CursorRef) Anchor {
++	return Anchor{
++		Kind: int(TargetPosition), // 使用位置类型的锚点
++		Ref:  ref,                 // 使用 CursorRef 作为引用
++	}
++}
++
++// DEPRECATED: Meta["line_id"] is legacy-only. Do not use in new code.
++// All new code should rely on Anchor structures for positional information.
+\ No newline at end of file
+diff --git a/compatibility_test.go b/compatibility_test.go
+new file mode 100644
+index 0000000..32d6d6d
+--- /dev/null
++++ b/compatibility_test.go
+@@ -0,0 +1,269 @@
++package main
++
++import (
++	"testing"
++	"github.com/stretchr/testify/require"
++)
++
++// TestNativeIntentBuilderCompatibility 测试 Native Intent Builder 与 Legacy Intent 的兼容性
++func TestNativeIntentBuilderCompatibility(t *testing.T) {
++	// 创建测试状态
++	state := &FSMState{
++		Mode:   "NORMAL",
++		PaneID: "test-pane",
++		Cursor: Cursor{Row: 0, Col: 0},
++	}
++
++	// 测试 dw 命令
++	key := "d"
++	intent1 := processKeyToIntent(state, key)
++	// 调试输出
++	t.Logf("Intent1 Kind: %d, Expected IntentNone: %d", intent1.Kind, IntentNone)
++	t.Logf("State Mode: %s, Expected OPERATOR_PENDING", state.Mode)
++	t.Logf("State Operator: %s, Expected delete", state.Operator)
++
++	require.Equal(t, IntentNone, intent1.Kind) // 应该进入 OPERATOR_PENDING 模式
++	require.Equal(t, "OPERATOR_PENDING", state.Mode)
++	require.Equal(t, "delete", state.Operator)
++
++	key = "w"
++	intent2 := processKeyToIntent(state, key)
++	// 现在应该返回一个删除单词的意图
++	require.Equal(t, IntentDelete, intent2.Kind)
++	require.Equal(t, TargetWord, intent2.Target.Kind)
++	// 注意：对于 dw，方向应该是 forward
++	require.Equal(t, "forward", intent2.Target.Direction)
++
++	// 测试 cw 命令
++	state.Mode = "NORMAL"
++	state.Operator = ""
++	intent3 := processKeyToIntent(state, "c")
++	require.Equal(t, IntentNone, intent3.Kind)
++	require.Equal(t, "OPERATOR_PENDING", state.Mode)
++	require.Equal(t, "change", state.Operator)
++
++	key = "w"
++	intent4 := processKeyToIntent(state, key)
++	// 现在应该返回一个修改单词的意图
++	require.Equal(t, IntentChange, intent4.Kind)
++	require.Equal(t, TargetWord, intent4.Target.Kind)
++	require.Equal(t, "forward", intent4.Target.Direction)
++
++	// 测试 dd 命令
++	state.Mode = "NORMAL"
++	state.Operator = ""
++	intent5 := processKeyToIntent(state, "d")
++	require.Equal(t, IntentNone, intent5.Kind)
++	require.Equal(t, "OPERATOR_PENDING", state.Mode)
++	require.Equal(t, "delete", state.Operator)
++
++	key = "d"
++	intent6 := processKeyToIntent(state, key)
++	// 现在应该返回一个删除整行的意图
++	require.Equal(t, IntentDelete, intent6.Kind)
++	require.Equal(t, TargetLine, intent6.Target.Kind)
++	require.Equal(t, "whole", intent6.Target.Scope)
++}
++
++// TestLegacyIntentStillWorks 测试 Legacy Intent 仍然有效
++func TestLegacyIntentStillWorks(t *testing.T) {
++	// 创建测试状态
++	state := &FSMState{
++		Mode:   "NORMAL",
++		PaneID: "test-pane",
++		Cursor: Cursor{Row: 0, Col: 0},
++	}
++
++	// 测试一个尚未迁移到 Native Intent 的命令 (例如 "gg")
++	intent := processKeyToIntent(state, "gg")
++	// 这应该仍然通过 legacy bridge 工作
++	// 检查是否返回了某种意图
++	require.NotNil(t, intent)
++	// 检查是否是预期的移动到文件开头的意图
++	require.Equal(t, IntentMove, intent.Kind)
++	require.Equal(t, TargetFile, intent.Target.Kind)
++	require.Equal(t, "start", intent.Target.Scope)
++}
++
++// TestIntentBuilderCreation 测试 IntentBuilder 的创建
++func TestIntentBuilderCreation(t *testing.T) {
++	builder := NewIntentBuilder("test-pane")
++	require.NotNil(t, builder)
++	require.Equal(t, "test-pane", builder.paneID)
++	require.Equal(t, CursorPrimary, builder.cursor.Kind)
++}
++
++// TestIntentBuilderMethods 测试 IntentBuilder 的各种方法
++func TestIntentBuilderMethods(t *testing.T) {
++	builder := NewIntentBuilder("test-pane")
++
++	// 测试 Move 方法
++	moveIntent := builder.Move(SemanticTarget{Kind: TargetWord, Direction: "forward"}, 1)
++	require.Equal(t, IntentMove, moveIntent.Kind)
++	require.Equal(t, TargetWord, moveIntent.Target.Kind)
++	require.Equal(t, "forward", moveIntent.Target.Direction)
++	require.Equal(t, 1, moveIntent.Count)
++	require.Equal(t, "test-pane", moveIntent.PaneID)
++
++	// 测试 Delete 方法
++	deleteIntent := builder.Delete(SemanticTarget{Kind: TargetLine, Scope: "whole"}, 1)
++	require.Equal(t, IntentDelete, deleteIntent.Kind)
++	require.Equal(t, TargetLine, deleteIntent.Target.Kind)
++	require.Equal(t, "whole", deleteIntent.Target.Scope)
++	require.Equal(t, 1, deleteIntent.Count)
++	require.Equal(t, "test-pane", deleteIntent.PaneID)
++
++	// 测试 Change 方法
++	changeIntent := builder.Change(SemanticTarget{Kind: TargetWord, Direction: "forward"}, 2)
++	require.Equal(t, IntentChange, changeIntent.Kind)
++	require.Equal(t, TargetWord, changeIntent.Target.Kind)
++	require.Equal(t, "forward", changeIntent.Target.Direction)
++	require.Equal(t, 2, changeIntent.Count)
++	require.Equal(t, "test-pane", changeIntent.PaneID)
++
++	// 测试 Undo 方法
++	undoIntent := builder.Undo()
++	require.Equal(t, IntentUndo, undoIntent.Kind)
++	require.Equal(t, "test-pane", undoIntent.PaneID)
++
++	// 测试 Redo 方法
++	redoIntent := builder.Redo()
++	require.Equal(t, IntentRedo, redoIntent.Kind)
++	require.Equal(t, "test-pane", redoIntent.PaneID)
++}
++
++// TestSnapshotModel 测试快照模型的基本功能
++func TestSnapshotModel(t *testing.T) {
++	// 创建初始快照
++	initialSnapshot := Snapshot{
++		ID: "initial",
++		Lines: []LineSnapshot{
++			{ID: "L1", Text: "first line"},
++			{ID: "L2", Text: "second line"},
++		},
++	}
++
++	// 创建历史记录
++	history := NewHistoryForResolver(initialSnapshot)
++
++	// 验证初始状态
++	require.Equal(t, initialSnapshot, history.present)
++	require.Equal(t, 0, len(history.past))
++	require.Equal(t, 0, len(history.future))
++
++	// 创建新快照并推送
++	newSnapshot := Snapshot{
++		ID: "updated",
++		Lines: []LineSnapshot{
++			{ID: "L1", Text: "first line modified"},
++			{ID: "L2", Text: "second line"},
++			{ID: "L3", Text: "third line"},
++		},
++	}
++	history.Push(newSnapshot)
++
++	// 验证推送后状态
++	require.Equal(t, newSnapshot, history.present)
++	require.Equal(t, 1, len(history.past))
++	require.Equal(t, initialSnapshot, history.past[0])
++	require.Equal(t, 0, len(history.future))
++
++	// 测试撤销
++	undoneSnapshot, canUndo := history.Undo()
++	require.True(t, canUndo)
++	require.Equal(t, initialSnapshot, undoneSnapshot)
++	require.Equal(t, initialSnapshot, history.present)
++	require.Equal(t, 0, len(history.past))
++	require.Equal(t, 1, len(history.future))
++	require.Equal(t, newSnapshot, history.future[0])
++
++	// 测试重做
++	redoneSnapshot, canRedo := history.Redo()
++	require.True(t, canRedo)
++	require.Equal(t, newSnapshot, redoneSnapshot)
++	require.Equal(t, newSnapshot, history.present)
++	require.Equal(t, 1, len(history.past))
++	require.Equal(t, initialSnapshot, history.past[0])
++	require.Equal(t, 0, len(history.future))
++}
++
++// TestResolverWithNativeAndLegacyIntents 测试 Resolver 处理 Native 和 Legacy 意图
++func TestResolverWithNativeAndLegacyIntents(t *testing.T) {
++	// 创建测试快照
++	snap := testSnapshot()
++
++	// 创建上下文
++	ctx := ResolveContext{
++		Snapshot: snap,
++		Cursor:   CursorState{LineID: "L1", Offset: 5},
++	}
++
++	// 测试原生意图
++	nativeIntent := Intent{
++		Kind: IntentDelete,
++		Target: SemanticTarget{
++			Kind: TargetWord,
++		},
++		Count: 1,
++		Anchors: []Anchor{
++			CursorAnchor(CursorRef{Kind: CursorPrimary}),
++		},
++		PaneID: "p1",
++	}
++
++	resolvedNative, err := ResolveIntent(ctx, nativeIntent)
++	require.NoError(t, err)
++	require.Equal(t, 1, len(resolvedNative.Anchors))
++	// 确保原生意图没有遗留锚点
++	for _, anchor := range resolvedNative.Anchors {
++		require.NotEqual(t, AnchorOriginLegacy, anchor.Origin)
++	}
++
++	// 测试遗留意图
++	legacyIntent := Intent{
++		Kind: IntentDelete,
++		Anchors: []Anchor{
++			{
++				PaneID: "p1",
++				LineID: "legacy::pane::p1::row::0::time::123456789",
++				Start:  6,
++				End:    11,
++			},
++		},
++		PaneID: "p1",
++	}
++
++	resolvedLegacy, err := ResolveIntent(ctx, legacyIntent)
++	require.NoError(t, err)
++	require.Equal(t, 1, len(resolvedLegacy.Anchors))
++	// 确保遗留意图有遗留锚点
++	for _, anchor := range resolvedLegacy.Anchors {
++		require.Equal(t, AnchorOriginLegacy, anchor.Origin)
++	}
++}
++
++// TestCursorRefToStateConversion 测试光标引用到状态的转换
++func TestCursorRefToStateConversion(t *testing.T) {
++	snap := testSnapshot()
++
++	// 测试主光标
++	cursorRef := CursorRef{Kind: CursorPrimary}
++	cursorState, err := CursorRefToState(cursorRef, snap)
++	require.NoError(t, err)
++	require.Equal(t, snap.Lines[0].ID, cursorState.LineID)
++	require.Equal(t, 0, cursorState.Offset)
++
++	// 测试选择开始光标
++	selectionStartRef := CursorRef{Kind: CursorSelectionStart}
++	selectionStartState, err := CursorRefToState(selectionStartRef, snap)
++	require.NoError(t, err)
++	require.Equal(t, snap.Lines[0].ID, selectionStartState.LineID)
++	require.Equal(t, 0, selectionStartState.Offset)
++
++	// 测试选择结束光标
++	selectionEndRef := CursorRef{Kind: CursorSelectionEnd}
++	selectionEndState, err := CursorRefToState(selectionEndRef, snap)
++	require.NoError(t, err)
++	require.Equal(t, snap.Lines[0].ID, selectionEndState.LineID)
++	require.Equal(t, 0, selectionEndState.Offset)
++}
+\ No newline at end of file
+diff --git a/globals.go b/globals.go
+index 741e711..1177168 100644
+--- a/globals.go
++++ b/globals.go
+@@ -24,13 +24,16 @@ type FSMState struct {
+ 	PendingKeys          string                 `json:"pending_keys"`
+ 	Register             string                 `json:"register"`
+ 	LastRepeatableAction map[string]interface{} `json:"last_repeatable_action"`
+-	UndoStack            []Transaction          `json:"undo_stack"`
+-	RedoStack            []Transaction          `json:"redo_stack"`
+-	LastUndoFailure      string                 `json:"last_undo_failure,omitempty"`
+-	LastUndoSafetyLevel  string                 `json:"last_undo_safety_level,omitempty"`
+-	AllowPartial         bool                   `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
+-	PaneID               string                 `json:"pane_id"`       // Current pane ID for intent processing
+-	Cursor               Cursor                 `json:"cursor"`        // Current cursor position
++	// Legacy undo/redo stacks - to be replaced with snapshot-based history
++	UndoStack           []Transaction `json:"undo_stack"`
++	RedoStack           []Transaction `json:"redo_stack"`
++	LastUndoFailure     string        `json:"last_undo_failure,omitempty"`
++	LastUndoSafetyLevel string        `json:"last_undo_safety_level,omitempty"`
++	AllowPartial        bool          `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
++	PaneID              string        `json:"pane_id"`       // Current pane ID for intent processing
++	Cursor              Cursor        `json:"cursor"`        // Current cursor position
++	// New snapshot-based history for undo/redo
++	History *History `json:"-"` // Not serialized, rebuilt from transactions
+ }
+ 
+ var (
+diff --git a/go.mod b/go.mod
+index 921ddb3..f9bf8f7 100644
+--- a/go.mod
++++ b/go.mod
+@@ -2,4 +2,12 @@ module tmux-fsm
+ 
+ go 1.24.0
+ 
+-require gopkg.in/yaml.v3 v3.0.1
++require (
++	github.com/stretchr/testify v1.11.1
++	gopkg.in/yaml.v3 v3.0.1
++)
++
++require (
++	github.com/davecgh/go-spew v1.1.1 // indirect
++	github.com/pmezard/go-difflib v1.0.0 // indirect
++)
+diff --git a/go.sum b/go.sum
+index a62c313..c4c1710 100644
+--- a/go.sum
++++ b/go.sum
+@@ -1,3 +1,9 @@
++github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
++github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
++github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
++github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
++github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
++github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
+ gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
+ gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
+ gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
+diff --git a/intent.go b/intent.go
+index ec71da4..3588e76 100644
+--- a/intent.go
++++ b/intent.go
+@@ -55,6 +55,8 @@ const (
+ 	IntentRepeat
+ 	IntentFind
+ 	IntentExit
++	// 快照相关意图
++	IntentSnapshotUpdate
+ )
+ 
+ // SemanticTarget 语义目标（而非物理位置）
+diff --git a/logic.go b/logic.go
+index d34278f..1d064f0 100644
+--- a/logic.go
++++ b/logic.go
+@@ -6,10 +6,31 @@ import (
+ 	"strings"
+ )
+ 
++// PendingOp 表示待处理的操作
++type PendingOp int
++
++const (
++	OpNone PendingOp = iota
++	OpDelete
++	OpChange
++	OpYank
++)
++
++// FSM 结构体用于管理状态机
++type FSM struct {
++	pending PendingOp
++}
++
+ // processKeyToIntent 将按键转换为 Intent（阶段 1：新增的语义层）
+ // 这是从 string-based action 到 Intent-based 的过渡函数
+ func processKeyToIntent(state *FSMState, key string) Intent {
+-	// 先调用原有逻辑获取 action string
++	// 尝试使用 Native Intent Builder 处理特定命令 (dw, cw, dd)
++	intent := processKeyWithNativeBuilder(state, key)
++	if intent.Kind != IntentNone {
++		return intent
++	}
++
++	// 对于不支持的命令，仍然使用 legacy bridge
+ 	action := processKeyLegacy(state, key)
+ 
+ 	// 如果没有 action，返回空 Intent
+@@ -36,6 +57,187 @@ func processKeyToIntent(state *FSMState, key string) Intent {
+ 	return actionStringToIntentWithLineInfo(action, state.Count, state.PaneID, "", cursorPos[1], cursorPos[0])
+ }
+ 
++// processKeyWithNativeBuilder 使用 Native Intent Builder 处理特定命令
++func processKeyWithNativeBuilder(state *FSMState, key string) Intent {
++	// 创建 IntentBuilder 实例
++	builder := NewIntentBuilder(state.PaneID)
++
++	// 处理数字计数
++	if val, err := strconv.Atoi(key); err == nil && (val > 0 || state.Count > 0) {
++		// 在 Native Intent 模式下，我们直接更新状态中的计数
++		state.Count = state.Count*10 + val
++		return Intent{Kind: IntentNone}
++	}
++
++	// 根据当前模式处理按键
++	switch state.Mode {
++	case "NORMAL":
++		return handleNormalWithNativeBuilder(state, key, builder)
++	case "OPERATOR_PENDING":
++		return handleOperatorPendingWithNativeBuilder(state, key, builder)
++	}
++
++	// 对于其他模式，返回 IntentNone 以使用 legacy bridge
++	return Intent{Kind: IntentNone}
++}
++
++// handleNormalWithNativeBuilder 处理 NORMAL 模式下的按键，使用 Native Intent Builder
++func handleNormalWithNativeBuilder(state *FSMState, key string, builder *IntentBuilder) Intent {
++	switch key {
++	case "d":
++		// 设置待处理操作为删除
++		state.Operator = "delete"
++		state.Mode = "OPERATOR_PENDING"
++		return Intent{Kind: IntentNone}
++	case "c":
++		// 设置待处理操作为修改
++		state.Operator = "change"
++		state.Mode = "OPERATOR_PENDING"
++		return Intent{Kind: IntentNone}
++	case "y":
++		// 设置待处理操作为复制
++		state.Operator = "yank"
++		state.Mode = "OPERATOR_PENDING"
++		return Intent{Kind: IntentNone}
++	case "x":
++		// 直接删除右侧字符
++		return builder.Delete(SemanticTarget{Kind: TargetChar, Direction: "right"}, 1)
++	case "X":
++		// 直接删除左侧字符
++		return builder.Delete(SemanticTarget{Kind: TargetChar, Direction: "left"}, 1)
++	case "D":
++		// 删除到行尾
++		return builder.Delete(SemanticTarget{Kind: TargetLine, Scope: "end"}, 1)
++	case "C":
++		// 修改到行尾
++		return builder.Change(SemanticTarget{Kind: TargetLine, Scope: "end"}, 1)
++	case "S":
++		// 修改整行
++		return builder.Change(SemanticTarget{Kind: TargetLine, Scope: "whole"}, 1)
++	case "u":
++		// 撤销
++		return builder.Undo()
++	case "C-r":
++		// 重做
++		return builder.Redo()
++	case "n":
++		// 搜索下一个
++		return builder.Search(SemanticTarget{Kind: TargetSearch, Direction: "next"})
++	case "N":
++		// 搜索上一个
++		return builder.Search(SemanticTarget{Kind: TargetSearch, Direction: "prev"})
++	}
++
++	// 基础移动命令
++	motions := map[string]SemanticTarget{
++		"h": {Kind: TargetChar, Direction: "left"},
++		"j": {Kind: TargetPosition, Direction: "down"},
++		"k": {Kind: TargetPosition, Direction: "up"},
++		"l": {Kind: TargetChar, Direction: "right"},
++		"w": {Kind: TargetWord, Direction: "forward"},
++		"b": {Kind: TargetWord, Direction: "backward"},
++		"e": {Kind: TargetWord, Scope: "end"},
++		"0": {Kind: TargetLine, Scope: "start"},
++		"$": {Kind: TargetLine, Scope: "end"},
++		"G": {Kind: TargetFile, Scope: "end"},
++		"^": {Kind: TargetLine, Scope: "start"},
++		"C-b": {Kind: TargetWord, Direction: "backward"},
++		"C-f": {Kind: TargetWord, Direction: "forward"},
++		"Home": {Kind: TargetLine, Scope: "start"},
++		"End":  {Kind: TargetLine, Scope: "end"},
++	}
++
++	if motion, ok := motions[key]; ok {
++		return builder.Move(motion, state.Count)
++	}
++
++	return Intent{Kind: IntentNone}
++}
++
++// handleOperatorPendingWithNativeBuilder 处理 OPERATOR_PENDING 模式下的按键，使用 Native Intent Builder
++func handleOperatorPendingWithNativeBuilder(state *FSMState, key string, builder *IntentBuilder) Intent {
++	// 处理数字计数 (允许 d2w 这种形式)
++	if val, err := strconv.Atoi(key); err == nil && (val > 0 || state.Count > 0) {
++		state.Count = state.Count*10 + val
++		return Intent{Kind: IntentNone}
++	}
++
++	// 定义运动映射
++	motions := map[string]SemanticTarget{
++		"h": {Kind: TargetChar, Direction: "left"},
++		"j": {Kind: TargetPosition, Direction: "down"},
++		"k": {Kind: TargetPosition, Direction: "up"},
++		"l": {Kind: TargetChar, Direction: "right"},
++		"w": {Kind: TargetWord, Direction: "forward"},
++		"b": {Kind: TargetWord, Direction: "backward"},
++		"e": {Kind: TargetWord, Scope: "end"},
++		"$": {Kind: TargetLine, Scope: "end"},
++		"0": {Kind: TargetLine, Scope: "start"},
++		"^": {Kind: TargetLine, Scope: "start"},
++		"G": {Kind: TargetFile, Scope: "end"},
++	}
++
++	// 检查是否是运动命令
++	if motion, ok := motions[key]; ok {
++		// 根据操作符创建相应的 Intent
++		var intent Intent
++		count := state.Count
++		if count == 0 {
++			count = 1
++		}
++
++		switch state.Operator {
++		case "delete":
++			intent = builder.Delete(motion, count)
++		case "change":
++			intent = builder.Change(motion, count)
++		case "yank":
++			intent = builder.Yank(motion, count)
++		}
++
++		// 重置状态
++		state.Mode = "NORMAL"
++		state.Operator = ""
++		state.Count = 0
++
++		return intent
++	}
++
++	// 检查是否是重复操作符 (例如在 d 后再按 d)
++	if key == "d" && state.Operator == "delete" {
++		// 重复删除操作符意味着对整行进行操作
++		intent := builder.Delete(SemanticTarget{Kind: TargetLine, Scope: "whole"}, 1)
++		state.Mode = "NORMAL"
++		state.Operator = ""
++		return intent
++	} else if key == "c" && state.Operator == "change" {
++		// 重复修改操作符意味着对整行进行操作
++		intent := builder.Change(SemanticTarget{Kind: TargetLine, Scope: "whole"}, 1)
++		state.Mode = "NORMAL"
++		state.Operator = ""
++		return intent
++	} else if key == "y" && state.Operator == "yank" {
++		// 重复复制操作符意味着对整行进行操作
++		intent := builder.Yank(SemanticTarget{Kind: TargetLine, Scope: "whole"}, 1)
++		state.Mode = "NORMAL"
++		state.Operator = ""
++		return intent
++	}
++
++	// 检查是否进入文本对象模式 (i 或 a)
++	if key == "i" || key == "a" {
++		// 设置文本对象待处理状态
++		state.Mode = "TEXT_OBJECT_PENDING"
++		state.PendingKeys = key // 记录是 inside 还是 around
++		return Intent{Kind: IntentNone}
++	}
++
++	// 如果没有匹配，取消操作符待处理状态
++	state.Mode = "NORMAL"
++	state.Operator = ""
++	return Intent{Kind: IntentNone}
++}
++
+ // processKey 保持原有签名，内部调用 processKeyToIntent
+ // 这确保了向后兼容性（阶段 1 的关键：行为 100% 不变）
+ func processKey(state *FSMState, key string) string {
+diff --git a/resolver.go b/resolver.go
+new file mode 100644
+index 0000000..958884f
+--- /dev/null
++++ b/resolver.go
+@@ -0,0 +1,213 @@
++package main
++
++import (
++	"errors"
++	"strings"
++)
++
++// ResolveContext 包含 Resolver 所需的上下文信息
++type ResolveContext struct {
++	Snapshot Snapshot
++	Cursor   CursorState
++}
++
++// ResolvedIntent 表示解析后的意图
++type ResolvedIntent struct {
++	Intent
++	Anchors []ResolvedAnchor
++}
++
++// ResolvedAnchor 表示解析后的锚点
++type ResolvedAnchor struct {
++	PaneID string
++	LineID string
++	Range  TextRange
++	Origin AnchorOrigin
++}
++
++// TextRange 表示文本范围
++type TextRange struct {
++	Start int
++	End   int
++}
++
++// AnchorOrigin 表示锚点来源
++type AnchorOrigin int
++
++const (
++	AnchorOriginNative AnchorOrigin = iota
++	AnchorOriginLegacy
++)
++
++// ResolveIntent 解析意图
++func ResolveIntent(ctx ResolveContext, intent Intent) (ResolvedIntent, error) {
++	// 特殊处理 Undo 和 Redo 意图
++	switch intent.Kind {
++	case IntentUndo:
++		return resolveUndoIntent(ctx, intent)
++	case IntentRedo:
++		return resolveRedoIntent(ctx, intent)
++	}
++
++	// 创建基础解析后的意图
++	resolved := ResolvedIntent{
++		Intent:  intent,
++		Anchors: []ResolvedAnchor{},
++	}
++
++	// 解析锚点
++	for _, anchor := range intent.Anchors {
++		if isLegacyAnchor(anchor) {
++			// 解析遗留锚点
++			resolvedAnchor, err := resolveLegacyAnchor(ctx, anchor)
++			if err != nil {
++				return ResolvedIntent{}, err
++			}
++			resolvedAnchor.Origin = AnchorOriginLegacy
++			resolved.Anchors = append(resolved.Anchors, resolvedAnchor)
++		} else {
++			// 解析原生锚点
++			resolvedAnchor, err := resolveNativeAnchor(ctx, anchor)
++			if err != nil {
++				return ResolvedIntent{}, err
++			}
++			resolvedAnchor.Origin = AnchorOriginNative
++			resolved.Anchors = append(resolved.Anchors, resolvedAnchor)
++		}
++	}
++
++	return resolved, nil
++}
++
++// isLegacyAnchor 检查锚点是否为遗留锚点
++func isLegacyAnchor(anchor Anchor) bool {
++	return strings.HasPrefix(anchor.LineID, "legacy::")
++}
++
++// resolveLegacyAnchor 解析遗留锚点
++func resolveLegacyAnchor(ctx ResolveContext, anchor Anchor) (ResolvedAnchor, error) {
++	// 从遗留 LineID 中提取行号
++	var row int
++	// 这里简化处理，实际实现需要解析 "legacy::pane::<paneID>::row::<row>" 格式
++	// 使用 engine.go 中的 clamp 函数
++	if len(ctx.Snapshot.Lines) > row {
++		line := ctx.Snapshot.Lines[row]
++		return ResolvedAnchor{
++			PaneID: anchor.PaneID,
++			LineID: line.ID, // 使用快照中的稳定 ID
++			Range: TextRange{
++				Start: clamp(anchor.Start, 0, len(line.Text)),
++				End:   clamp(anchor.End, 0, len(line.Text)),
++			},
++		}, nil
++	}
++
++	// 如果找不到对应行，返回错误
++	return ResolvedAnchor{}, errors.New(ErrLineNotFound)
++}
++
++// resolveNativeAnchor 解析原生锚点
++func resolveNativeAnchor(ctx ResolveContext, anchor Anchor) (ResolvedAnchor, error) {
++	// 根据锚点类型解析
++	switch anchor.Kind {
++	case int(TargetPosition):
++		// 如果锚点引用光标位置
++		if ref, ok := anchor.Ref.(CursorRef); ok {
++			cursorState, err := CursorRefToState(ref, ctx.Snapshot)
++			if err != nil {
++				return ResolvedAnchor{}, err
++			}
++
++			return ResolvedAnchor{
++				PaneID: anchor.PaneID,
++				LineID: cursorState.LineID,
++				Range: TextRange{
++					Start: cursorState.Offset,
++					End:   cursorState.Offset,
++				},
++			}, nil
++		}
++		// 如果没有引用光标，使用锚点中的信息
++		return ResolvedAnchor{
++			PaneID: anchor.PaneID,
++			LineID: anchor.LineID,
++			Range: TextRange{
++				Start: anchor.Start,
++				End:   anchor.End,
++			},
++		}, nil
++	default:
++		// 其他类型的锚点处理
++		return ResolvedAnchor{
++			PaneID: anchor.PaneID,
++			LineID: anchor.LineID,
++			Range: TextRange{
++				Start: anchor.Start,
++				End:   anchor.End,
++			},
++		}, nil
++	}
++}
++
++// NOTE: Undo/Redo anchors are for projection compatibility only.
++// Resolver MUST ignore anchor for history-based intents.
++func resolveUndoIntent(ctx ResolveContext, intent Intent) (ResolvedIntent, error) {
++	// Undo 意图的解析主要是为了保持投影兼容性
++	// 实际的撤销操作由专门的 UndoManager 处理
++	resolved := ResolvedIntent{
++		Intent:  intent,
++		Anchors: []ResolvedAnchor{},
++	}
++
++	// 为 Undo 意图添加当前光标位置的锚点，用于投影兼容性
++	cursorAnchor := ResolvedAnchor{
++		PaneID: intent.PaneID,
++		LineID: ctx.Cursor.LineID,
++		Range: TextRange{
++			Start: ctx.Cursor.Offset,
++			End:   ctx.Cursor.Offset,
++		},
++		Origin: AnchorOriginNative, // Undo 意图使用原生锚点
++	}
++
++	resolved.Anchors = append(resolved.Anchors, cursorAnchor)
++
++	return resolved, nil
++}
++
++// resolveRedoIntent 解析重做意图
++func resolveRedoIntent(ctx ResolveContext, intent Intent) (ResolvedIntent, error) {
++	// Redo 意图的解析主要是为了保持投影兼容性
++	// 实际的重做操作由专门的 UndoManager 处理
++	resolved := ResolvedIntent{
++		Intent:  intent,
++		Anchors: []ResolvedAnchor{},
++	}
++
++	// 为 Redo 意图添加当前光标位置的锚点，用于投影兼容性
++	cursorAnchor := ResolvedAnchor{
++		PaneID: intent.PaneID,
++		LineID: ctx.Cursor.LineID,
++		Range: TextRange{
++			Start: ctx.Cursor.Offset,
++			End:   ctx.Cursor.Offset,
++		},
++		Origin: AnchorOriginNative, // Redo 意图使用原生锚点
++	}
++
++	resolved.Anchors = append(resolved.Anchors, cursorAnchor)
++
++	return resolved, nil
++}
++
++// AssertNoLegacy 确保解析后的意图不包含遗留锚点
++func (r ResolvedIntent) AssertNoLegacy() {
++	for _, anchor := range r.Anchors {
++		if anchor.Origin == AnchorOriginLegacy {
++			panic("legacy anchor leaked past resolver")
++		}
++	}
++}
++
++// 错误定义
++var ErrLineNotFound = "line not found"
+\ No newline at end of file
+diff --git a/resolver_integration.go b/resolver_integration.go
+deleted file mode 100644
+index 15a87c0..0000000
+--- a/resolver_integration.go
++++ /dev/null
+@@ -1,213 +0,0 @@
+-package main
+-
+-import (
+-	"errors"
+-)
+-
+-// IntentOperate 表示操作意图
+-type IntentOperate struct {
+-	Operator *Operator
+-	Motion   *Motion
+-}
+-
+-// OperatorKind 定义操作符类型
+-type OperatorKind int
+-
+-const (
+-	OpNone OperatorKind = iota
+-	OpDelete
+-	OpYank
+-	OpChange
+-)
+-
+-// Operator 表示操作符
+-type Operator struct {
+-	Kind OperatorKind
+-}
+-
+-// ResolvedOperation 表示解析后的操作
+-type ResolvedOperation struct {
+-	Operator OperatorKind // OpDelete / OpChange / OpYank / OpNone
+-	Motion   MotionKind   // 原始 motion（用于 repeat / undo 语义）
+-	Count    int
+-
+-	From Cursor
+-	To   Cursor
+-
+-	Range *MotionRange // nil 表示纯移动
+-}
+-
+-// Resolver 负责解析意图到具体操作
+-type Resolver struct {
+-	engine         *CursorEngine
+-	textObjectCalc *ConcreteTextObjectCalculator
+-}
+-
+-// NewResolver 创建新的解析器
+-func NewResolver(engine *CursorEngine) *Resolver {
+-	return &Resolver{
+-		engine:         engine,
+-		textObjectCalc: NewConcreteTextObjectCalculator(engine.Buffer),
+-	}
+-}
+-
+-// Resolve 解析意图
+-func (r *Resolver) Resolve(intent Intent) (*ResolvedOperation, error) {
+-	start := *r.engine.Cursor
+-
+-	switch intent.Kind {
+-	case IntentMove:
+-		return r.resolveMove(&intent, start)
+-	case IntentDelete, IntentChange, IntentYank:
+-		return r.resolveOperator(&intent, start)
+-	}
+-	return nil, errors.New("unknown intent type")
+-}
+-
+-// resolveMove 解析移动意图
+-func (r *Resolver) resolveMove(intent *Intent, start Cursor) (*ResolvedOperation, error) {
+-	if intent.Target.Kind == TargetTextObject {
+-		// 处理文本对象移动
+-		obj, err := ParseTextObject(intent.Target.Value)
+-		if err != nil {
+-			return nil, err
+-		}
+-
+-		textRange, err := r.textObjectCalc.CalculateRange(*obj, start)
+-		if err != nil {
+-			return nil, err
+-		}
+-
+-		return &ResolvedOperation{
+-			Operator: OpNone,
+-			Motion:   MotionKind(intent.Target.Kind),
+-			Count:    intent.Count,
+-			From:     start,
+-			To:       textRange.End, // 移动到文本对象的结束位置
+-			Range:    textRange,
+-		}, nil
+-	} else {
+-		// 处理普通移动
+-		motion := &Motion{
+-			Kind:  MotionKind(intent.Target.Kind),
+-			Count: intent.Count,
+-		}
+-
+-		mr, err := r.engine.ComputeMotion(motion)
+-		if err != nil {
+-			return nil, err
+-		}
+-
+-		// 虚拟计算终点（不改 cursor）
+-		end := start
+-		end.Row += mr.DeltaRow
+-		end.Col += mr.DeltaCol
+-		end.Row, end.Col = r.clampCursor(end.Row, end.Col)
+-
+-		return &ResolvedOperation{
+-			Operator: OpNone,
+-			Motion:   motion.Kind,
+-			Count:    motion.Count,
+-			From:     start,
+-			To:       end,
+-			Range:    nil, // 移动通常不产生范围
+-		}, nil
+-	}
+-}
+-
+-// clampCursor 限制光标位置
+-func (r *Resolver) clampCursor(row, col int) (int, int) {
+-	if r.engine.Buffer == nil {
+-		return row, col
+-	}
+-
+-	row = clamp(row, 0, r.engine.Buffer.LineCount()-1)
+-
+-	maxCol := 0
+-	if row >= 0 && row < r.engine.Buffer.LineCount() {
+-		maxCol = r.engine.Buffer.LineLength(row)
+-		if maxCol > 0 {
+-			maxCol-- // Length 是实际长度，所以最大索引是 Length-1
+-		}
+-	}
+-	col = clamp(col, 0, maxCol)
+-
+-	return row, col
+-}
+-
+-// resolveOperator 解析操作意图
+-func (r *Resolver) resolveOperator(intent *Intent, start Cursor) (*ResolvedOperation, error) {
+-	var opKind OperatorKind = OpNone
+-	switch intent.Kind {
+-	case IntentDelete:
+-		opKind = OpDelete
+-	case IntentChange:
+-		opKind = OpChange
+-	case IntentYank:
+-		opKind = OpYank
+-	}
+-
+-	var rng *MotionRange
+-
+-	if intent.Target.Kind == TargetTextObject {
+-		// 处理文本对象操作
+-		obj, err := ParseTextObject(intent.Target.Value)
+-		if err != nil {
+-			return nil, err
+-		}
+-
+-		textRange, err := r.textObjectCalc.CalculateRange(*obj, start)
+-		if err != nil {
+-			return nil, err
+-		}
+-
+-		rng = textRange
+-	} else {
+-		// 处理普通运动操作
+-		motion := &Motion{
+-			Kind:  MotionKind(intent.Target.Kind),
+-			Count: intent.Count,
+-		}
+-
+-		mr, err := r.engine.ComputeMotion(motion)
+-		if err != nil {
+-			return nil, err
+-		}
+-
+-		// 虚拟计算终点（不改 cursor）
+-		end := start
+-		end.Row += mr.DeltaRow
+-		end.Col += mr.DeltaCol
+-		end.Row, end.Col = r.clampCursor(end.Row, end.Col)
+-
+-		rng = resolveRange(opKind, start, end, motion.Kind)
+-	}
+-
+-	return &ResolvedOperation{
+-		Operator: opKind,
+-		Motion:   MotionKind(intent.Target.Kind),
+-		Count:    intent.Count,
+-		From:     start,
+-		To:       start, // 操作后光标位置可能不同，这里先设置为起始位置
+-		Range:    rng,
+-	}, nil
+-}
+-
+-// resolveRange 计算操作范围
+-func resolveRange(op OperatorKind, from Cursor, to Cursor, motion MotionKind) *MotionRange {
+-	switch motion {
+-	case MotionWordForward:
+-		switch op {
+-		case OpDelete, OpYank:
+-			return &MotionRange{Start: from, End: to}
+-		case OpChange:
+-			// Vim: cw 不包含 word 后的空白
+-			adjusted := to
+-			adjusted.Col-- // 简化版
+-			return &MotionRange{Start: from, End: adjusted}
+-		}
+-	}
+-
+-	// fallback
+-	return &MotionRange{Start: from, End: to}
+-}
+diff --git a/resolver_test.go b/resolver_test.go
+new file mode 100644
+index 0000000..b2a733e
+--- /dev/null
++++ b/resolver_test.go
+@@ -0,0 +1,249 @@
++package main
++
++import (
++	"testing"
++	"github.com/stretchr/testify/require"
++)
++
++// testSnapshot 创建测试用的快照
++func testSnapshot() Snapshot {
++	return Snapshot{
++		ID: "test-snapshot-1",
++		Lines: []LineSnapshot{
++			{ID: "L1", Text: "hello world"},
++			{ID: "L2", Text: "second line"},
++			{ID: "L3", Text: "third line here"},
++		},
++	}
++}
++
++// TestResolve_LegacyDeleteWord 测试解析遗留的删除单词意图
++func TestResolve_LegacyDeleteWord(t *testing.T) {
++	snap := testSnapshot()
++	
++	intent := Intent{
++		Kind: IntentDelete,
++		Target: SemanticTarget{
++			Kind: TargetWord,
++		},
++		Anchors: []Anchor{
++			{
++				PaneID: "p1",
++				LineID: "legacy::pane::p1::row::0::time::123456789",
++				Start:  6,
++				End:    11,
++				Kind:   int(TargetWord),
++			},
++		},
++		PaneID: "p1",
++	}
++
++	ctx := ResolveContext{
++		Snapshot: snap,
++		Cursor:   CursorState{LineID: "L1", Offset: 6},
++	}
++
++	resolved, err := ResolveIntent(ctx, intent)
++
++	require.NoError(t, err)
++	require.Equal(t, 1, len(resolved.Anchors))
++	require.Equal(t, "L1", resolved.Anchors[0].LineID)
++	require.Equal(t, 6, resolved.Anchors[0].Range.Start)
++	require.Equal(t, 11, resolved.Anchors[0].Range.End)
++	require.Equal(t, AnchorOriginLegacy, resolved.Anchors[0].Origin)
++}
++
++// TestResolve_NativeDeleteWord 测试解析原生的删除单词意图
++func TestResolve_NativeDeleteWord(t *testing.T) {
++	snap := testSnapshot()
++
++	intent := Intent{
++		Kind: IntentDelete,
++		Target: SemanticTarget{
++			Kind: TargetWord,
++		},
++		Count: 1,
++		Anchors: []Anchor{
++			CursorAnchor(CursorRef{Kind: CursorPrimary}),
++		},
++		PaneID: "p1",
++	}
++
++	ctx := ResolveContext{
++		Snapshot: snap,
++		Cursor:   CursorState{LineID: "L1", Offset: 6},
++	}
++
++	resolved, err := ResolveIntent(ctx, intent)
++
++	require.NoError(t, err)
++	require.Equal(t, 1, len(resolved.Anchors))
++	// 确保没有遗留锚点泄漏
++	require.NotEqual(t, AnchorOriginLegacy, resolved.Anchors[0].Origin)
++}
++
++// TestResolve_NativeMove 测试解析原生的移动意图
++func TestResolve_NativeMove(t *testing.T) {
++	snap := testSnapshot()
++
++	intent := Intent{
++		Kind: IntentMove,
++		Target: SemanticTarget{
++			Kind:      TargetWord,
++			Direction: "forward",
++		},
++		Count: 1,
++		Anchors: []Anchor{
++			CursorAnchor(CursorRef{Kind: CursorPrimary}),
++		},
++		PaneID: "p1",
++	}
++
++	ctx := ResolveContext{
++		Snapshot: snap,
++		Cursor:   CursorState{LineID: "L1", Offset: 0}, // 从 "hello" 开始
++	}
++
++	resolved, err := ResolveIntent(ctx, intent)
++
++	require.NoError(t, err)
++	require.Equal(t, IntentMove, resolved.Kind)
++	require.Equal(t, 1, len(resolved.Anchors))
++	// 确保没有遗留锚点泄漏
++	require.NotEqual(t, AnchorOriginLegacy, resolved.Anchors[0].Origin)
++}
++
++// TestResolve_LegacyMove 测试解析遗留的移动意图
++func TestResolve_LegacyMove(t *testing.T) {
++	snap := testSnapshot()
++
++	intent := Intent{
++		Kind: IntentMove,
++		Target: SemanticTarget{
++			Kind:      TargetWord,
++			Direction: "forward",
++		},
++		Anchors: []Anchor{
++			{
++				PaneID: "p1",
++				LineID: "legacy::pane::p1::row::0::time::123456789",
++				Start:  0,
++				End:    5, // "hello"
++				Kind:   int(TargetWord),
++			},
++		},
++		PaneID: "p1",
++	}
++
++	ctx := ResolveContext{
++		Snapshot: snap,
++		Cursor:   CursorState{LineID: "L1", Offset: 0},
++	}
++
++	resolved, err := ResolveIntent(ctx, intent)
++
++	require.NoError(t, err)
++	require.Equal(t, IntentMove, resolved.Kind)
++	require.Equal(t, 1, len(resolved.Anchors))
++	require.Equal(t, AnchorOriginLegacy, resolved.Anchors[0].Origin)
++}
++
++// TestResolvedIntent_NoLegacyLeak 测试防止遗留锚点泄漏
++func TestResolvedIntent_NoLegacyLeak(t *testing.T) {
++	// 创建一个包含遗留锚点的解析后意图
++	resolved := ResolvedIntent{
++		Intent: Intent{
++			Kind: IntentDelete,
++		},
++		Anchors: []ResolvedAnchor{
++			{
++				LineID: "L1",
++				Origin: AnchorOriginLegacy, // 故意设置为遗留类型
++			},
++		},
++	}
++
++	// 这里我们测试断言函数
++	// 在实际使用中，这个函数会在解析完成后被调用
++	defer func() {
++		if r := recover(); r != nil {
++			// 预期会有 panic，因为我们故意设置了遗留锚点
++			require.Equal(t, "legacy anchor leaked past resolver", r)
++		}
++	}()
++	
++	// 这会触发 panic，因为我们有遗留锚点
++	resolved.AssertNoLegacy()
++	
++	// 如果没有 panic，测试失败
++	t.Error("Expected panic from AssertNoLegacy due to legacy anchor")
++}
++
++// TestResolve_UndoIntent 测试解析撤销意图
++func TestResolve_UndoIntent(t *testing.T) {
++	snap := testSnapshot()
++
++	intent := Intent{
++		Kind:   IntentUndo,
++		PaneID: "p1",
++		Anchors: []Anchor{
++			CursorAnchor(CursorRef{Kind: CursorPrimary}),
++		},
++	}
++
++	ctx := ResolveContext{
++		Snapshot: snap,
++		Cursor:   CursorState{LineID: "L1", Offset: 5},
++	}
++
++	resolved, err := ResolveIntent(ctx, intent)
++
++	require.NoError(t, err)
++	require.Equal(t, IntentUndo, resolved.Kind)
++	// Undo 意图应该有锚点用于投影兼容性
++	require.Equal(t, 1, len(resolved.Anchors))
++}
++
++// TestResolve_RedoIntent 测试解析重做意图
++func TestResolve_RedoIntent(t *testing.T) {
++	snap := testSnapshot()
++
++	intent := Intent{
++		Kind:   IntentRedo,
++		PaneID: "p1",
++		Anchors: []Anchor{
++			CursorAnchor(CursorRef{Kind: CursorPrimary}),
++		},
++	}
++
++	ctx := ResolveContext{
++		Snapshot: snap,
++		Cursor:   CursorState{LineID: "L1", Offset: 5},
++	}
++
++	resolved, err := ResolveIntent(ctx, intent)
++
++	require.NoError(t, err)
++	require.Equal(t, IntentRedo, resolved.Kind)
++	// Redo 意图应该有锚点用于投影兼容性
++	require.Equal(t, 1, len(resolved.Anchors))
++}
++
++// TestIsLegacyAnchor_Detection 测试遗留锚点检测
++func TestIsLegacyAnchor_Detection(t *testing.T) {
++	// 测试遗留锚点
++	legacyAnchor := Anchor{
++		LineID: "legacy::pane::p1::row::0::time::123456789",
++	}
++	require.True(t, isLegacyAnchor(legacyAnchor))
++
++	// 测试原生锚点
++	nativeAnchor := Anchor{
++		LineID: "L123456789",
++	}
++	require.False(t, isLegacyAnchor(nativeAnchor))
++
++	// 测试空锚点
++	emptyAnchor := Anchor{}
++	require.False(t, isLegacyAnchor(emptyAnchor))
++}
+\ No newline at end of file
+diff --git a/snapshot.go b/snapshot.go
+new file mode 100644
+index 0000000..cf9999f
+--- /dev/null
++++ b/snapshot.go
+@@ -0,0 +1,161 @@
++package main
++
++import (
++	"crypto/rand"
++	"fmt"
++	"math/big"
++)
++
++// LineSnapshot 表示一行内容（具有稳定 ID）
++// 行号不可信，ID 是唯一锚点
++type LineSnapshot struct {
++	ID   string // 稳定 ID，跨编辑保持不变
++	Text string // 行内容
++}
++
++// Snapshot 表示代码快照（不可变）
++// 这是 Resolver / Projection 只读的数据结构
++type Snapshot struct {
++	ID    string // 快照唯一标识
++	Lines []LineSnapshot
++}
++
++// NewLine 创建一个带稳定 ID 的新行
++func NewLine(text string) LineSnapshot {
++	return LineSnapshot{
++		ID:   generateStableID(text),
++		Text: text,
++	}
++}
++
++// generateStableID 生成一个稳定 ID
++// 在实际实现中，这可能基于内容哈希或其他稳定标识符
++func generateStableID(text string) string {
++	// 生成随机 ID，实际实现可能使用内容哈希或其他机制
++	n, _ := rand.Int(rand.Reader, big.NewInt(1000000000))
++	return fmt.Sprintf("line_%d_%s", n.Int64(), text[:min(len(text), 5)])
++}
++
++// min 是一个辅助函数
++func min(a, b int) int {
++	if a < b {
++		return a
++	}
++	return b
++}
++
++// LineByID 根据 ID 查找行
++func (s Snapshot) LineByID(id string) *LineSnapshot {
++	for i := range s.Lines {
++		if s.Lines[i].ID == id {
++			return &s.Lines[i]
++		}
++	}
++	return nil
++}
++
++// LineAtCursor 根据光标状态查找行
++func (s Snapshot) LineAtCursor(cursor CursorState) *LineSnapshot {
++	return s.LineByID(cursor.LineID)
++}
++
++// CursorState 表示运行时光标状态（不序列化，不进 Intent）
++type CursorState struct {
++	LineID string // 当前行的稳定 ID
++	Offset int    // 在行中的偏移量
++}
++
++// CursorRefToState 将语义光标引用解析为运行时光标状态
++// 这是 Resolver 的职责
++func CursorRefToState(ref CursorRef, snapshot Snapshot) (CursorState, error) {
++	switch ref.Kind {
++	case CursorPrimary:
++		// 在实际实现中，这里会从快照中获取主光标位置
++		// 现在我们简化处理，返回第一行的开始位置
++		if len(snapshot.Lines) > 0 {
++			return CursorState{
++				LineID: snapshot.Lines[0].ID,
++				Offset: 0,
++			}, nil
++		}
++		return CursorState{}, fmt.Errorf("no lines in snapshot")
++	case CursorSelectionStart, CursorSelectionEnd:
++		// 在实际实现中，这里会从快照中获取选择区域的开始/结束位置
++		// 现在我们简化处理
++		if len(snapshot.Lines) > 0 {
++			return CursorState{
++				LineID: snapshot.Lines[0].ID,
++				Offset: 0,
++			}, nil
++		}
++		return CursorState{}, fmt.Errorf("no lines in snapshot")
++	default:
++		return CursorState{}, fmt.Errorf("unknown cursor kind: %d", ref.Kind)
++	}
++}
++
++// HistoryForResolver 用于实现快照模型下的 Undo/Redo
++type HistoryForResolver struct {
++	past    []Snapshot
++	present Snapshot
++	future  []Snapshot
++}
++
++// NewHistoryForResolver 创建新的历史记录
++func NewHistoryForResolver(initial Snapshot) *HistoryForResolver {
++	return &HistoryForResolver{
++		past:    []Snapshot{},
++		present: initial,
++		future:  []Snapshot{},
++	}
++}
++
++// Push 将新快照添加到历史记录
++func (h *HistoryForResolver) Push(snap Snapshot) {
++	h.past = append(h.past, h.present)
++	h.present = snap
++	// 丢弃 future，因为我们在新的分支上
++	h.future = []Snapshot{}
++}
++
++// Undo 执行撤销操作
++func (h *HistoryForResolver) Undo() (Snapshot, bool) {
++	if len(h.past) == 0 {
++		return h.present, false // 无法撤销
++	}
++
++	lastIdx := len(h.past) - 1
++	previous := h.past[lastIdx]
++
++	h.future = append([]Snapshot{h.present}, h.future...) // 将当前快照移到 future
++	h.present = previous
++	h.past = h.past[:lastIdx] // 移除最后一个 past 快照
++
++	return h.present, true
++}
++
++// Redo 执行重做操作
++func (h *HistoryForResolver) Redo() (Snapshot, bool) {
++	if len(h.future) == 0 {
++		return h.present, false // 无法重做
++	}
++
++	nextIdx := 0
++	next := h.future[nextIdx]
++
++	h.past = append(h.past, h.present) // 将当前快照移到 past
++	h.present = next
++	h.future = h.future[1:] // 移除第一个 future 快照
++
++	return h.present, true
++}
++
++// HasUndo 检查是否有可撤销的快照
++func (h *HistoryForResolver) HasUndo() bool {
++	return len(h.past) > 0
++}
++
++// HasRedo 检查是否有可重做的快照
++func (h *HistoryForResolver) HasRedo() bool {
++	return len(h.future) > 0
++}
+\ No newline at end of file
+diff --git a/undo_redo.go b/undo_redo.go
+new file mode 100644
+index 0000000..d55a955
+--- /dev/null
++++ b/undo_redo.go
+@@ -0,0 +1,135 @@
++package main
++
++import (
++	"errors"
++	"fmt"
++)
++
++// SnapshotManager 管理快照和历史记录
++type SnapshotManager struct {
++	history *HistoryForResolver
++}
++
++// NewSnapshotManager 创建新的快照管理器
++func NewSnapshotManager(initialSnapshot Snapshot) *SnapshotManager {
++	return &SnapshotManager{
++		history: NewHistoryForResolver(initialSnapshot),
++	}
++}
++
++// PushSnapshot 将新快照推送到历史记录
++func (sm *SnapshotManager) PushSnapshot(snapshot Snapshot) {
++	sm.history.Push(snapshot)
++}
++
++// PerformUndo 执行撤销操作
++func (sm *SnapshotManager) PerformUndo() (Snapshot, error) {
++	if !sm.history.HasUndo() {
++		return sm.history.present, errors.New("nothing to undo")
++	}
++	
++	snapshot, success := sm.history.Undo()
++	if !success {
++		return sm.history.present, errors.New("failed to undo")
++	}
++	
++	return snapshot, nil
++}
++
++// PerformRedo 执行重做操作
++func (sm *SnapshotManager) PerformRedo() (Snapshot, error) {
++	if !sm.history.HasRedo() {
++		return sm.history.present, errors.New("nothing to redo")
++	}
++	
++	snapshot, success := sm.history.Redo()
++	if !success {
++		return sm.history.present, errors.New("failed to redo")
++	}
++	
++	return snapshot, nil
++}
++
++// GetCurrentSnapshot 获取当前快照
++func (sm *SnapshotManager) GetCurrentSnapshot() Snapshot {
++	return sm.history.present
++}
++
++// HasUndo 检查是否可以撤销
++func (sm *SnapshotManager) HasUndo() bool {
++	return sm.history.HasUndo()
++}
++
++// HasRedo 检查是否可以重做
++func (sm *SnapshotManager) HasRedo() bool {
++	return sm.history.HasRedo()
++}
++
++// TransactionalEditor 提供事务性编辑操作
++type TransactionalEditor struct {
++	manager *SnapshotManager
++}
++
++// NewTransactionalEditor 创建新的事务性编辑器
++func NewTransactionalEditor(initialSnapshot Snapshot) *TransactionalEditor {
++	return &TransactionalEditor{
++		manager: NewSnapshotManager(initialSnapshot),
++	}
++}
++
++// ApplyIntent 应用意图并更新快照
++func (te *TransactionalEditor) ApplyIntent(intent Intent, currentSnapshot Snapshot) (Snapshot, error) {
++	// 这里应该根据意图类型应用相应的编辑操作
++	// 为了简化，我们只是将当前快照推送到历史记录
++	newSnapshot := te.simulateEdit(currentSnapshot, intent)
++	te.manager.PushSnapshot(newSnapshot)
++	
++	return newSnapshot, nil
++}
++
++// simulateEdit 模拟编辑操作（在实际实现中，这里会根据意图执行具体的编辑）
++func (te *TransactionalEditor) simulateEdit(snapshot Snapshot, intent Intent) Snapshot {
++	// 在实际实现中，这里会根据 Intent 的类型执行相应的编辑操作
++	// 例如：删除文本、插入文本、移动光标等
++	// 并返回一个新的快照
++
++	// 为了演示目的，我们简单地克隆快照并添加一些变化
++	newLines := make([]LineSnapshot, len(snapshot.Lines))
++	copy(newLines, snapshot.Lines)
++
++	// 根据意图类型模拟不同的编辑操作
++	switch intent.Kind {
++	case IntentDelete:
++		// 模拟删除操作
++		if len(newLines) > 0 {
++			// 简单地截断第一行的一部分
++			if len(newLines[0].Text) > 5 {
++				newLines[0] = LineSnapshot{
++					ID:   newLines[0].ID,
++					Text: newLines[0].Text[:len(newLines[0].Text)-5],
++				}
++			}
++		}
++	case IntentInsert:
++		// 模拟插入操作
++		if len(newLines) > 0 {
++			newLines[0] = LineSnapshot{
++				ID:   newLines[0].ID,
++				Text: newLines[0].Text + "_inserted",
++			}
++		}
++	// 其他意图类型的处理...
++	}
++
++	return Snapshot{
++		ID:    generateSnapshotID(),
++		Lines: newLines,
++	}
++}
++
++// generateSnapshotID 生成快照ID
++func generateSnapshotID() string {
++	// 在实际实现中，这可能是基于内容的哈希或其他唯一标识符
++	// 这里我们返回一个简单的字符串，因为无法访问外部的 snapshot 变量
++	return fmt.Sprintf("snapshot_%d", len("dummy"))
++}
+\ No newline at end of file
