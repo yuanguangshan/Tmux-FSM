@@ -50,8 +50,21 @@ func (g *GrammarEmitter) Emit(token fsm.RawToken) {
 }
 
 func (k *Kernel) Decide(key string) *Decision {
-	// ✅ 1. FSM 必须先看到 key
+	// ✅ 1. 优先检查是否有简单的 FSM 动作（最高优先级）
 	if k.FSM != nil {
+		if k.FSM.CanHandle(key) {
+			if state, ok := k.FSM.Keymap.States[k.FSM.Active]; ok {
+				if keyAction, ok := state.Keys[key]; ok && keyAction.Action != "" {
+					// 这是一个简单的 FSM 动作，优先执行
+					return &Decision{
+						Kind:   DecisionFSM,
+						Action: keyAction.Action,
+					}
+				}
+			}
+		}
+
+		// ✅ 2. 如果没有简单的 FSM 动作，再让 Grammar 处理
 		var lastGrammarIntent *intent.GrammarIntent
 
 		// 创建一个 GrammarEmitter 来处理 token
@@ -79,19 +92,6 @@ func (k *Kernel) Decide(key string) *Decision {
 			return &Decision{
 				Kind:   DecisionIntent, // This is a full-fledged intent
 				Intent: finalIntent,
-			}
-		}
-
-		// Fallback for simple actions defined in keymap.yaml
-		if dispatched && lastGrammarIntent == nil {
-			if state, ok := k.FSM.Keymap.States[k.FSM.Active]; ok {
-				if keyAction, ok := state.Keys[key]; ok && keyAction.Action != "" {
-					// This is a simple FSM action, not a full intent.
-					return &Decision{
-						Kind:   DecisionFSM,
-						Action: keyAction.Action,
-					}
-				}
 			}
 		}
 
