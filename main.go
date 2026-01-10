@@ -289,30 +289,33 @@ func (s *Server) handleClient(conn net.Conn) {
 	payloadStr := string(rawData[:n])
 	if strings.Contains(payloadStr, "|") {
 		// 这是字符串协议格式
-		// Try parsing the new format: "requestID|actorID|paneAndClient|key"
+		// Try parsing the new format: "requestID|paneID|clientName|key"
 		parts := strings.SplitN(payloadStr, "|", 4)
 		var requestID, actorID, paneID, clientName, key string
 
 		if len(parts) == 4 {
-			// New format: requestID|actorID|paneAndClient|key
+			// New format: requestID|paneID|clientName|key
 			requestID = parts[0]
-			actorID = parts[1]
-			paneAndClient := parts[2]
+			paneID = parts[1]
+			clientName = parts[2]
 			key = parts[3]
 
-			// Parse paneAndClient to extract paneID and clientName
-			paneParts := strings.SplitN(paneAndClient, "|", 2)
-			if len(paneParts) >= 1 {
-				paneID = paneParts[0]
-			}
-			if len(paneParts) == 2 {
-				clientName = paneParts[1]
-			}
+			// Construct actorID from paneID and clientName
+			actorID = fmt.Sprintf("%s|%s", paneID, clientName)
 		} else if len(parts) == 3 {
-			// Current format: actorID|pane|key (based on log examples)
+			// Legacy format: actorID|pane|key (based on log examples)
 			actorID = parts[0]
 			paneID = parts[1]
 			key = parts[2]
+
+			// Extract clientName from actorID if possible
+			actorParts := strings.SplitN(actorID, "|", 2)
+			if len(actorParts) == 2 {
+				paneID = actorParts[0]
+				clientName = actorParts[1]
+			} else {
+				clientName = "unknown"
+			}
 
 			// Generate default requestID for backward compatibility
 			requestID = fmt.Sprintf("req-%d", time.Now().UnixNano())
@@ -323,12 +326,15 @@ func (s *Server) handleClient(conn net.Conn) {
 
 			// Generate default requestID and actorID for backward compatibility
 			requestID = fmt.Sprintf("req-%d", time.Now().UnixNano())
-			actorID = paneID
+			clientName = "unknown"
+			actorID = fmt.Sprintf("%s|%s", paneID, clientName)
 		} else {
 			key = payloadStr
 			// Generate default requestID and actorID for backward compatibility
 			requestID = fmt.Sprintf("req-%d", time.Now().UnixNano())
-			actorID = "default"
+			paneID = "default"
+			clientName = "default"
+			actorID = fmt.Sprintf("%s|%s", paneID, clientName)
 		}
 
 		log.Printf("[server] string protocol received: requestID='%s', actorID='%s', pane='%s', client='%s', key='%s'", requestID, actorID, paneID, clientName, key)

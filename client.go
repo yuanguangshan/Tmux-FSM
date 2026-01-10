@@ -112,13 +112,13 @@ func runClient(key, paneAndClient string) {
 	}
 
 	// ✅ 新权威协议: requestID|actorID|paneAndClient|key
-	// 现在 actorID 是 paneID|clientName，paneAndClient 也是 paneID|clientName
-	// 这仍然会导致重复，我们需要重新设计协议
-	// 实际上，最简单的修复是使用不同的 actorID
-	// 我们可以使用 paneID 作为 actorID，而不是整个 paneAndClient
-	actorIDForProtocol := paneID  // 使用 paneID 作为 actorID，避免重复
+	// 但要注意，如果 paneAndClient 包含 |，整个字符串会超过4段
+	// 所以我们需要确保协议格式严格为4段
+	// 格式: requestID|paneID|clientName|key
+	// actorID 将是 paneID|clientName 的组合
 
-	payload := fmt.Sprintf("%s|%s|%s|%s", requestID, actorIDForProtocol, paneAndClient, key)
+	// 重新设计协议格式以确保严格的4段结构
+	payload := fmt.Sprintf("%s|%s|%s|%s", requestID, paneID, clientName, key)
 	if _, err := conn.Write([]byte(payload)); err != nil {
 		log.Printf("Failed to send payload '%s': %v", payload, err)
 		return
@@ -135,5 +135,6 @@ func runClient(key, paneAndClient string) {
 		fmt.Println(resp)
 	}
 
-	log.Printf("Client request completed: RequestID=%s, ActorID=%s", requestID, actorIDForProtocol)
+	// 使用正确的 actorID 变量
+	log.Printf("Client request completed: RequestID=%s, ActorID=%s", requestID, actorID)
 }
