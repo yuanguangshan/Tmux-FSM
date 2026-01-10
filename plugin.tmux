@@ -1,59 +1,178 @@
-##### tmux-fsm plugin (New Architecture with Legacy Support) #####
+# UTF-8 Support
+set -g default-terminal "screen-256color"
+set -g terminal-overrides "xterm-256color:Tc,xterm-kitty:Tc"
 
-##### 1. 变量初始化 #####
-set -g @fsm_state ""
-set -g @fsm_keys ""
+# Locale Support
+set -g set-clipboard on
 
-##### 2. 状态栏配置 #####
-set -g status-right "#[fg=yellow,bold]#{@fsm_state}#{@fsm_keys}#[default] | #S | %m-%d %H:%M"
+#ctrl-a 作为前缀
+set -g prefix C-a
+unbind C-b
+bind C-a send-prefix
 
-##### 3. 插件路径 #####
-set -g @fsm_bin "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm"
 
-##### 4. FSM 入口（静态绑定，声明式） #####
-# Prefix + f
-bind-key f run-shell -b "$HOME/.tmux/plugins/tmux-fsm/enter_fsm.sh"
+##### 鼠标支持 #####
 
-# No-prefix Ctrl+f
-bind-key -n C-f run-shell -b "$HOME/.tmux/plugins/tmux-fsm/enter_fsm.sh"
+# 启用鼠标（pane / window / 滚动）
+set -g mouse on
 
-##### 5. FSM 键表：安全退出（先退表，再通知 runtime） #####
-bind-key -T fsm Escape switch-client -T root \; \
-  run-shell -b "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -exit"
 
-bind-key -T fsm C-c switch-client -T root \; \
-  run-shell -b "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -exit"
+##### 历史记录 #####
 
-bind-key -T fsm q switch-client -T root \; \
-  run-shell -b "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -exit"
+# 提高 scrollback 历史长度
+set -g history-limit 50000
 
-##### 6. 显式绑定字母 / 数字（POSIX 兼容） #####
-run-shell "
-for key in \
-  a b c d e f g h i j k l m n o p q r s t u v w x y z \
-  A B C D E F G H I J K L M N O P Q R S T U V W X Y Z \
-  0 1 2 3 4 5 6 7 8 9; do
-    tmux bind-key -T fsm \"\$key\" \
-      run-shell -b \"$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -key '\$key' '#{pane_id}|#{client_name}'\"
-done
-"
 
-##### 7. Any fallback（兜底所有特殊键 / 标点） #####
-bind-key -T fsm Any run-shell -b \
-  "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -key \"#{key}\" \"#{pane_id}|#{client_name}\""
+##### Pane 切换（Vim 风格 hjkl，前缀模式） #####
 
-##### 8. 重新加载 FSM（不影响 client 表） #####
-bind-key -T root R run-shell -b \
-  "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -reload"
+bind h select-pane -L
+bind j select-pane -D
+bind k select-pane -U
+bind l select-pane -R
 
-##### 9. Help #####
-bind-key -T root ? run-shell \
-  "$HOME/.tmux/plugins/tmux-fsm/tmux-fsm '__HELP__' '#{pane_id}|#{client_name}'"
 
-##### 10. 启动 FSM Server（一次性，后台） #####
-run-shell -b "
-TMUX_FSM_MODE=weaver TMUX_FSM_LOG_FACTS=1 \
-$HOME/.tmux/plugins/tmux-fsm/tmux-fsm -server >/dev/null 2>&1 &
-"
+##### 快速重载配置 #####
 
-##### end tmux-fsm #####
+bind r source-file ~/.tmux.conf \; display "tmux reloaded"
+
+
+##### 状态栏 #####
+
+# 右侧显示 FSM 状态 + session 名称 + 时间
+# 由 plugin.tmux 统一管理 - 确保不在此处设置，避免覆盖
+# set -g status-right "#{@fsm_state}#{@fsm_keys} | #S | %Y-%m-%d %H:%M"
+
+# 仅设置左侧状态栏
+set -g status-left "#[fg=green,bold]#S#[default] | "
+
+
+##### 窗口与索引（补充项，不影响你原习惯） #####
+
+# 窗口 / pane 编号从 1 开始
+set -g base-index 1
+set -g pane-base-index 1
+set -g renumber-windows on
+
+
+##### 新窗口 / 分屏（继承当前目录） #####
+
+bind c new-window -c "#{pane_current_path}"
+bind | split-window -h -c "#{pane_current_path}"
+bind - split-window -v -c "#{pane_current_path}"
+
+
+##### 复制模式（Vim 风格） #####
+
+# 启用 vi 模式
+setw -g mode-keys vi
+
+# 复制模式绑定（带系统剪贴板同步）
+bind -T copy-mode-vi v send -X begin-selection
+bind -T copy-mode-vi y send -X copy-selection \; run "tmux save-buffer - | pbcopy"
+bind -T copy-mode-vi r send -X rectangle-toggle
+bind -T copy-mode-vi n send -X search-next
+bind -T copy-mode-vi N send -X search-previous
+bind -T copy-mode-vi Escape send -X cancel
+
+# 从系统剪贴板粘贴到 tmux
+bind -T copy-mode-vi p send -X paste-selection
+bind P run "pbpaste | tmux load-buffer - ; tmux paste-buffer"
+
+setw -g mode-keys vi
+bind -T copy-mode-vi v send -X begin-selection
+bind -T copy-mode-vi y send -X copy-selection
+
+
+##### 视觉提示（轻量，不花哨） #####
+
+set -g pane-border-style fg=colour238
+set -g pane-active-border-style fg=colour39
+
+
+##### Vim / Neovim 与 tmux 无缝 hjkl 穿透 #####
+
+# 判断当前 pane 是否在运行 vim / nvim
+is_vim="ps -o state= -o comm= -t '#{pane_tty}' | grep -iqE '^[^TXZ ]+ +(vi|vim|nvim)$'"
+
+# Ctrl-h/j/k/l：在 Vim split 和 tmux pane 之间自动切换
+# bind -n C-h if-shell "$is_vim" "send-keys C-h" "select-pane -L"
+# bind -n C-j if-shell "$is_vim" "send-keys C-j" "select-pane -D"  # Unbound to use for FSM mode
+bind -n C-k if-shell "$is_vim" "send-keys C-k" "select-pane -U"
+
+
+##### 终端与响应（稳态设置） #####
+
+set -g default-terminal "screen-256color"
+set -as terminal-overrides ",xterm-256color:RGB"
+
+# 降低 Esc 延迟（对 Vim 友好）
+set -sg escape-time 0
+
+##### Window / Pane 管理 #####
+
+# 关闭当前 window / pane
+bind x kill-pane        #  x 关闭 pane
+bind X kill-window      # 大写 X 关闭整个 window
+bind q kill-pane
+
+# 列出窗口
+bind w list-windows
+
+# 数字切换窗口（1 开始）
+bind 1 select-window -t 1
+bind 2 select-window -t 2
+bind 3 select-window -t 3
+bind 4 select-window -t 4
+bind 5 select-window -t 5
+bind 6 select-window -t 6
+bind 7 select-window -t 7
+bind 8 select-window -t 8
+bind 9 select-window -t 9
+
+
+bind -n C-h previous-window
+
+# 最近窗口切换
+bind Tab last-window
+# 调整大小
+bind -r H resize-pane -L 5
+bind -r J resize-pane -D 5
+bind -r K resize-pane -U 5
+bind -r L resize-pane -R 5
+
+set -g set-clipboard on
+
+
+##### Status Bar / Window Style #####
+
+# 状态栏基础
+set -g status on
+set -g status-position bottom
+set -g status-interval 5
+
+# 状态栏整体风格
+set -g status-style fg=colour250,bg=colour234
+
+# 左右组件长度
+set -g status-left-length 20
+set -g status-right-length 80
+
+# 非当前窗口
+set -g window-status-style fg=colour245,bg=colour234
+
+# 当前窗口（高亮，统一风格）
+set -g window-status-current-style fg=colour234,bg=colour39,bold
+
+# 分隔符（淡一点）
+set -g window-status-separator " | "
+
+# 窗口格式
+set -g window-status-format " #I:#W "
+set -g window-status-current-format "▶#I:#W◀"
+
+
+# 将 Ctrl-f 绑定为无前缀入口
+set -g @fsm_bind_no_prefix "C-f"
+
+# 包含原始插件配置
+source-file "$HOME/.tmux/plugins/tmux-fsm/plugin.tmux"
