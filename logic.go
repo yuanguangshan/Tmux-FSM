@@ -6,10 +6,31 @@ import (
 	"strings"
 )
 
+// PendingOp 表示待处理的操作
+type PendingOp int
+
+const (
+	OpNone PendingOp = iota
+	OpDelete
+	OpChange
+	OpYank
+)
+
+// FSM 结构体用于管理状态机
+type FSM struct {
+	pending PendingOp
+}
+
 // processKeyToIntent 将按键转换为 Intent（阶段 1：新增的语义层）
 // 这是从 string-based action 到 Intent-based 的过渡函数
 func processKeyToIntent(state *FSMState, key string) Intent {
-	// 先调用原有逻辑获取 action string
+	// 尝试使用 Native Intent Builder 处理特定命令 (dw, cw, dd)
+	intent := processKeyWithNativeBuilder(state, key)
+	if intent.Kind != IntentNone {
+		return intent
+	}
+
+	// 对于不支持的命令，仍然使用 legacy bridge
 	action := processKeyLegacy(state, key)
 
 	// 如果没有 action，返回空 Intent
@@ -34,6 +55,187 @@ func processKeyToIntent(state *FSMState, key string) Intent {
 	// 使用新的函数，传入行信息以解决 projection conflict check failed: missing LineID 的问题
 	// 重要：当前实现使用临时 LineID 策略，真正的快照感知实现需要在 Resolver 阶段完成
 	return actionStringToIntentWithLineInfo(action, state.Count, state.PaneID, "", cursorPos[1], cursorPos[0])
+}
+
+// processKeyWithNativeBuilder 使用 Native Intent Builder 处理特定命令
+func processKeyWithNativeBuilder(state *FSMState, key string) Intent {
+	// 创建 IntentBuilder 实例
+	builder := NewIntentBuilder(state.PaneID)
+
+	// 处理数字计数
+	if val, err := strconv.Atoi(key); err == nil && (val > 0 || state.Count > 0) {
+		// 在 Native Intent 模式下，我们直接更新状态中的计数
+		state.Count = state.Count*10 + val
+		return Intent{Kind: IntentNone}
+	}
+
+	// 根据当前模式处理按键
+	switch state.Mode {
+	case "NORMAL":
+		return handleNormalWithNativeBuilder(state, key, builder)
+	case "OPERATOR_PENDING":
+		return handleOperatorPendingWithNativeBuilder(state, key, builder)
+	}
+
+	// 对于其他模式，返回 IntentNone 以使用 legacy bridge
+	return Intent{Kind: IntentNone}
+}
+
+// handleNormalWithNativeBuilder 处理 NORMAL 模式下的按键，使用 Native Intent Builder
+func handleNormalWithNativeBuilder(state *FSMState, key string, builder *IntentBuilder) Intent {
+	switch key {
+	case "d":
+		// 设置待处理操作为删除
+		state.Operator = "delete"
+		state.Mode = "OPERATOR_PENDING"
+		return Intent{Kind: IntentNone}
+	case "c":
+		// 设置待处理操作为修改
+		state.Operator = "change"
+		state.Mode = "OPERATOR_PENDING"
+		return Intent{Kind: IntentNone}
+	case "y":
+		// 设置待处理操作为复制
+		state.Operator = "yank"
+		state.Mode = "OPERATOR_PENDING"
+		return Intent{Kind: IntentNone}
+	case "x":
+		// 直接删除右侧字符
+		return builder.Delete(SemanticTarget{Kind: TargetChar, Direction: "right"}, 1)
+	case "X":
+		// 直接删除左侧字符
+		return builder.Delete(SemanticTarget{Kind: TargetChar, Direction: "left"}, 1)
+	case "D":
+		// 删除到行尾
+		return builder.Delete(SemanticTarget{Kind: TargetLine, Scope: "end"}, 1)
+	case "C":
+		// 修改到行尾
+		return builder.Change(SemanticTarget{Kind: TargetLine, Scope: "end"}, 1)
+	case "S":
+		// 修改整行
+		return builder.Change(SemanticTarget{Kind: TargetLine, Scope: "whole"}, 1)
+	case "u":
+		// 撤销
+		return builder.Undo()
+	case "C-r":
+		// 重做
+		return builder.Redo()
+	case "n":
+		// 搜索下一个
+		return builder.Search(SemanticTarget{Kind: TargetSearch, Direction: "next"})
+	case "N":
+		// 搜索上一个
+		return builder.Search(SemanticTarget{Kind: TargetSearch, Direction: "prev"})
+	}
+
+	// 基础移动命令
+	motions := map[string]SemanticTarget{
+		"h": {Kind: TargetChar, Direction: "left"},
+		"j": {Kind: TargetPosition, Direction: "down"},
+		"k": {Kind: TargetPosition, Direction: "up"},
+		"l": {Kind: TargetChar, Direction: "right"},
+		"w": {Kind: TargetWord, Direction: "forward"},
+		"b": {Kind: TargetWord, Direction: "backward"},
+		"e": {Kind: TargetWord, Scope: "end"},
+		"0": {Kind: TargetLine, Scope: "start"},
+		"$": {Kind: TargetLine, Scope: "end"},
+		"G": {Kind: TargetFile, Scope: "end"},
+		"^": {Kind: TargetLine, Scope: "start"},
+		"C-b": {Kind: TargetWord, Direction: "backward"},
+		"C-f": {Kind: TargetWord, Direction: "forward"},
+		"Home": {Kind: TargetLine, Scope: "start"},
+		"End":  {Kind: TargetLine, Scope: "end"},
+	}
+
+	if motion, ok := motions[key]; ok {
+		return builder.Move(motion, state.Count)
+	}
+
+	return Intent{Kind: IntentNone}
+}
+
+// handleOperatorPendingWithNativeBuilder 处理 OPERATOR_PENDING 模式下的按键，使用 Native Intent Builder
+func handleOperatorPendingWithNativeBuilder(state *FSMState, key string, builder *IntentBuilder) Intent {
+	// 处理数字计数 (允许 d2w 这种形式)
+	if val, err := strconv.Atoi(key); err == nil && (val > 0 || state.Count > 0) {
+		state.Count = state.Count*10 + val
+		return Intent{Kind: IntentNone}
+	}
+
+	// 定义运动映射
+	motions := map[string]SemanticTarget{
+		"h": {Kind: TargetChar, Direction: "left"},
+		"j": {Kind: TargetPosition, Direction: "down"},
+		"k": {Kind: TargetPosition, Direction: "up"},
+		"l": {Kind: TargetChar, Direction: "right"},
+		"w": {Kind: TargetWord, Direction: "forward"},
+		"b": {Kind: TargetWord, Direction: "backward"},
+		"e": {Kind: TargetWord, Scope: "end"},
+		"$": {Kind: TargetLine, Scope: "end"},
+		"0": {Kind: TargetLine, Scope: "start"},
+		"^": {Kind: TargetLine, Scope: "start"},
+		"G": {Kind: TargetFile, Scope: "end"},
+	}
+
+	// 检查是否是运动命令
+	if motion, ok := motions[key]; ok {
+		// 根据操作符创建相应的 Intent
+		var intent Intent
+		count := state.Count
+		if count == 0 {
+			count = 1
+		}
+
+		switch state.Operator {
+		case "delete":
+			intent = builder.Delete(motion, count)
+		case "change":
+			intent = builder.Change(motion, count)
+		case "yank":
+			intent = builder.Yank(motion, count)
+		}
+
+		// 重置状态
+		state.Mode = "NORMAL"
+		state.Operator = ""
+		state.Count = 0
+
+		return intent
+	}
+
+	// 检查是否是重复操作符 (例如在 d 后再按 d)
+	if key == "d" && state.Operator == "delete" {
+		// 重复删除操作符意味着对整行进行操作
+		intent := builder.Delete(SemanticTarget{Kind: TargetLine, Scope: "whole"}, 1)
+		state.Mode = "NORMAL"
+		state.Operator = ""
+		return intent
+	} else if key == "c" && state.Operator == "change" {
+		// 重复修改操作符意味着对整行进行操作
+		intent := builder.Change(SemanticTarget{Kind: TargetLine, Scope: "whole"}, 1)
+		state.Mode = "NORMAL"
+		state.Operator = ""
+		return intent
+	} else if key == "y" && state.Operator == "yank" {
+		// 重复复制操作符意味着对整行进行操作
+		intent := builder.Yank(SemanticTarget{Kind: TargetLine, Scope: "whole"}, 1)
+		state.Mode = "NORMAL"
+		state.Operator = ""
+		return intent
+	}
+
+	// 检查是否进入文本对象模式 (i 或 a)
+	if key == "i" || key == "a" {
+		// 设置文本对象待处理状态
+		state.Mode = "TEXT_OBJECT_PENDING"
+		state.PendingKeys = key // 记录是 inside 还是 around
+		return Intent{Kind: IntentNone}
+	}
+
+	// 如果没有匹配，取消操作符待处理状态
+	state.Mode = "NORMAL"
+	state.Operator = ""
+	return Intent{Kind: IntentNone}
 }
 
 // processKey 保持原有签名，内部调用 processKeyToIntent

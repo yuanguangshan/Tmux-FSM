@@ -24,13 +24,16 @@ type FSMState struct {
 	PendingKeys          string                 `json:"pending_keys"`
 	Register             string                 `json:"register"`
 	LastRepeatableAction map[string]interface{} `json:"last_repeatable_action"`
-	UndoStack            []Transaction          `json:"undo_stack"`
-	RedoStack            []Transaction          `json:"redo_stack"`
-	LastUndoFailure      string                 `json:"last_undo_failure,omitempty"`
-	LastUndoSafetyLevel  string                 `json:"last_undo_safety_level,omitempty"`
-	AllowPartial         bool                   `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
-	PaneID               string                 `json:"pane_id"`       // Current pane ID for intent processing
-	Cursor               Cursor                 `json:"cursor"`        // Current cursor position
+	// Legacy undo/redo stacks - to be replaced with snapshot-based history
+	UndoStack           []Transaction `json:"undo_stack"`
+	RedoStack           []Transaction `json:"redo_stack"`
+	LastUndoFailure     string        `json:"last_undo_failure,omitempty"`
+	LastUndoSafetyLevel string        `json:"last_undo_safety_level,omitempty"`
+	AllowPartial        bool          `json:"allow_partial"` // Phase 7: Explicit permission for fuzzy resolution
+	PaneID              string        `json:"pane_id"`       // Current pane ID for intent processing
+	Cursor              Cursor        `json:"cursor"`        // Current cursor position
+	// New snapshot-based history for undo/redo
+	History *History `json:"-"` // Not serialized, rebuilt from transactions
 }
 
 var (

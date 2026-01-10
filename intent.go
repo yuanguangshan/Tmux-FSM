@@ -55,6 +55,8 @@ const (
 	IntentRepeat
 	IntentFind
 	IntentExit
+	// 快照相关意图
+	IntentSnapshotUpdate
 )
 
 // SemanticTarget 语义目标（而非物理位置）
