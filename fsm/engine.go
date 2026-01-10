@@ -2,8 +2,10 @@ package fsm
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
+	"tmux-fsm/backend"
 	"tmux-fsm/intent"
 )
 
@@ -380,12 +382,15 @@ func (e *Engine) RunAction(name string) {
 	}
 }
 
-// tmux 函数现在只记录需要执行的命令
+// tmux 函数现在通过 backend 执行 tmux 命令
 // 实际执行将由 Kernel 或 Executor 层处理
 func tmux(cmd string) {
 	// 注意：根据架构原则，FSM 不应直接执行命令
-	// 这个函数现在是一个占位符，实际执行应由 Kernel 层处理
-	fmt.Printf("FSM would execute tmux command: %s\n", cmd)
+	// 但现在通过 backend 执行命令
+	err := backend.GlobalBackend.ExecRaw(cmd)
+	if err != nil {
+		log.Printf("Error executing tmux command '%s': %v", cmd, err)
+	}
 }
 
 // DispatchIntent 分发意图给解析器
