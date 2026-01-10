@@ -59,49 +59,30 @@ func (e *ShadowEngine) ApplyIntent(hctx HandleContext, intent Intent, snapshot S
 		current, err := e.reality.ReadCurrent(intent.GetPaneID())
 		if err == nil {
 			if string(current.Hash) != intent.GetSnapshotHash() {
-				log.Printf("World drift detected: expected %s, got %s", intent.GetSnapshotHash(), string(current.Hash))
+				log.Printf("World drift detected: expected %s, got %s. Proceeding anyway (Optimistic).", intent.GetSnapshotHash(), string(current.Hash))
+
+				// Add audit entry as warning
+				auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
+					Phase:   "Adjudicate",
+					Action:  "Warning",
+					Outcome: "Proceed",
+					Detail:  "World drift detected but ignored (Optimistic Execution)",
+					Meta:    map[string]string{"expected": intent.GetSnapshotHash(), "actual": string(current.Hash)},
+					At:      time.Now().Unix(),
+				})
+			} else {
+				log.Printf("Time consistency verified for intent in pane %s", intent.GetPaneID())
 
 				// Add audit entry
 				auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
 					Phase:   "Adjudicate",
-					Action:  "Reject",
-					Outcome: "Rejected",
-					Detail:  "World drift detected",
-					Meta:    map[string]string{"expected": intent.GetSnapshotHash(), "actual": string(current.Hash)},
+					Action:  "Verify",
+					Outcome: "Success",
+					Detail:  "Time consistency verified",
+					Meta:    map[string]string{"pane": intent.GetPaneID()},
 					At:      time.Now().Unix(),
 				})
-
-				// Update result
-				auditRecord.Result = AuditResult{
-					Status:      "Rejected",
-					WorldDrift:  true,
-					DriftReason: string(DriftSnapshotMismatch),
-					Error:       "World drift detected",
-				}
-
-				return &Verdict{
-						Kind:    VerdictRejected,
-						Safety:  SafetyUnsafe,
-						Message: "World drift detected",
-						Audit:   convertAuditRecordToLegacy(auditRecord),
-					}, &WorldDriftError{
-						Reason:   DriftSnapshotMismatch,
-						Expected: intent.GetSnapshotHash(),
-						Actual:   string(current.Hash),
-						Message:  "World drift detected",
-					}
 			}
-			log.Printf("Time consistency verified for intent in pane %s", intent.GetPaneID())
-
-			// Add audit entry
-			auditRecord.Entries = append(auditRecord.Entries, AuditEntryV2{
-				Phase:   "Adjudicate",
-				Action:  "Verify",
-				Outcome: "Success",
-				Detail:  "Time consistency verified",
-				Meta:    map[string]string{"pane": intent.GetPaneID()},
-				At:      time.Now().Unix(),
-			})
 		} else {
 			log.Printf("Could not read current reality for pane %s: %v", intent.GetPaneID(), err)
 

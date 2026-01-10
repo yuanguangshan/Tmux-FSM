@@ -90,9 +90,9 @@ func PerformPhysicalMove(motion string, count int, targetPane string) {
 	case "right":
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-N", cStr, "Right").Run()
 	case "start_of_line", "goto_line_start": // 0
-		exec.Command("tmux", "send-keys", "-t", targetPane, "C-a").Run()
+		exec.Command("tmux", "send-keys", "-t", targetPane, "Home").Run()
 	case "end_of_line", "goto_line_end": // $
-		exec.Command("tmux", "send-keys", "-t", targetPane, "C-e").Run()
+		exec.Command("tmux", "send-keys", "-t", targetPane, "End").Run()
 	case "word_forward": // w
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-N", cStr, "M-f").Run()
 	case "word_backward": // b
@@ -303,7 +303,11 @@ func HandleVisualAction(action string, stateCount int, targetPane string) {
 			exec.Command("tmux", "send-keys", "-t", targetPane, vimOp).Run()
 		}
 	} else {
-		if op == "yank" {
+		if op == "enter" {
+			exec.Command("tmux", "copy-mode", "-t", targetPane).Run()
+			// Start selection if using vi keys in tmux
+			exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "begin-selection").Run()
+		} else if op == "yank" {
 			exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "copy-pipe-and-cancel", "tmux save-buffer -").Run()
 		} else if op == "delete" || op == "change" {
 			exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "copy-pipe-and-cancel", "tmux save-buffer -").Run()

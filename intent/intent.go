@@ -1,35 +1,39 @@
 package intent
 
+import (
+	"tmux-fsm/weaver/core"
+)
+
 // IntentKind 意图类型
-type IntentKind int
+type IntentKind = core.IntentKind
 
 const (
-	IntentNone IntentKind = iota
-	IntentMove
-	IntentDelete
-	IntentChange
-	IntentYank
-	IntentInsert
-	IntentPaste
-	IntentUndo
-	IntentRedo
-	IntentSearch
-	IntentVisual
-	IntentToggleCase
-	IntentReplace
-	IntentRepeat
-	IntentFind
-	IntentExit
-	IntentCount
-	IntentOperator
-	IntentMotion
-	IntentMacro
-	IntentEnterVisual
-	IntentExitVisual
-	IntentExtendSelection
-	IntentOperatorSelection
-	IntentRepeatFind
-	IntentRepeatFindReverse
+	IntentNone              = core.IntentNone
+	IntentMove              = core.IntentMove
+	IntentDelete            = core.IntentDelete
+	IntentChange            = core.IntentChange
+	IntentYank              = core.IntentYank
+	IntentInsert            = core.IntentInsert
+	IntentPaste             = core.IntentPaste
+	IntentUndo              = core.IntentUndo
+	IntentRedo              = core.IntentRedo
+	IntentSearch            = core.IntentSearch
+	IntentVisual            = core.IntentVisual
+	IntentToggleCase        = core.IntentToggleCase
+	IntentReplace           = core.IntentReplace
+	IntentRepeat            = core.IntentRepeat
+	IntentFind              = core.IntentFind
+	IntentExit              = core.IntentExit
+	IntentCount             = core.IntentCount
+	IntentOperator          = core.IntentOperator
+	IntentMotion            = core.IntentMotion
+	IntentMacro             = core.IntentMacro
+	IntentEnterVisual       = core.IntentEnterVisual
+	IntentExitVisual        = core.IntentExitVisual
+	IntentExtendSelection   = core.IntentExtendSelection
+	IntentOperatorSelection = core.IntentOperatorSelection
+	IntentRepeatFind        = core.IntentRepeatFind
+	IntentRepeatFindReverse = core.IntentRepeatFindReverse
 )
 
 // OperatorKind 操作符类型
@@ -43,18 +47,18 @@ const (
 )
 
 // TargetKind 目标类型
-type TargetKind int
+type TargetKind = core.TargetKind
 
 const (
-	TargetNone TargetKind = iota
-	TargetUnknown
-	TargetChar
-	TargetWord
-	TargetLine
-	TargetFile
-	TargetTextObject
-	TargetPosition
-	TargetSearch
+	TargetNone       = core.TargetNone
+	TargetUnknown    = core.TargetUnknown
+	TargetChar       = core.TargetChar
+	TargetWord       = core.TargetWord
+	TargetLine       = core.TargetLine
+	TargetFile       = core.TargetFile
+	TargetTextObject = core.TargetTextObject
+	TargetPosition   = core.TargetPosition
+	TargetSearch     = core.TargetSearch
 )
 
 // RangeType 范围类型
@@ -92,22 +96,29 @@ type Intent struct {
 }
 
 // SemanticTarget 语义目标（而非物理位置）
-type SemanticTarget struct {
-	Kind      TargetKind `json:"kind"`
-	Direction string     `json:"direction,omitempty"` // forward, backward
-	Scope     string     `json:"scope,omitempty"`     // char, line, word, etc.
-	Value     string     `json:"value,omitempty"`     // 用于搜索、替换等
-}
+type SemanticTarget = core.SemanticTarget
 
 // Anchor 锚点结构
-type Anchor struct {
-	PaneID string      `json:"pane_id"`
-	Kind   int         `json:"kind"`
-	Ref    interface{} `json:"ref,omitempty"`
-	Hash   string      `json:"hash,omitempty"`    // Phase 5.4: Reconciliation Expectation
-	LineID string      `json:"line_id,omitempty"` // Phase 9: Stable line identifier
-	Start  int         `json:"start,omitempty"`   // Phase 11: Start position in line
-	End    int         `json:"end,omitempty"`     // Phase 11: End position in line
+type Anchor = core.Anchor
+
+// GetKind 获取意图类型
+func (i Intent) GetKind() core.IntentKind {
+	return i.Kind
+}
+
+// GetTarget 获取语义目标
+func (i Intent) GetTarget() core.SemanticTarget {
+	return i.Target
+}
+
+// GetCount 获取计数
+func (i Intent) GetCount() int {
+	return i.Count
+}
+
+// GetMeta 获取元数据
+func (i Intent) GetMeta() map[string]interface{} {
+	return i.Meta
 }
 
 // GetPaneID 获取面板ID
@@ -123,4 +134,18 @@ func (i Intent) GetSnapshotHash() string {
 // IsPartialAllowed 是否允许部分匹配
 func (i Intent) IsPartialAllowed() bool {
 	return i.AllowPartial
+}
+
+// GetAnchors 获取锚点
+func (i Intent) GetAnchors() []core.Anchor {
+	return i.Anchors
+}
+
+// GetOperator 获取操作符
+func (i Intent) GetOperator() *int {
+	if i.Operator == nil {
+		return nil
+	}
+	val := int(*i.Operator)
+	return &val
 }

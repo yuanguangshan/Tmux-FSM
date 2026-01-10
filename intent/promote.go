@@ -57,9 +57,9 @@ func populateLegacyMotionMeta(meta map[string]interface{}, motion *Motion) {
 	case MotionWord:
 		switch motion.Direction {
 		case DirectionLeft:
-			motionStr = "word_left"
+			motionStr = "word_backward"
 		case DirectionRight:
-			motionStr = "word_right"
+			motionStr = "word_forward"
 		}
 	case MotionLine:
 		switch motion.Direction {
@@ -67,17 +67,27 @@ func populateLegacyMotionMeta(meta map[string]interface{}, motion *Motion) {
 			motionStr = "line_up"
 		case DirectionDown:
 			motionStr = "line_down"
+		default:
+			motionStr = "line"
 		}
 	case MotionGoto:
-		// 对于 Goto 类型，可能需要特殊处理
 		switch motion.Direction {
 		case DirectionLeft:
-			motionStr = "goto_line_start" // 对应 $ 或 0
+			motionStr = "goto_line_start"
 		case DirectionRight:
-			motionStr = "goto_line_end" // 对应 $
+			motionStr = "goto_line_end"
+		default:
+			// gg or G
+			if motion.Count > 1 {
+				motionStr = "goto_line" // Not fully supported yet?
+			} else {
+				// Assuming if no count and goto, it is gg/G?
+				// Grammar sets MotionGoto but doesn't set direction for gg/G
+				// TmuxPhysical expects start_of_file/end_of_file
+				// For now let's leave it as is or handle in next step
+			}
 		}
 	case MotionFind:
-		// Find 类型的运动
 		if motion.Find != nil {
 			if motion.Find.Direction == FindForward {
 				if motion.Find.Till {

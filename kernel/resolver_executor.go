@@ -36,7 +36,6 @@ func (e *ResolverExecutor) ProcessWithContext(ctx context.Context, hctx HandleCo
 		ActorID:   hctx.ActorID,
 	}
 
-	// Adapt the intent to the core.Intent interface and process it.
-	adaptedIntent := &intent.Adapter{Intent: *i}
-	return weaverMgr.ProcessIntentGlobalWithContext(coreHctx, adaptedIntent)
+	// intent.Intent now implements core.Intent interface directly.
+	return weaverMgr.ProcessIntentGlobalWithContext(coreHctx, i)
 }

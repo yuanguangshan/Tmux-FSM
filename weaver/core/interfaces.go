@@ -46,6 +46,7 @@ type Intent interface {
 	GetSnapshotHash() string // Phase 6.2
 	IsPartialAllowed() bool  // Phase 7: Explicit permission for fuzzy resolution
 	GetAnchors() []Anchor    // Phase 11.0: Support for multi-cursor / multi-selection
+	GetOperator() *int       // Added: Support for high-level operators
 } // 新增：Phase 3 需要
 
 // IntentKind 意图类型
@@ -62,19 +63,42 @@ const (
 	IntentUndo
 	IntentRedo
 	IntentSearch
-	IntentEnterVisual
-	IntentExitVisual
-	IntentVisual // Deprecated? Or generic? Keeping for safety.
+	IntentVisual
 	IntentToggleCase
 	IntentReplace
 	IntentRepeat
 	IntentFind
 	IntentExit
+	IntentCount
+	IntentOperator
+	IntentMotion
+	IntentMacro
+	IntentEnterVisual
+	IntentExitVisual
+	IntentExtendSelection
+	IntentOperatorSelection
+	IntentRepeatFind
+	IntentRepeatFindReverse
+)
+
+// TargetKind 目标类型
+type TargetKind int
+
+const (
+	TargetNone TargetKind = iota
+	TargetUnknown
+	TargetChar
+	TargetWord
+	TargetLine
+	TargetFile
+	TargetTextObject
+	TargetPosition
+	TargetSearch
 )
 
 // SemanticTarget 语义目标
 type SemanticTarget struct {
-	Kind      int
+	Kind      TargetKind
 	Direction string
 	Scope     string
 	Value     string

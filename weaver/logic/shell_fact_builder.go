@@ -106,6 +106,51 @@ func (b *ShellFactBuilder) Build(intent core.Intent, snapshot core.Snapshot) ([]
 				Anchor: anchor,
 				Meta:   updatedMeta,
 			})
+
+		case core.IntentOperator:
+			// Phase 17+ Architecture: High Level Operators (dd, dw, cw, yy)
+			updatedMeta := populateMotionMeta(meta, intent)
+			opPtr := intent.GetOperator()
+			if opPtr != nil {
+				op := *opPtr
+				// Corresponding Op kinds in intent/intent.go:
+				// OpMove = 0, OpDelete = 1, OpYank = 2, OpChange = 3
+				if op == 1 { // OpDelete
+					facts = append(facts, core.Fact{
+						Kind:   core.FactDelete,
+						Anchor: anchor,
+						Meta:   updatedMeta,
+					})
+				} else if op == 3 { // OpChange
+					// Change is delete + insert mode side effect
+					updatedMeta["operation"] = "change"
+					facts = append(facts, core.Fact{
+						Kind:   core.FactInsert, // Projection knows to enter insert mode
+						Anchor: anchor,
+						Meta:   updatedMeta,
+					})
+				}
+			}
+
+		case core.IntentEnterVisual, core.IntentVisual:
+			// Enter visual mode side effect
+			facts = append(facts, core.Fact{
+				Kind:   core.FactNone,
+				Anchor: anchor,
+				Meta: map[string]interface{}{
+					"operation": "visual_enter",
+				},
+			})
+
+		case core.IntentExitVisual:
+			// Exit visual mode side effect
+			facts = append(facts, core.Fact{
+				Kind:   core.FactNone,
+				Anchor: anchor,
+				Meta: map[string]interface{}{
+					"operation": "exit",
+				},
+			})
 		}
 	}
 

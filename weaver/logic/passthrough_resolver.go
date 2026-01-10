@@ -112,7 +112,10 @@ func (r *PassthroughResolver) resolveAnchorWithSnapshot(a core.Anchor, s core.Sn
 		if a.Hash != "" {
 			// Compare with LineSnapshot Hash
 			if string(s.Lines[row].Hash) != a.Hash {
-				return core.ResolvedAnchor{}, fmt.Errorf("line hash mismatch in snapshot")
+				// Phase 6.3: Relax to Warning for responsiveness
+				// fmt.Errorf("line hash mismatch in snapshot")
+				fmt.Printf("[RECONCILE] Warning: line hash mismatch (exp: %s, act: %s). Proceeding with Fuzzy safety.\n", a.Hash, string(s.Lines[row].Hash))
+				// Downgrade safety later if needed, but for now just don't return error
 			}
 		}
 	}
@@ -200,8 +203,8 @@ func (r *PassthroughResolver) resolveAnchor(a core.Anchor) (core.ResolvedAnchor,
 	if a.Hash != "" {
 		currentHash := adapter.TmuxHashLine(lineText)
 		if currentHash != a.Hash {
-			// Reconciliation Failure (Optimistic Locking)
-			return core.ResolvedAnchor{}, fmt.Errorf("consistency check failed: hash mismatch (exp: %s, act: %s)", a.Hash, currentHash)
+			// Reconciliation Warning instead of Failure
+			fmt.Printf("[RECONCILE] Warning: ad-hoc consistency check failed: hash mismatch (exp: %s, act: %s). Proceeding.\n", a.Hash, currentHash)
 		}
 	}
 

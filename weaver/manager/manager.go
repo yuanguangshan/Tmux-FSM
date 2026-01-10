@@ -151,7 +151,7 @@ func (a *intentAdapter) GetKind() core.IntentKind {
 
 func (a *intentAdapter) GetTarget() core.SemanticTarget {
 	return core.SemanticTarget{
-		Kind:      int(a.intent.Target.Kind), // 使用intent中的Kind值
+		Kind:      core.TargetKind(a.intent.Target.Kind), // 使用 core.TargetKind 强制转换
 		Direction: a.intent.Target.Direction,
 		Scope:     a.intent.Target.Scope,
 		Value:     a.intent.Target.Value,
@@ -193,6 +193,14 @@ func (a *intentAdapter) GetAnchors() []core.Anchor {
 		}
 	}
 	return anchors
+}
+
+func (a *intentAdapter) GetOperator() *int {
+	if a.intent.Operator == nil {
+		return nil
+	}
+	val := int(*a.intent.Operator)
+	return &val
 }
 
 // GetWeaverManager 获取全局 Weaver 管理器实例
