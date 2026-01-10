@@ -76,15 +76,18 @@ func (b *ShellFactBuilder) Build(intent core.Intent, snapshot core.Snapshot) ([]
 				// Extract "iw", "ap" etc from value
 				// The semantic target value for TextObject is the spec string (e.g. "iw")
 				meta["text_object"] = target.Value
-
 				facts = append(facts, core.Fact{
 					Kind:   core.FactDelete,
 					Anchor: anchor, // This anchor needs to be Kind=AnchorTextObject
 					Meta:   meta,
 				})
 			} else {
-				// Fallback or other delete types?
-				// For now, only enabling TextObject delete in this path as requested.
+				// Handle other delete types (Character, Word, Line, etc.)
+				facts = append(facts, core.Fact{
+					Kind:   core.FactDelete,
+					Anchor: anchor,
+					Meta:   meta,
+				})
 			}
 
 		case core.IntentMove:
