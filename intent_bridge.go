@@ -31,74 +31,74 @@ func actionStringToIntentWithLineInfo(action string, count int, paneID string, l
 	// 特殊的单一动作
 	switch action {
 	case "undo":
-		return Intent{Kind: IntentUndo, Count: count, PaneID: paneID}
+		return createIntentWithAnchor(Intent{Kind: IntentUndo, Count: count, PaneID: paneID}, paneID, lineID, row, col)
 	case "redo":
-		return Intent{Kind: IntentRedo, Count: count, PaneID: paneID}
+		return createIntentWithAnchor(Intent{Kind: IntentRedo, Count: count, PaneID: paneID}, paneID, lineID, row, col)
 	case "repeat_last":
-		return Intent{Kind: IntentRepeat, Count: count, PaneID: paneID}
+		return createIntentWithAnchor(Intent{Kind: IntentRepeat, Count: count, PaneID: paneID}, paneID, lineID, row, col)
 	case "exit":
-		return Intent{Kind: IntentExit, PaneID: paneID}
+		return createIntentWithAnchor(Intent{Kind: IntentExit, PaneID: paneID}, paneID, lineID, row, col)
 	case "toggle_case":
-		return Intent{Kind: IntentToggleCase, Count: count, PaneID: paneID}
+		return createIntentWithAnchor(Intent{Kind: IntentToggleCase, Count: count, PaneID: paneID}, paneID, lineID, row, col)
 	case "search_next":
-		return Intent{
+		return createIntentWithAnchor(Intent{
 			Kind:   IntentSearch,
 			Target: SemanticTarget{Kind: TargetSearch, Direction: "next"},
 			Count:  count,
 			PaneID: paneID,
-		}
+		}, paneID, lineID, row, col)
 	case "search_prev":
-		return Intent{
+		return createIntentWithAnchor(Intent{
 			Kind:   IntentSearch,
 			Target: SemanticTarget{Kind: TargetSearch, Direction: "prev"},
 			Count:  count,
 			PaneID: paneID,
-		}
+		}, paneID, lineID, row, col)
 	case "start_visual_char":
-		return Intent{
+		return createIntentWithAnchor(Intent{
 			Kind:   IntentVisual,
 			Target: SemanticTarget{Scope: "char"},
 			PaneID: paneID,
-		}
+		}, paneID, lineID, row, col)
 	case "start_visual_line":
-		return Intent{
+		return createIntentWithAnchor(Intent{
 			Kind:   IntentVisual,
 			Target: SemanticTarget{Scope: "line"},
 			PaneID: paneID,
-		}
+		}, paneID, lineID, row, col)
 	case "cancel_selection":
-		return Intent{
+		return createIntentWithAnchor(Intent{
 			Kind:   IntentVisual,
 			Target: SemanticTarget{Scope: "cancel"},
 			PaneID: paneID,
-		}
+		}, paneID, lineID, row, col)
 	}
 
 	// 处理前缀匹配的动作
 	if strings.HasPrefix(action, "search_forward_") {
 		query := strings.TrimPrefix(action, "search_forward_")
-		return Intent{
+		return createIntentWithAnchor(Intent{
 			Kind:   IntentSearch,
 			Target: SemanticTarget{Kind: TargetSearch, Value: query},
 			Count:  count,
 			PaneID: paneID,
-		}
+		}, paneID, lineID, row, col)
 	}
 
 	if strings.HasPrefix(action, "replace_char_") {
 		char := strings.TrimPrefix(action, "replace_char_")
-		return Intent{
+		return createIntentWithAnchor(Intent{
 			Kind:   IntentReplace,
 			Target: SemanticTarget{Value: char},
 			Count:  count,
 			PaneID: paneID,
-		}
+		}, paneID, lineID, row, col)
 	}
 
 	if strings.HasPrefix(action, "find_") {
 		parts := strings.SplitN(action, "_", 3)
 		if len(parts) == 3 {
-			return Intent{
+			return createIntentWithAnchor(Intent{
 				Kind:  IntentFind,
 				Count: count,
 				Meta: map[string]interface{}{
@@ -106,18 +106,18 @@ func actionStringToIntentWithLineInfo(action string, count int, paneID string, l
 					"char":      parts[2],
 				},
 				PaneID: paneID,
-			}
+			}, paneID, lineID, row, col)
 		}
 	}
 
 	if strings.HasPrefix(action, "visual_") {
 		op := strings.TrimPrefix(action, "visual_")
-		return Intent{
+		return createIntentWithAnchor(Intent{
 			Kind:   IntentVisual,
 			Count:  count,
 			Meta:   map[string]interface{}{"operation": op},
 			PaneID: paneID,
-		}
+		}, paneID, lineID, row, col)
 	}
 
 	// 解析 operation_motion 格式
@@ -125,7 +125,7 @@ func actionStringToIntentWithLineInfo(action string, count int, paneID string, l
 	if len(parts) < 2 {
 		// 单一动作，无法解析
 		base.Kind = IntentNone
-		return base
+		return createIntentWithAnchor(base, paneID, lineID, row, col)
 	}
 
 	operation := parts[0]
@@ -179,17 +179,21 @@ func actionStringToIntentWithLineInfo(action string, count int, paneID string, l
 		LineID: finalLineID,
 		Start:  col,
 		End:    col,
-		Kind:   int(TargetPosition), // 使用位置类型锚点
+		Kind:   int(TargetPosition), // 默认使用位置类型锚点
 	}
 
-	// 根据动作类型调整锚点类型
+	// 根据目标类型调整锚点类型和范围，使其与 ShellFactBuilder 期望的值匹配
 	switch target.Kind {
 	case TargetLine:
-		anchor.Kind = int(TargetLine)
+		anchor.Kind = int(TargetLine) // = 3
+		// For line operations, we might want to set the range to cover the whole line
+		// But for now, we'll keep the cursor position and let resolver handle the semantic expansion
 	case TargetWord:
-		anchor.Kind = int(TargetWord)
+		anchor.Kind = int(TargetWord) // = 2
 	case TargetChar:
-		anchor.Kind = int(TargetChar)
+		anchor.Kind = int(TargetChar) // = 1
+	case TargetTextObject:
+		anchor.Kind = int(TargetTextObject) // = 5
 	}
 
 	return Intent{
@@ -200,6 +204,39 @@ func actionStringToIntentWithLineInfo(action string, count int, paneID string, l
 		Meta:    meta,
 		Anchors: []Anchor{anchor}, // 添加锚点信息
 	}
+}
+
+// createIntentWithAnchor creates an intent with proper anchor information
+func createIntentWithAnchor(base Intent, paneID string, lineID string, row int, col int) Intent {
+	// Generate LineID if not provided
+	finalLineID := lineID
+	if finalLineID == "" && paneID != "" {
+		finalLineID = fmt.Sprintf("%s_line_%d", paneID, row)
+	}
+
+	// Create anchor with LineID
+	anchor := Anchor{
+		PaneID: paneID,
+		LineID: finalLineID,
+		Start:  col,
+		End:    col,
+		Kind:   int(TargetPosition), // Default position anchor
+	}
+
+	// Add LineID to meta if available
+	if finalLineID != "" && base.Meta == nil {
+		base.Meta = make(map[string]interface{})
+		base.Meta["line_id"] = finalLineID
+		base.Meta["row"] = row
+		base.Meta["col"] = col
+	} else if finalLineID != "" && base.Meta != nil {
+		base.Meta["line_id"] = finalLineID
+		base.Meta["row"] = row
+		base.Meta["col"] = col
+	}
+
+	base.Anchors = []Anchor{anchor}
+	return base
 }
 
 // parseMotionToTarget 将 motion string 解析为 SemanticTarget
