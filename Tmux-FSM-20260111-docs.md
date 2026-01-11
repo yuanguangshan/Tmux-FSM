@@ -1,9 +1,9 @@
 # Project Documentation
 
-- **Generated at:** 2026-01-11 16:35:26
+- **Generated at:** 2026-01-11 16:38:00
 - **Root Dir:** `.`
 - **File Count:** 129
-- **Total Size:** 526.99 KB
+- **Total Size:** 527.07 KB
 
 ## 📂 扫描目录
 - [backend/backend.go](#📄-backendbackendgo) (105 lines, 2.96 KB)
@@ -98,7 +98,7 @@
 - [snapshot.go](#📄-snapshotgo) (161 lines, 4.06 KB)
 - [tests/integration_test.go](#📄-testsintegration_testgo) (86 lines, 2.61 KB)
 - [tests/invalid_history_test.go](#📄-testsinvalid_history_testgo) (41 lines, 1.04 KB)
-- [tools/gen-docs.go](#📄-toolsgen-docsgo) (657 lines, 15.14 KB)
+- [tools/gen-docs.go](#📄-toolsgen-docsgo) (659 lines, 15.23 KB)
 - [ui/interface.go](#📄-uiinterfacego) (8 lines, 0.08 KB)
 - [ui/popup.go](#📄-uipopupgo) (48 lines, 0.71 KB)
 - [undotree/tree.go](#📄-undotreetreego) (107 lines, 2.80 KB)
@@ -15628,6 +15628,7 @@ func writeMarkdownStream(cfg Config, files []FileMetadata, stats Stats) error {
 	fmt.Fprintln(w)
 
 	// 写入目录
+	fmt.Fprintln(w, "<a name=\"toc\"></a>")
 	fmt.Fprintln(w, "## 📂 扫描目录")
 	for _, file := range files {
 		// 生成锚点，方便在 Markdown 中点击跳转
@@ -15684,6 +15685,7 @@ func copyFileContent(w *bufio.Writer, file FileMetadata) error {
 	}
 
 	fmt.Fprintln(w, "\n````")
+	fmt.Fprintln(w, "\n[⬆ 回到目录](#toc)")
 	return nil
 }
 
@@ -21609,5 +21611,5 @@ func TestWeaverManagerProcess(t *testing.T) {
 ---
 ### 📊 最终统计汇总
 - **文件总数:** 129
-- **代码总行数:** 20695
-- **物理总大小:** 526.99 KB
+- **代码总行数:** 20697
+- **物理总大小:** 527.07 KB
