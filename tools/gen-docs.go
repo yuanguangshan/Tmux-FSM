@@ -24,14 +24,15 @@ const versionStr = "v2.0.0"
 
 // Config 集中管理配置
 type Config struct {
-	RootDir     string
-	OutputFile  string
-	IncludeExts []string
-	ExcludeExts []string
-	MaxFileSize int64
-	NoSubdirs   bool
-	Verbose     bool
-	Version     bool
+	RootDir        string
+	OutputFile     string
+	IncludeExts    []string
+	IncludeMatches []string
+	ExcludeExts    []string
+	MaxFileSize    int64
+	NoSubdirs      bool
+	Verbose        bool
+	Version        bool
 }
 
 // FileMetadata 仅存储元数据，不存内容
@@ -137,12 +138,13 @@ func main() {
 
 func parseFlags() Config {
 	var cfg Config
-	var include, exclude string
+	var include, match, exclude string
 	var maxKB int64
 
 	flag.StringVar(&cfg.RootDir, "dir", ".", "Root directory to scan")
 	flag.StringVar(&cfg.OutputFile, "o", "", "Output markdown file")
 	flag.StringVar(&include, "i", "", "Include extensions (e.g. .go,.js)")
+	flag.StringVar(&match, "m", "", "Include path matches (e.g. _test.go,kernel/)")
 	flag.StringVar(&exclude, "x", "", "Exclude extensions")
 	flag.Int64Var(&maxKB, "max-size", 500, "Max file size in KB")
 	flag.BoolVar(&cfg.NoSubdirs, "no-subdirs", false, "Do not scan subdirectories")
@@ -173,10 +175,26 @@ func parseFlags() Config {
 	}
 
 	cfg.IncludeExts = normalizeExts(include)
+	cfg.IncludeMatches = splitAndTrim(match)
 	cfg.ExcludeExts = normalizeExts(exclude)
 	cfg.MaxFileSize = maxKB * 1024
 
 	return cfg
+}
+
+func splitAndTrim(input string) []string {
+	if input == "" {
+		return nil
+	}
+	parts := strings.Split(input, ",")
+	var result []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
 }
 
 /*
@@ -191,10 +209,13 @@ func printStartupInfo(cfg Config) {
 	fmt.Printf("  Out : %s\n", cfg.OutputFile)
 	fmt.Printf("  Max : %d KB\n", cfg.MaxFileSize/1024)
 	if len(cfg.IncludeExts) > 0 {
-		fmt.Printf("  Only: %v\n", cfg.IncludeExts)
+		fmt.Printf("  Only Ext: %v\n", cfg.IncludeExts)
+	}
+	if len(cfg.IncludeMatches) > 0 {
+		fmt.Printf("  Match   : %v\n", cfg.IncludeMatches)
 	}
 	if len(cfg.ExcludeExts) > 0 {
-		fmt.Printf("  Skip: %v\n", cfg.ExcludeExts)
+		fmt.Printf("  Skip Ext: %v\n", cfg.ExcludeExts)
 	}
 	fmt.Println()
 }
@@ -323,11 +344,26 @@ func shouldIgnoreFile(relPath string, size int64, cfg Config) bool {
 		}
 	}
 
-	// 包含规则（白名单）
+	// 规则 1: 包含后缀白名单 (如果设置了)
 	if len(cfg.IncludeExts) > 0 {
 		found := false
 		for _, i := range cfg.IncludeExts {
 			if ext == i {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return true
+		}
+	}
+
+	// 规则 2: 路径模糊匹配 (如果设置了)
+	// 只要相对路径包含任一关键字，就保留
+	if len(cfg.IncludeMatches) > 0 {
+		found := false
+		for _, m := range cfg.IncludeMatches {
+			if strings.Contains(relPath, m) {
 				found = true
 				break
 			}
