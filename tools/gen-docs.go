@@ -29,6 +29,7 @@ type Config struct {
 	IncludeExts    []string
 	IncludeMatches []string
 	ExcludeExts    []string
+	ExcludeMatches []string
 	MaxFileSize    int64
 	NoSubdirs      bool
 	Verbose        bool
@@ -37,16 +38,18 @@ type Config struct {
 
 // FileMetadata 仅存储元数据，不存内容
 type FileMetadata struct {
-	RelPath  string
-	FullPath string
-	Size     int64
+	RelPath   string
+	FullPath  string
+	Size      int64
+	LineCount int
 }
 
 // Stats 统计信息
 type Stats struct {
-	FileCount int
-	TotalSize int64
-	Skipped   int
+	FileCount  int
+	TotalSize  int64
+	TotalLines int
+	Skipped    int
 }
 
 var defaultIgnorePatterns = []string{
@@ -138,14 +141,15 @@ func main() {
 
 func parseFlags() Config {
 	var cfg Config
-	var include, match, exclude string
+	var include, match, exclude, excludeMatch string
 	var maxKB int64
 
 	flag.StringVar(&cfg.RootDir, "dir", ".", "Root directory to scan")
 	flag.StringVar(&cfg.OutputFile, "o", "", "Output markdown file")
 	flag.StringVar(&include, "i", "", "Include extensions (e.g. .go,.js)")
-	flag.StringVar(&match, "m", "", "Include path matches (e.g. _test.go,kernel/)")
-	flag.StringVar(&exclude, "x", "", "Exclude extensions")
+	flag.StringVar(&match, "m", "", "Include path keywords (e.g. _test.go)")
+	flag.StringVar(&exclude, "x", "", "Exclude extensions (e.g. .exe,.o)")
+	flag.StringVar(&excludeMatch, "xm", "", "Exclude path keywords (e.g. vendor/,node_modules/)")
 	flag.Int64Var(&maxKB, "max-size", 500, "Max file size in KB")
 	flag.BoolVar(&cfg.NoSubdirs, "no-subdirs", false, "Do not scan subdirectories")
 	flag.BoolVar(&cfg.NoSubdirs, "ns", false, "Alias for --no-subdirs")
@@ -193,6 +197,7 @@ func parseFlags() Config {
 	cfg.IncludeExts = normalizeExts(include)
 	cfg.IncludeMatches = splitAndTrim(match)
 	cfg.ExcludeExts = normalizeExts(exclude)
+	cfg.ExcludeMatches = splitAndTrim(excludeMatch)
 	cfg.MaxFileSize = maxKB * 1024
 
 	return cfg
@@ -233,15 +238,19 @@ func printStartupInfo(cfg Config) {
 	if len(cfg.ExcludeExts) > 0 {
 		fmt.Printf("  Skip Ext: %v\n", cfg.ExcludeExts)
 	}
+	if len(cfg.ExcludeMatches) > 0 {
+		fmt.Printf("  Skip Key: %v\n", cfg.ExcludeMatches)
+	}
 	fmt.Println()
 }
 
 func printSummary(stats Stats, output string) {
 	fmt.Println("\n✔ 完成!")
-	fmt.Printf("  文件数  : %d\n", stats.FileCount)
-	fmt.Printf("  已跳过  : %d\n", stats.Skipped)
-	fmt.Printf("  总大小  : %.2f KB\n", float64(stats.TotalSize)/1024)
-	fmt.Printf("  输出路径: %s\n", output)
+	fmt.Printf("  文件总数  : %d\n", stats.FileCount)
+	fmt.Printf("  总行数    : %d\n", stats.TotalLines)
+	fmt.Printf("  总物理大小 : %.2f KB\n", float64(stats.TotalSize)/1024)
+	fmt.Printf("  已跳过    : %d\n", stats.Skipped)
+	fmt.Printf("  输出路径  : %s\n", output)
 }
 
 /*
@@ -360,7 +369,17 @@ func shouldIgnoreFile(relPath string, size int64, cfg Config) bool {
 		}
 	}
 
-	// 规则 1: 包含后缀白名单 (如果设置了)
+	// 规则 0: 硬性排除 (关键字排除) - 优先级最高
+	if len(cfg.ExcludeMatches) > 0 {
+		for _, m := range cfg.ExcludeMatches {
+			if strings.Contains(relPath, m) {
+				logf(cfg.Verbose, "⊘ 匹配排除关键字 [%s]: %s", m, relPath)
+				return true
+			}
+		}
+	}
+
+	// 规则 1: 包含后缀白名单
 	if len(cfg.IncludeExts) > 0 {
 		found := false
 		for _, i := range cfg.IncludeExts {
@@ -374,8 +393,7 @@ func shouldIgnoreFile(relPath string, size int64, cfg Config) bool {
 		}
 	}
 
-	// 规则 2: 路径模糊匹配 (如果设置了)
-	// 只要相对路径包含任一关键字，就保留
+	// 规则 2: 关键字包含匹配
 	if len(cfg.IncludeMatches) > 0 {
 		found := false
 		for _, m := range cfg.IncludeMatches {
@@ -488,9 +506,16 @@ func writeMarkdownStream(cfg Config, files []FileMetadata, stats Stats) error {
 	fmt.Fprintln(w)
 
 	// 写入目录
-	fmt.Fprintln(w, "## 📂 File List")
+	fmt.Fprintln(w, "## 📂 扫描目录")
 	for _, file := range files {
-		fmt.Fprintf(w, "- `%s` (%.2f KB)\n", file.RelPath, float64(file.Size)/1024)
+		// 生成锚点，方便在 Markdown 中点击跳转
+		// 注意：锚点名称在 GitHub 中通常是将空格转为横杠并全小写
+		anchor := strings.ReplaceAll(file.RelPath, " ", "-")
+		anchor = strings.ReplaceAll(anchor, ".", "")
+		anchor = strings.ReplaceAll(anchor, "/", "")
+		anchor = strings.ToLower(anchor)
+
+		fmt.Fprintf(w, "- [%s](#📄-%s) (%d lines, %.2f KB)\n", file.RelPath, anchor, file.LineCount, float64(file.Size)/1024)
 	}
 	fmt.Fprintln(w, "\n---")
 
@@ -498,42 +523,55 @@ func writeMarkdownStream(cfg Config, files []FileMetadata, stats Stats) error {
 	total := len(files)
 	for i, file := range files {
 		if !cfg.Verbose && (i%10 == 0 || i == total-1) {
-			fmt.Printf("\r🚀 进度: %d/%d (%.1f%%)", i+1, total, float64(i+1)/float64(total)*100)
+			fmt.Printf("\r🚀 写入进度: %d/%d (%.1f%%)", i+1, total, float64(i+1)/float64(total)*100)
 		}
 
-		if err := copyFileContent(w, file); err != nil {
+		if count, err := copyFileContent(w, file); err != nil {
 			logf(true, "\n⚠ 读取失败 %s: %v", file.RelPath, err)
 			continue
+		} else {
+			files[i].LineCount = count
+			stats.TotalLines += count
 		}
 	}
 	fmt.Println()
 
-	// 【改进1】显式 Flush 并捕获错误
+	//【补充统计】因为行数是在写入时才知道的，我们在末尾追加汇总
+	fmt.Fprintln(w, "\n---")
+	fmt.Fprintf(w, "### 📊 最终统计汇总\n")
+	fmt.Fprintf(w, "- **文件总数:** %d\n", stats.FileCount)
+	fmt.Fprintf(w, "- **代码总行数:** %d\n", stats.TotalLines)
+	fmt.Fprintf(w, "- **物理总大小:** %.2f KB\n", float64(stats.TotalSize)/1024)
+
 	return w.Flush()
 }
 
-func copyFileContent(w *bufio.Writer, file FileMetadata) error {
+func copyFileContent(w *bufio.Writer, file FileMetadata) (int, error) {
 	src, err := os.Open(file.FullPath)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer src.Close()
 
 	lang := detectLanguage(file.RelPath)
 
 	fmt.Fprintln(w)
-	fmt.Fprintf(w, "## 📄 `%s`\n\n", file.RelPath)
+	// 此处的标题格式必须与 ToC 中的锚点规则匹配
+	fmt.Fprintf(w, "## 📄 %s\n\n", file.RelPath)
 
-	// 【改进2】使用更安全的代码块分隔符（4个反引号）
-	// 这样即使源代码中包含 ``` 也不会破坏格式
 	fmt.Fprintf(w, "````%s\n", lang)
 
-	if _, err := io.Copy(w, src); err != nil {
-		return err
+	// 计算行数
+	lineCount := 0
+	scanner := bufio.NewScanner(src)
+	for scanner.Scan() {
+		w.WriteString(scanner.Text())
+		w.WriteByte('\n')
+		lineCount++
 	}
 
-	fmt.Fprintln(w, "\n````")
-	return nil
+	fmt.Fprintln(w, "````")
+	return lineCount, scanner.Err()
 }
 
 /*
