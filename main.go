@@ -160,6 +160,7 @@ func main() {
 
 	if *debugMode {
 		log.SetFlags(log.LstdFlags | log.Lshortfile) // Include file and line info in logs
+		DebugLogging = true                          // 同时启用文件调试日志
 	}
 
 	// Handle command line arguments

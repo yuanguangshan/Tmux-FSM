@@ -46,6 +46,7 @@ var (
 	// Feature Flags
 	StrictNativeFSM      = false // Phase 2.3: Panic on legacy fallback
 	StrictNativeResolver = false // Phase 2.0.2: Panic on legacy anchors
+	DebugLogging         = false // 是否启用详细调试日志 (写入 ~/tmux-fsm.log)
 )
 
 func init() {
@@ -168,12 +169,14 @@ func updateStatusBar(state FSMState, clientName string) {
 		keysMsg += " !UNDO_FAIL"
 	}
 
-	// Debug logging
-	f, _ := os.OpenFile(os.Getenv("HOME")+"/tmux-fsm.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if f != nil {
-		fmt.Fprintf(f, "[%s] Updating status: mode=%s, state.Mode=%s, keys=%s\n",
-			time.Now().Format("15:04:05"), modeMsg, state.Mode, keysMsg)
-		f.Close()
+	if DebugLogging {
+		// Debug logging
+		f, _ := os.OpenFile(os.Getenv("HOME")+"/tmux-fsm.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if f != nil {
+			fmt.Fprintf(f, "[%s] Updating status: mode=%s, state.Mode=%s, keys=%s\n",
+				time.Now().Format("15:04:05"), modeMsg, state.Mode, keysMsg)
+			f.Close()
+		}
 	}
 
 	// Use GlobalBackend for tmux option updates
