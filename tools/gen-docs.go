@@ -313,16 +313,21 @@ func scanDirectory(cfg Config) ([]FileMetadata, Stats, error) {
 			return nil
 		}
 
+		// 计算行数
+		lineCount, _ := countLines(path)
+
 		// 加入列表
 		files = append(files, FileMetadata{
-			RelPath:  relPath,
-			FullPath: path,
-			Size:     info.Size(),
+			RelPath:   relPath,
+			FullPath:  path,
+			Size:      info.Size(),
+			LineCount: lineCount,
 		})
 		stats.FileCount++
+		stats.TotalLines += lineCount
 		stats.TotalSize += info.Size()
 
-		logf(cfg.Verbose, "✓ 添加: %s", relPath)
+		logf(cfg.Verbose, "✓ 添加: %s (%d lines)", relPath, lineCount)
 
 		return nil
 	})
@@ -526,17 +531,14 @@ func writeMarkdownStream(cfg Config, files []FileMetadata, stats Stats) error {
 			fmt.Printf("\r🚀 写入进度: %d/%d (%.1f%%)", i+1, total, float64(i+1)/float64(total)*100)
 		}
 
-		if count, err := copyFileContent(w, file); err != nil {
+		if err := copyFileContent(w, file); err != nil {
 			logf(true, "\n⚠ 读取失败 %s: %v", file.RelPath, err)
 			continue
-		} else {
-			files[i].LineCount = count
-			stats.TotalLines += count
 		}
 	}
 	fmt.Println()
 
-	//【补充统计】因为行数是在写入时才知道的，我们在末尾追加汇总
+	//【补充统计】
 	fmt.Fprintln(w, "\n---")
 	fmt.Fprintf(w, "### 📊 最终统计汇总\n")
 	fmt.Fprintf(w, "- **文件总数:** %d\n", stats.FileCount)
@@ -546,32 +548,44 @@ func writeMarkdownStream(cfg Config, files []FileMetadata, stats Stats) error {
 	return w.Flush()
 }
 
-func copyFileContent(w *bufio.Writer, file FileMetadata) (int, error) {
+func copyFileContent(w *bufio.Writer, file FileMetadata) error {
 	src, err := os.Open(file.FullPath)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	defer src.Close()
 
 	lang := detectLanguage(file.RelPath)
 
 	fmt.Fprintln(w)
-	// 此处的标题格式必须与 ToC 中的锚点规则匹配
 	fmt.Fprintf(w, "## 📄 %s\n\n", file.RelPath)
-
 	fmt.Fprintf(w, "````%s\n", lang)
 
-	// 计算行数
-	lineCount := 0
-	scanner := bufio.NewScanner(src)
-	for scanner.Scan() {
-		w.WriteString(scanner.Text())
-		w.WriteByte('\n')
-		lineCount++
+	// 使用 io.Copy 替代 scanner，更安全且不限行长
+	if _, err := io.Copy(w, src); err != nil {
+		return err
 	}
 
-	fmt.Fprintln(w, "````")
-	return lineCount, scanner.Err()
+	fmt.Fprintln(w, "\n````")
+	return nil
+}
+
+func countLines(path string) (int, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	count := 0
+	scanner := bufio.NewScanner(f)
+	// 增加缓冲区以支持超长行
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
+	for scanner.Scan() {
+		count++
+	}
+	return count, scanner.Err()
 }
 
 /*
