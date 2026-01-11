@@ -567,6 +567,7 @@ func writeMarkdownStream(cfg Config, files []FileMetadata, stats Stats) error {
 	fmt.Fprintln(w)
 
 	// 写入目录
+	fmt.Fprintln(w, "<a name=\"toc\"></a>")
 	fmt.Fprintln(w, "## 📂 扫描目录")
 	for _, file := range files {
 		// 生成锚点，方便在 Markdown 中点击跳转
@@ -623,6 +624,7 @@ func copyFileContent(w *bufio.Writer, file FileMetadata) error {
 	}
 
 	fmt.Fprintln(w, "\n````")
+	fmt.Fprintln(w, "\n[⬆ 回到目录](#toc)")
 	return nil
 }
 
