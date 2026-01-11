@@ -39,7 +39,8 @@ func PerformPhysicalInsert(motion, targetPane string) {
 	case "start_of_line":
 		exec.Command("tmux", "send-keys", "-t", targetPane, "Home").Run()
 	case "end_of_line":
-		exec.Command("tmux", "send-keys", "-t", targetPane, "C-e").Run()
+		exec.Command("tmux", "send-keys", "-t", targetPane, "End").Run()
+
 	case "open_below":
 		exec.Command("tmux", "send-keys", "-t", targetPane, "End", "Enter").Run()
 	case "open_above":
@@ -107,7 +108,8 @@ func PerformPhysicalMove(motion string, count int, targetPane string) {
 	case "start_of_line", "goto_line_start": // 0
 		exec.Command("tmux", "send-keys", "-t", targetPane, "Home").Run()
 	case "end_of_line", "goto_line_end": // $
-		exec.Command("tmux", "send-keys", "-t", targetPane, "C-e").Run()
+		exec.Command("tmux", "send-keys", "-t", targetPane, "End").Run()
+
 	case "word_forward": // w
 		exec.Command("tmux", "send-keys", "-t", targetPane, "-N", cStr, "M-f").Run()
 	case "word_backward": // b
@@ -141,7 +143,7 @@ func PerformPhysicalDelete(motion string, targetPane string) {
 	exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "cancel").Run()
 
 	switch motion {
-	case "start_of_line": // d0
+	case "start_of_line", "goto_line_start": // d0
 		// Robust implementation: Get cursor X position and backspace that many times
 		pos := TmuxGetCursorPos(targetPane) // Use helper
 		cursorX := pos[0]
@@ -149,7 +151,8 @@ func PerformPhysicalDelete(motion string, targetPane string) {
 			exec.Command("tmux", "send-keys", "-t", targetPane, "-N", fmt.Sprint(cursorX), "BSpace").Run()
 		}
 
-	case "end_of_line": // d$
+	case "end_of_line", "goto_line_end": // d$
+
 		// C-k: Kill to end of line
 		exec.Command("tmux", "send-keys", "-t", targetPane, "C-k").Run()
 
