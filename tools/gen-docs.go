@@ -46,10 +46,12 @@ type FileMetadata struct {
 
 // Stats 统计信息
 type Stats struct {
-	FileCount  int
-	TotalSize  int64
-	TotalLines int
-	Skipped    int
+	PotentialMatches   int // 符合包含规则的文件数
+	ExplicitlyExcluded int // 符合包含规则但被排除规则踢掉的文件数
+	FileCount          int // 最终写入的文件数
+	TotalSize          int64
+	TotalLines         int
+	Skipped            int // 完全不匹配规则的文件数
 }
 
 var defaultIgnorePatterns = []string{
@@ -246,11 +248,13 @@ func printStartupInfo(cfg Config) {
 
 func printSummary(stats Stats, output string) {
 	fmt.Println("\n✔ 完成!")
-	fmt.Printf("  文件总数  : %d\n", stats.FileCount)
-	fmt.Printf("  总行数    : %d\n", stats.TotalLines)
-	fmt.Printf("  总物理大小 : %.2f KB\n", float64(stats.TotalSize)/1024)
-	fmt.Printf("  已跳过    : %d\n", stats.Skipped)
-	fmt.Printf("  输出路径  : %s\n", output)
+	fmt.Printf("  符合包含规则 (Potential) : %d\n", stats.PotentialMatches)
+	fmt.Printf("  由于排除规则被踢除 (Excluded): %d\n", stats.ExplicitlyExcluded)
+	fmt.Printf("  最终写入文件数 (Final)    : %d\n", stats.FileCount)
+	fmt.Printf("  总行数 (Total Lines)      : %d\n", stats.TotalLines)
+	fmt.Printf("  总物理大小 (Total Size)   : %.2f KB\n", float64(stats.TotalSize)/1024)
+	fmt.Printf("  无需处理的无关文件          : %d\n", stats.Skipped)
+	fmt.Printf("  输出路径                  : %s\n", output)
 }
 
 /*
@@ -300,23 +304,76 @@ func scanDirectory(cfg Config) ([]FileMetadata, Stats, error) {
 			return nil
 		}
 
-		// 应用过滤规则
-		if shouldIgnoreFile(relPath, info.Size(), cfg) {
+		// --- 细化过滤逻辑 ---
+		// 1. 基础过滤：过大或二进制
+		if info.Size() > cfg.MaxFileSize || isBinaryFile(path) {
 			stats.Skipped++
 			return nil
 		}
 
-		// 二进制检测
-		if isBinaryFile(path) {
-			logf(cfg.Verbose, "⊘ 二进制文件: %s", relPath)
+		// 2. 检查是否符合“包含”意图
+		isIncluded := true
+		if len(cfg.IncludeExts) > 0 || len(cfg.IncludeMatches) > 0 {
+			extMatched := false
+			if len(cfg.IncludeExts) > 0 {
+				ext := strings.ToLower(filepath.Ext(relPath))
+				for _, e := range cfg.IncludeExts {
+					if ext == e {
+						extMatched = true
+						break
+					}
+				}
+			} else {
+				extMatched = true // 如果没设后缀白名单，默认后缀通过
+			}
+
+			pathMatched := false
+			if len(cfg.IncludeMatches) > 0 {
+				for _, m := range cfg.IncludeMatches {
+					if strings.Contains(relPath, m) {
+						pathMatched = true
+						break
+					}
+				}
+			} else {
+				pathMatched = true // 如果没设关键字匹配，默认路径通过
+			}
+			isIncluded = extMatched && pathMatched
+		}
+
+		if !isIncluded {
 			stats.Skipped++
 			return nil
 		}
 
-		// 计算行数
+		// 3. 符合包含意图 (Potential Match)
+		stats.PotentialMatches++
+
+		// 4. 检查是否被“排除”规则拦截
+		isExcluded := false
+		ext := strings.ToLower(filepath.Ext(relPath))
+		for _, e := range cfg.ExcludeExts {
+			if ext == e {
+				isExcluded = true
+				break
+			}
+		}
+		if !isExcluded && len(cfg.ExcludeMatches) > 0 {
+			for _, m := range cfg.ExcludeMatches {
+				if strings.Contains(relPath, m) {
+					isExcluded = true
+					break
+				}
+			}
+		}
+
+		if isExcluded {
+			stats.ExplicitlyExcluded++
+			return nil
+		}
+
+		// --- 最终通过 ---
 		lineCount, _ := countLines(path)
-
-		// 加入列表
 		files = append(files, FileMetadata{
 			RelPath:   relPath,
 			FullPath:  path,
@@ -328,7 +385,6 @@ func scanDirectory(cfg Config) ([]FileMetadata, Stats, error) {
 		stats.TotalSize += info.Size()
 
 		logf(cfg.Verbose, "✓ 添加: %s (%d lines)", relPath, lineCount)
-
 		return nil
 	})
 
