@@ -166,12 +166,28 @@ func parseFlags() Config {
 
 	// 自动生成输出文件名
 	if cfg.OutputFile == "" {
-		base := filepath.Base(cfg.RootDir)
-		if base == "." || base == string(filepath.Separator) {
-			base = "project"
+		baseName := "project"
+		cleanRoot := filepath.Clean(cfg.RootDir)
+
+		if cleanRoot == "." || cleanRoot == string(filepath.Separator) {
+			// 如果是当前目录，尝试获取文件夹真实名称
+			if abs, err := filepath.Abs(cleanRoot); err == nil {
+				baseName = filepath.Base(abs)
+			}
+		} else {
+			// 将路径中的分隔符和点替换为下划线
+			baseName = cleanRoot
+			baseName = strings.ReplaceAll(baseName, string(filepath.Separator), "_")
+			baseName = strings.ReplaceAll(baseName, ".", "_")
+			// 清理连续的下划线
+			for strings.Contains(baseName, "__") {
+				baseName = strings.ReplaceAll(baseName, "__", "_")
+			}
+			baseName = strings.Trim(baseName, "_")
 		}
+
 		date := time.Now().Format("20060102")
-		cfg.OutputFile = fmt.Sprintf("%s-%s-docs.md", base, date)
+		cfg.OutputFile = fmt.Sprintf("%s-%s-docs.md", baseName, date)
 	}
 
 	cfg.IncludeExts = normalizeExts(include)
