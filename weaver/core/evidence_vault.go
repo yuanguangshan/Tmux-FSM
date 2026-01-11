@@ -128,40 +128,54 @@ func (l *FileAppenderEvidenceLibrary) Traverse(fn func(meta EvidenceMeta) error)
 func (l *FileAppenderEvidenceLibrary) rebuildIndex() error {
 	f, err := os.Open(l.path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
 	defer f.Close()
 
+	// 使用 Scanner 逐行读取，因为我们使用的是 JSON Lines 格式
+	// 这比 json.Decoder + Seek 更可靠
 	var offset int64
-	decoder := json.NewDecoder(f)
-	for {
-		start := offset
-		var record AuditRecord
-		if err := decoder.Decode(&record); err != nil {
-			if err == io.EOF {
-				break
-			}
-			return err
-		}
-
-		// 估计当前读取结束的位置，更新并计算哈希
-		newOffset, _ := f.Seek(0, io.SeekCurrent)
-		size := newOffset - start
-
-		// 重新计算哈希（保证索引与物理内容严格对应）
-		f.Seek(start, io.SeekStart)
-		data := make([]byte, size)
-		f.ReadAt(data, start)
-		sum := sha256.Sum256(data[:len(data)-1]) // 去掉末尾换行符
-		hash := hex.EncodeToString(sum[:])
-
-		l.index[hash] = EvidenceMeta{
-			Hash:      hash,
-			Offset:    start,
-			Timestamp: record.TimestampUTC,
-			Size:      size,
-		}
-		offset = newOffset
+	info, err := f.Stat()
+	if err != nil {
+		return err
 	}
+	fileSize := info.Size()
+
+	// 我们需要手动读取以确保护准 offset
+	data, err := os.ReadFile(l.path)
+	if err != nil {
+		return err
+	}
+
+	for offset < fileSize {
+		// 寻找换行符
+		end := offset
+		for end < fileSize && data[end] != '\n' {
+			end++
+		}
+
+		line := data[offset:end]
+		if len(line) > 0 {
+			var record AuditRecord
+			if err := json.Unmarshal(line, &record); err == nil {
+				// 计算哈希 (不包含换行符)
+				sum := sha256.Sum256(line)
+				hash := hex.EncodeToString(sum[:])
+
+				l.index[hash] = EvidenceMeta{
+					Hash:      hash,
+					Offset:    offset,
+					Timestamp: record.TimestampUTC,
+					Size:      int64(len(line) + 1), // 包括可能存在的换行符
+				}
+			}
+		}
+
+		offset = end + 1 // 跳过换行符
+	}
+
 	return nil
 }
