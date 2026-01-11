@@ -169,6 +169,40 @@ Or run specific tests:
 bash test_fsm.sh
 ```
 
+tmux-fsm 的 Debug 日志主要存储在以下两个位置：
+
+1. 核心运行日志 (Main Log)
+这是最主要的日志文件，记录了按键处理过程、意图解析（Intent）、以及内核（Kernel）的执行决策。
+
+文件路径: ~/tmux-fsm.log (即主目录下的 tmux-fsm.log)
+查看命令:
+bash
+# 实时查看最后 20 行
+tail -f ~/tmux-fsm.log
+# 搜索特定按键（如 $）的处理记录
+grep "key '$'" ~/tmux-fsm.log
+2. 司法审计日志 (Evidence Log)
+如果你启用了 Weaver 模式（默认开启），系统会记录每一次状态变更的哈希对比和操作证据，用于保证撤销（Undo）和重做（Redo）的可靠性。
+
+文件路径: 项目目录下的 
+.weaver/evidence.log
+查看命令:
+bash
+# 该文件为 JSON Lines 格式
+cat .weaver/evidence.log | jq .  # 如果安装了 jq
+# 或者直接查看
+tail -n 10 .weaver/evidence.log
+3. 系统错误日志 (Stderr)
+如果后端进程本身启动失败或崩溃，输出可能会被定向到临时文件夹或 tmux 的输出缓存。
+
+查看方式: 由于进程由 run-shell 启动，如果发生了严重的初始化错误，可以通过 tmux 内部指令查看：
+bash
+# 在 tmux 中按前缀键然后输入 :
+show-messages
+建议查看方式：通常你只需要关注 tail -f ~/tmux-fsm.log，它能最直观地告诉你后端是否接收到了按键以及执行了什么操作。
+
+
+
 The test suite covers:
 - Build process
 - Keymap validation
