@@ -130,12 +130,13 @@ func (ea *EngineAdapter) ChangeWithMotion(motion intent.MotionKind, count int) e
 
 // Engine FSM 引擎结构体
 type Engine struct {
-	Active     string
-	Keymap     *Keymap
-	layerTimer *time.Timer
-	count      int               // 用于存储数字计数
-	emitters   []RawTokenEmitter // 用于向外部发送token的多个接收者
-	visualMode intent.VisualMode // 视觉模式状态
+	Active          string
+	Keymap          *Keymap
+	layerTimer      *time.Timer
+	count           int               // 用于存储数字计数
+	emitters        []RawTokenEmitter // 用于向外部发送token的多个接收者
+	visualMode      intent.VisualMode // 视觉模式状态
+	PendingOperator string            // 当前 pending 的操作符 (用于 UI 显示)
 }
 
 // FSMStatus FSM 状态信息，用于UI更新
@@ -270,6 +271,8 @@ func (e *Engine) Reset() {
 		e.Active = "NAV"
 	}
 	e.count = 0
+	e.PendingOperator = ""
+
 	e.emitInternal(RawToken{Kind: TokenSystem, Value: "reset"})
 }
 
@@ -432,4 +435,9 @@ func ExitFSM() {
 	UpdateUI() // 确保退出时更新UI
 	// FSM 不应直接依赖 backend
 	// 执行层的退出逻辑应该由上层处理
+}
+
+// GetCount 获取当前计数
+func (e *Engine) GetCount() int {
+	return e.count
 }

@@ -363,8 +363,18 @@ func (s *Server) handleClient(conn net.Conn) {
 			}
 			kernelInstance.HandleKey(hctx, key)
 
-			// Phase 4.1: Re-assert FSM key table and refresh UI
-			// This ensures we don't "drop out" of FSM mode after one action.
+			// Phase 4.1: Sync State & Refresh UI
+			state := loadState()
+			if kernelInstance.FSM != nil {
+				state.Mode = kernelInstance.FSM.Active
+				state.Count = kernelInstance.GetCount()
+			}
+			state.Operator = kernelInstance.GetPendingOp()
+
+			// Save updated state back to tmux option for persistence
+			globalState = state
+			saveFSMState()
+
 			// Extract clientName again to be sure
 			actualClient := clientName
 			if actualClient == "" || actualClient == "default" {
@@ -374,7 +384,8 @@ func (s *Server) handleClient(conn net.Conn) {
 					actualClient = parts[1]
 				}
 			}
-			updateStatusBar(loadState(), actualClient)
+			updateStatusBar(globalState, actualClient)
+
 		}
 
 		conn.Write([]byte("ok"))

@@ -623,3 +623,20 @@ func parseMotion(key string) (intentPkg.MotionKind, bool) {
 		return 0, false
 	}
 }
+
+// GetPendingOp 获取当前处于 pending 状态的操作符名称
+func (g *Grammar) GetPendingOp() string {
+	if g.pendingOp == nil {
+		return ""
+	}
+	switch *g.pendingOp {
+	case intentPkg.OpDelete:
+		return "delete"
+	case intentPkg.OpYank:
+		return "yank"
+	case intentPkg.OpChange:
+		return "change"
+	}
+
+	return ""
+}

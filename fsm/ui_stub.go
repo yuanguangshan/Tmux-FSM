@@ -47,7 +47,11 @@ func updateTmuxVariables() {
 	}
 
 	// 设置状态变量
-	setTmuxOption("@fsm_state", activeLayer)
+	displayState := activeLayer
+	if defaultEngine.PendingOperator != "" {
+		displayState = fmt.Sprintf("%s [%s]", activeLayer, defaultEngine.PendingOperator)
+	}
+	setTmuxOption("@fsm_state", displayState)
 
 	// 如果有计数器，也显示它
 	if defaultEngine.count > 0 {

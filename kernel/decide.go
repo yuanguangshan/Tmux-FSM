@@ -81,6 +81,14 @@ func (k *Kernel) Decide(key string) *Decision {
 		// 让 FSM 处理按键，这会生成 token
 		dispatched := k.FSM.Dispatch(key)
 
+		// 同步 Grammar 的 PendingOperator 到 FSM (用于 UI 显示)
+		if k.Grammar != nil {
+			k.FSM.PendingOperator = k.Grammar.GetPendingOp()
+		}
+
+		// 刷新 UI
+		fsm.UpdateUI()
+
 		// 移除 GrammarEmitter
 		k.FSM.RemoveEmitter(grammarEmitter)
 
@@ -108,4 +116,20 @@ func (k *Kernel) Decide(key string) *Decision {
 	return &Decision{
 		Kind: DecisionLegacy,
 	}
+}
+
+// GetPendingOp 获取当前处于 pending 状态的操作符名称
+func (k *Kernel) GetPendingOp() string {
+	if k.Grammar != nil {
+		return k.Grammar.GetPendingOp()
+	}
+	return ""
+}
+
+// GetCount 获取当前 FSM 计数
+func (k *Kernel) GetCount() int {
+	if k.FSM != nil {
+		return k.FSM.GetCount()
+	}
+	return 0
 }

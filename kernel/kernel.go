@@ -108,7 +108,7 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 			case DecisionLegacy:
 				// 明确：Grammar/FSM 不处理，才允许 legacy
 				log.Printf("Key '%s' falls back to legacy handling: RequestID=%s, ActorID=%s", key, requestID, actorID)
-				break
+
 			}
 		}
 	}
