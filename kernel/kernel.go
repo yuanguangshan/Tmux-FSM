@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"time"
+	"tmux-fsm/backend"
 	"tmux-fsm/fsm"
 	"tmux-fsm/intent"
 	"tmux-fsm/intent/builder"
@@ -48,7 +48,6 @@ func NewKernel(fsmEngine *fsm.Engine, exec IntentExecutor) *Kernel {
 	}
 }
 
-// ✅ Kernel 的唯一入口
 func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 	// ⚠️ Invariant: RequestID / ActorID are authoritative once received.
 	// Server MUST NOT generate or modify them.
@@ -64,65 +63,18 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 		return
 	}
 
-	// Log the incoming key for audit trail with identity anchors
 	log.Printf("Handling key: RequestID=%s, ActorID=%s, Key=%s", requestID, actorID, key)
 
-	// 通过Grammar路径生成intent（新的权威执行路径）
-	var decision *Decision
-
-	// 先尝试通过FSM + Grammar生成intent
-	if k.FSM != nil && k.Grammar != nil {
-		decision = k.Decide(key)
-
-		if decision != nil {
-			// Log decision details for audit trail
-			log.Printf("Decision made for key '%s': RequestID=%s, ActorID=%s, Kind=%s, Intent=%v",
-				key, requestID, actorID, decision.Kind, decision.Intent)
-
-			switch decision.Kind {
-			case DecisionIntent:
-				log.Printf("Processing intent for key '%s': RequestID=%s, ActorID=%s", key, requestID, actorID)
-
-				// Critical Fix: Inject PaneID from Context if missing in Intent
-				// Grammar generates pure intents without context. We must bind them here.
-				if decision.Intent.PaneID == "" {
-					parts := strings.Split(actorID, "|")
-					if len(parts) > 0 {
-						decision.Intent.PaneID = parts[0]
-					}
-				}
-
-				k.ProcessIntentWithContext(hctx, decision.Intent)
-				return
-
-			case DecisionFSM:
-				log.Printf("Executing FSM decision for key '%s': RequestID=%s, ActorID=%s", key, requestID, actorID)
-				k.Execute(decision)
-				return
-
-			case DecisionNone:
-				// FSM 吃了 key，合法等待
-				log.Printf("FSM consumed key '%s', valid wait state: RequestID=%s, ActorID=%s", key, requestID, actorID)
-				return
-
-			case DecisionLegacy:
-				// 明确：Grammar/FSM 不处理，才允许 legacy
-				log.Printf("Key '%s' falls back to legacy handling: RequestID=%s, ActorID=%s", key, requestID, actorID)
-
-			}
-		}
+	action, handled := k.FSM.Dispatch(key)
+	if !handled {
+		log.Printf("Key '%s' not handled by FSM", key)
+		return
 	}
 
-	// 如果Grammar没有处理，记录信息（未来将完全移除legacy路径）
-	if k.ShadowIntent && k.NativeBuilder != nil {
-		// 只有在 DecisionLegacy 情况下才记录为未覆盖
-		// DecisionNone 是合法的等待状态，不应计入未覆盖
-		if decision != nil && decision.Kind == DecisionLegacy {
-			log.Printf("[GRAMMAR COVERAGE] key '%s' not handled by Grammar: RequestID=%s, ActorID=%s", key, requestID, actorID)
-			k.ShadowStats.Total++
-			k.ShadowStats.Mismatched++ // 记录为未覆盖
-		}
+	if action != "" {
+		k.executeAction(action)
 	}
+
 }
 
 // ProcessIntent 处理意图
@@ -185,4 +137,58 @@ func (k *Kernel) ProcessIntentWithContext(hctx HandleContext, intent *intent.Int
 
 	log.Printf("No executor available for intent: RequestID=%s, ActorID=%s, Intent=%v", hctx.RequestID, hctx.ActorID, intent)
 	return fmt.Errorf("no executor available for intent")
+}
+
+func (k *Kernel) executeAction(action string) {
+	log.Printf("Executing action: %s", action)
+	switch action {
+	case "pane_left":
+		tmux("select-pane -L")
+	case "pane_right":
+		tmux("select-pane -R")
+	case "pane_up":
+		tmux("select-pane -U")
+	case "pane_down":
+		tmux("select-pane -D")
+	case "next_pane":
+		tmux("select-pane -t :.+")
+	case "prev_pane":
+		tmux("select-pane -t :.-")
+	case "far_left":
+		tmux("select-pane -t :.0")
+	case "far_right":
+		tmux("select-pane -t :.$")
+	case "goto_top":
+		tmux("select-pane -t :.0")
+	case "goto_bottom":
+		tmux("select-pane -t :.$")
+	case "goto_line_start":
+		tmux("send-keys -t . Home")
+	case "goto_line_end":
+		tmux("send-keys -t . End")
+	case "move_left":
+		tmux("send-keys -t . Left")
+	case "move_right":
+		tmux("send-keys -t . Right")
+	case "move_up":
+		tmux("send-keys -t . Up")
+	case "move_down":
+		tmux("send-keys -t . Down")
+	case "exit":
+		fsm.ExitFSM()
+	case "prompt":
+		tmux("command-prompt")
+	case "repeat":
+		// This will be handled by a proper implementation of repeat later
+		log.Println("Repeat action is not yet implemented.")
+	default:
+		log.Printf("Unknown action: %s", action)
+	}
+}
+
+func tmux(cmd string) {
+	err := backend.GlobalBackend.ExecRaw(cmd)
+	if err != nil {
+		log.Printf("Error executing tmux command '%s': %v", cmd, err)
+	}
 }

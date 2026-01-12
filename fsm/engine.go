@@ -1,7 +1,6 @@
 package fsm
 
 import (
-	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -23,10 +22,6 @@ func (ea *EngineAdapter) SendKeys(keys ...string) {
 	// 将键发送到tmux
 	args := append([]string{"send-keys", "-t", "."}, keys...)
 	tmux(strings.Join(args, " "))
-}
-
-func (ea *EngineAdapter) RunAction(name string) {
-	ea.engine.RunAction(name)
 }
 
 func (ea *EngineAdapter) GetVisualMode() intent.VisualMode {
@@ -212,45 +207,44 @@ func (e *Engine) CanHandle(key string) bool {
 	return exists
 }
 
-// Dispatch 处理按键交互
-func (e *Engine) Dispatch(key string) bool {
-	// 检查是否是数字键，即使当前层没有定义
+func (e *Engine) Dispatch(key string) (string, bool) {
 	if isDigit(key) {
-		// Fix: Treat '0' as a motion/key if current count is 0
 		if key == "0" && e.count == 0 {
-			// Fall through to CanHandle check
 		} else {
 			e.count = e.count*10 + int(key[0]-'0')
 			e.emitInternal(RawToken{Kind: TokenDigit, Value: key})
-			return true
+			return "", true
 		}
 	}
 
-	// 检查是否是重复键
 	if key == "." {
 		e.emitInternal(RawToken{Kind: TokenRepeat, Value: "."})
-		return true
+		return "repeat", true
 	}
 
-	// 其他按键按原有逻辑处理（只处理层切换，不处理动作）
 	if e.CanHandle(key) {
 		st := e.Keymap.States[e.Active]
 		act := st.Keys[key]
 
-		// 1. 处理层切换
 		if act.Layer != "" {
 			e.Active = act.Layer
 			e.resetLayerTimeout(act.TimeoutMs)
 			e.emitInternal(RawToken{Kind: TokenKey, Value: key})
-			return true
+			return "", true
 		}
 
-		// 2. 发送按键 token
+		if act.Action != "" {
+			e.emitInternal(RawToken{Kind: TokenKey, Value: key})
+			actionToReturn := act.Action
+			return actionToReturn, true
+		}
+
 		e.emitInternal(RawToken{Kind: TokenKey, Value: key})
-		return true
+		return "", true
 	}
 
-	return false
+	e.count = 0
+	return "", false
 }
 
 // isDigit 检查字符串是否为单个数字字符
@@ -337,56 +331,6 @@ func (e *Engine) resetLayerTimeout(ms int) {
 				UpdateUI()
 			},
 		)
-	}
-}
-
-// RunAction 执行动作
-func (e *Engine) RunAction(name string) {
-	switch name {
-	case "pane_left":
-		tmux("select-pane -L")
-	case "pane_right":
-		tmux("select-pane -R")
-	case "pane_up":
-		tmux("select-pane -U")
-	case "pane_down":
-		tmux("select-pane -D")
-	case "next_pane":
-		tmux("select-pane -t :.+")
-	case "prev_pane":
-		tmux("select-pane -t :.-")
-	case "far_left":
-		tmux("select-pane -t :.0")
-	case "far_right":
-		tmux("select-pane -t :.$")
-	case "goto_top":
-		tmux("select-pane -t :.0")
-	case "goto_bottom":
-		tmux("select-pane -t :.$")
-	case "goto_line_start":
-		// 发送 Home 键到当前窗格，这通常会将光标移到行首
-		tmux("send-keys -t . Home")
-	case "goto_line_end":
-		// 发送 End 键到当前窗格，这通常会将光标移到行尾
-		tmux("send-keys -t . End")
-	case "move_left":
-		// 发送左箭头键
-		tmux("send-keys -t . Left")
-	case "move_right":
-		// 发送右箭头键
-		tmux("send-keys -t . Right")
-	case "move_up":
-		// 发送上箭头键
-		tmux("send-keys -t . Up")
-	case "move_down":
-		// 发送下箭头键
-		tmux("send-keys -t . Down")
-	case "exit":
-		ExitFSM()
-	case "prompt":
-		tmux("command-prompt")
-	default:
-		fmt.Println("unknown action:", name)
 	}
 }
 

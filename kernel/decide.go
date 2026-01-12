@@ -79,7 +79,7 @@ func (k *Kernel) Decide(key string) *Decision {
 		k.FSM.AddEmitter(grammarEmitter)
 
 		// 让 FSM 处理按键，这会生成 token
-		dispatched := k.FSM.Dispatch(key)
+		_, dispatched := k.FSM.Dispatch(key)
 
 		// 同步 Grammar 的 PendingOperator 到 FSM (用于 UI 显示)
 		if k.Grammar != nil {
