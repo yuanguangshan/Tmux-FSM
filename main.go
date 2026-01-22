@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -167,6 +168,11 @@ func main() {
 	args := flag.Args()
 
 	if *enterFlag {
+		// 确保在 tmux 环境中运行
+		if os.Getenv("TMUX") == "" {
+			os.Exit(0)
+		}
+
 		// Enter FSM mode
 		fsm.EnterFSM()
 
@@ -182,8 +188,22 @@ func main() {
 	}
 
 	if *exitFlag {
+		// 确保在 tmux 环境中运行
+		if os.Getenv("TMUX") == "" {
+			os.Exit(0)
+		}
+
 		// Exit FSM mode
 		fsm.ExitFSM()
+
+		// 强制切换 tmux key table 回 root 模式
+		// 这是确保退出 FSM 后恢复正常 tmux 操作的关键步骤
+		cmd := exec.Command("tmux", "switch-client", "-T", "root")
+		err := cmd.Run()
+		if err != nil {
+			log.Printf("Warning: Failed to switch tmux key table to root: %v", err)
+		}
+
 		os.Exit(0)
 	}
 
