@@ -169,6 +169,15 @@ func main() {
 	if *enterFlag {
 		// Enter FSM mode
 		fsm.EnterFSM()
+
+		// 强制切换 tmux key table 到 fsm 模式
+		// 这是确保按键能够被正确捕获的关键步骤
+		cmd := exec.Command("tmux", "switch-client", "-T", "fsm")
+		err := cmd.Run()
+		if err != nil {
+			log.Printf("Warning: Failed to switch tmux key table to fsm: %v", err)
+		}
+
 		os.Exit(0)
 	}
 

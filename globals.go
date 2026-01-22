@@ -118,6 +118,17 @@ func updateStatusBar(state FSMState, clientName string) {
 		if err == nil {
 			clientName = strings.TrimSpace(string(out))
 		}
+		// 如果仍然无法获取有效的clientName，尝试从pane_id获取
+		if clientName == "" || clientName == "default" {
+			// 从pane_id推断clientName
+			if state.PaneID != "" {
+				// 获取与pane关联的client
+				out, err := exec.Command("tmux", "display-message", "-p", "-t", state.PaneID, "#{client_name}").Output()
+				if err == nil {
+					clientName = strings.TrimSpace(string(out))
+				}
+			}
+		}
 	}
 
 	modeMsg := state.Mode
@@ -187,11 +198,16 @@ func updateStatusBar(state FSMState, clientName string) {
 	// --- [ABI: Heartbeat Lock] ---
 	// Re-assert the key table to prevent "one-shot" dropouts.
 	// Check @fsm_active to allow intentional exits.
-	if clientName != "" && clientName != "default" {
+	// 强制切换key table，即使clientName是default
+	if clientName != "" {
 		// Fetching @fsm_active via GlobalBackend if it were available would be ideal,
 		// but for now, we rely on the fact that we are in a state where we should be active.
 		// If GlobalBackend could read options, it would be better.
 		// For now, we assume if we got here, FSM is active.
 		backend.GlobalBackend.SwitchClientTable(clientName, "fsm")
+	} else {
+		// 如果clientName仍然为空，尝试使用tmux命令直接切换
+		// 这是最后的备选方案，确保key table被切换
+		exec.Command("tmux", "switch-client", "-T", "fsm").Run()
 	}
 }
