@@ -25,7 +25,7 @@ func EnterFSM() {
 	// Switch current client to fsm key table
 	backend.GlobalBackend.SwitchClientTable("", "fsm")
 	// Fix: Sync authoritative state to tmux so external scripts/hooks respect it
-	backend.GlobalBackend.SetUserOption(" @fsm_active", "1")
+	backend.GlobalBackend.SetUserOption("@fsm_active", "1")
 
 	// 3️⃣ UI (status bar refresh)
 	UpdateUI()
