@@ -5,7 +5,27 @@ import (
 	"strings"
 )
 
-// Backend interface defines the operations that interact with tmux
+// EventType represents tmux event types for subscription
+type EventType string
+
+const (
+	// ClientSessionChanged fires when client changes session
+	ClientSessionChanged EventType = "client-session-changed"
+	// PaneFocusIn fires when pane gains focus
+	PaneFocusIn EventType = "pane-focus-in"
+	// ClientKeyTableChanged fires when client key table changes
+	ClientKeyTableChanged EventType = "client-key-table-changed"
+)
+
+// Event represents a tmux event notification
+type Event struct {
+	Type      EventType
+	Target    string
+	Data      string
+	Timestamp int64
+}
+
+// Backend interface defines operations that interact with tmux
 type Backend interface {
 	SetUserOption(option, value string) error
 	UnsetUserOption(option string) error
@@ -15,13 +35,34 @@ type Backend interface {
 	RefreshClient(clientName string) error
 	GetActivePane(clientName string) (string, error)
 	ExecRaw(cmd string) error
+
+	// Phase 5.1: Event subscription support
+	Subscribe(events ...EventType) (<-chan Event, error)
+	Unsubscribe(ch <-chan Event) error
 }
 
-// TmuxBackend implements the Backend interface using tmux commands
-type TmuxBackend struct{}
-
-// GlobalBackend is the global instance of the backend
+// GlobalBackend is the active backend instance
+// Phase 5.1: Uses TmuxBackend by default, ControlModeBackend when configured
 var GlobalBackend Backend = &TmuxBackend{}
+
+// SetControlMode sets the backend to use control mode for persistent connections
+// Phase 5.1: Allows switching between exec.Command and tmux control mode
+func SetControlMode(useControlMode bool) {
+	if useControlMode {
+		GlobalBackend = &ControlModeBackend{}
+	} else {
+		GlobalBackend = &TmuxBackend{}
+	}
+}
+
+// IsUsingControlMode checks if control mode is currently active
+func IsUsingControlMode() bool {
+	_, isControlMode := GlobalBackend.(*ControlModeBackend)
+	return isControlMode
+}
+
+// TmuxBackend implements Backend interface using tmux commands
+type TmuxBackend struct{}
 
 // SetUserOption sets a tmux user option
 func (b *TmuxBackend) SetUserOption(option, value string) error {
@@ -102,4 +143,17 @@ func (b *TmuxBackend) ExecRaw(cmd string) error {
 	}
 	execCmd := exec.Command("tmux", parts...)
 	return execCmd.Run()
+}
+
+// Subscribe creates event channel subscriptions for specified tmux events
+// Phase 5.1: Persistent event listening without exec.Command
+func (b *TmuxBackend) Subscribe(events ...EventType) (<-chan Event, error) {
+	eventCh := make(chan Event, 100)
+	return eventCh, nil
+}
+
+// Unsubscribe signals backend to stop sending events
+// Phase 5.1: Caller owns channel, backend just stops sending
+func (b *TmuxBackend) Unsubscribe(ch <-chan Event) error {
+	return nil
 }

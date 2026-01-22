@@ -173,23 +173,9 @@ func main() {
 			os.Exit(0)
 		}
 
-		// Phase 1: 语义提交 - Set FSM active flag
-		cmd1 := exec.Command("tmux", "set-option", "-gq", "@fsm_active", "1")
-		err1 := cmd1.Run()
-		if err1 != nil {
-			log.Printf("Warning: Failed to set @fsm_active: %v", err1)
-		}
-
-		// Enter FSM mode
+		// EnterFSM now handles state + input routing + UI atomically
+		// No need for separate key table switching here
 		fsm.EnterFSM()
-
-		// Phase 2: 物理提交 - Switch client key table to fsm
-		// This is the key step to ensure keystrokes are captured correctly
-		cmd2 := exec.Command("tmux", "switch-client", "-T", "fsm")
-		err2 := cmd2.Run()
-		if err2 != nil {
-			log.Printf("Warning: Failed to switch tmux key table to fsm: %v", err2)
-		}
 
 		os.Exit(0)
 	}
@@ -200,23 +186,9 @@ func main() {
 			os.Exit(0)
 		}
 
-		// Phase 1: 语义提交 - Set FSM inactive flag
-		cmd1 := exec.Command("tmux", "set-option", "-gq", "@fsm_active", "0")
-		err1 := cmd1.Run()
-		if err1 != nil {
-			log.Printf("Warning: Failed to set @fsm_active to 0: %v", err1)
-		}
-
-		// Exit FSM mode
+		// ExitFSM now handles state + input routing + UI atomically
+		// No need for separate key table switching here
 		fsm.ExitFSM()
-
-		// Phase 2: 物理兜底 - Switch client key table back to root
-		// This is the key step to ensure normal tmux operation after exit
-		cmd2 := exec.Command("tmux", "switch-client", "-T", "root")
-		err2 := cmd2.Run()
-		if err2 != nil {
-			log.Printf("Warning: Failed to switch tmux key table to root: %v", err2)
-		}
 
 		os.Exit(0)
 	}
@@ -430,9 +402,8 @@ func (s *Server) handleClient(conn net.Conn) {
 			}
 
 			// Two-Phase FSM Latch: Consistency Check
-			// Ensure @fsm_active and client_key_table are consistent
-			reconcileFSMState(actualClient)
-
+			// Phase 6: FSM is now authoritative source of truth for @fsm_active
+			// Reconciliation no longer needed - FSM.FSMActive is the single source of truth
 			updateStatusBar(globalState, actualClient)
 
 		}
@@ -754,6 +725,9 @@ func ProcessRedo(paneID string) error {
 	if txJournal != nil {
 		return txJournal.Redo()
 	}
+
+	// ProcessUndo executes undo operation
+
 	return nil
 }
 

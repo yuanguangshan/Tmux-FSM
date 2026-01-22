@@ -193,21 +193,9 @@ func updateStatusBar(state FSMState, clientName string) {
 	// Use GlobalBackend for tmux option updates
 	backend.GlobalBackend.SetUserOption("@fsm_state", modeMsg)
 	backend.GlobalBackend.SetUserOption("@fsm_keys", keysMsg)
-	backend.GlobalBackend.RefreshClient(clientName) // Refresh the target client
+	backend.GlobalBackend.RefreshClient(clientName) // Refresh target client
 
 	// --- [ABI: Heartbeat Lock] ---
-	// Re-assert the key table to prevent "one-shot" dropouts.
-	// Check @fsm_active to allow intentional exits.
-	// 强制切换key table，即使clientName是default
-	if clientName != "" {
-		// Fetching @fsm_active via GlobalBackend if it were available would be ideal,
-		// but for now, we rely on the fact that we are in a state where we should be active.
-		// If GlobalBackend could read options, it would be better.
-		// For now, we assume if we got here, FSM is active.
-		backend.GlobalBackend.SwitchClientTable(clientName, "fsm")
-	} else {
-		// 如果clientName仍然为空，尝试使用tmux命令直接切换
-		// 这是最后的备选方案，确保key table被切换
-		exec.Command("tmux", "switch-client", "-T", "fsm").Run()
-	}
+	// Key table switching now handled by atomic EnterFSM/ExitFSM operations
+	// updateStatusBar no longer switches key table directly
 }

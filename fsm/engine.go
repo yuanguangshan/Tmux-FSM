@@ -351,34 +351,9 @@ func (e *Engine) DispatchIntent(i *intent.Intent) error {
 	return nil
 }
 
-func EnterFSM() {
-	if defaultEngine == nil {
-		InitEngine(&KM)
-	}
-
-	engine := defaultEngine
-	engine.Active = "NAV"
-	// 确保进入时是干净的 NAV
-	engine.Reset()
-	engine.emitInternal(RawToken{Kind: TokenSystem, Value: "enter"})
-	UpdateUI() // 确保进入时更新UI
-	// ShowUI() // Disable initial UI popup to prevent flashing/annoyance
-}
-
 // GetDefaultEngine 获取默认引擎实例
 func GetDefaultEngine() *Engine {
 	return defaultEngine
-}
-
-func ExitFSM() {
-	if defaultEngine != nil {
-		defaultEngine.Reset()
-		defaultEngine.emitInternal(RawToken{Kind: TokenSystem, Value: "exit"})
-	}
-	HideUI()
-	UpdateUI() // 确保退出时更新UI
-	// FSM 不应直接依赖 backend
-	// 执行层的退出逻辑应该由上层处理
 }
 
 // GetCount 获取当前计数
