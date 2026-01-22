@@ -173,15 +173,22 @@ func main() {
 			os.Exit(0)
 		}
 
+		// Phase 1: 语义提交 - Set FSM active flag
+		cmd1 := exec.Command("tmux", "set-option", "-gq", "@fsm_active", "1")
+		err1 := cmd1.Run()
+		if err1 != nil {
+			log.Printf("Warning: Failed to set @fsm_active: %v", err1)
+		}
+
 		// Enter FSM mode
 		fsm.EnterFSM()
 
-		// 强制切换 tmux key table 到 fsm 模式
-		// 这是确保按键能够被正确捕获的关键步骤
-		cmd := exec.Command("tmux", "switch-client", "-T", "fsm")
-		err := cmd.Run()
-		if err != nil {
-			log.Printf("Warning: Failed to switch tmux key table to fsm: %v", err)
+		// Phase 2: 物理提交 - Switch client key table to fsm
+		// This is the key step to ensure keystrokes are captured correctly
+		cmd2 := exec.Command("tmux", "switch-client", "-T", "fsm")
+		err2 := cmd2.Run()
+		if err2 != nil {
+			log.Printf("Warning: Failed to switch tmux key table to fsm: %v", err2)
 		}
 
 		os.Exit(0)
@@ -193,15 +200,22 @@ func main() {
 			os.Exit(0)
 		}
 
+		// Phase 1: 语义提交 - Set FSM inactive flag
+		cmd1 := exec.Command("tmux", "set-option", "-gq", "@fsm_active", "0")
+		err1 := cmd1.Run()
+		if err1 != nil {
+			log.Printf("Warning: Failed to set @fsm_active to 0: %v", err1)
+		}
+
 		// Exit FSM mode
 		fsm.ExitFSM()
 
-		// 强制切换 tmux key table 回 root 模式
-		// 这是确保退出 FSM 后恢复正常 tmux 操作的关键步骤
-		cmd := exec.Command("tmux", "switch-client", "-T", "root")
-		err := cmd.Run()
-		if err != nil {
-			log.Printf("Warning: Failed to switch tmux key table to root: %v", err)
+		// Phase 2: 物理兜底 - Switch client key table back to root
+		// This is the key step to ensure normal tmux operation after exit
+		cmd2 := exec.Command("tmux", "switch-client", "-T", "root")
+		err2 := cmd2.Run()
+		if err2 != nil {
+			log.Printf("Warning: Failed to switch tmux key table to root: %v", err2)
 		}
 
 		os.Exit(0)
@@ -414,6 +428,11 @@ func (s *Server) handleClient(conn net.Conn) {
 					actualClient = parts[1]
 				}
 			}
+
+			// Two-Phase FSM Latch: Consistency Check
+			// Ensure @fsm_active and client_key_table are consistent
+			reconcileFSMState(actualClient)
+
 			updateStatusBar(globalState, actualClient)
 
 		}
@@ -736,4 +755,76 @@ func ProcessRedo(paneID string) error {
 		return txJournal.Redo()
 	}
 	return nil
+}
+
+// reconcileFSMState implements the Two-Phase FSM Latch consistency model
+// Ensures @fsm_active and client_key_table are consistent
+func reconcileFSMState(clientName string) {
+	// Get the current @fsm_active state
+	fsmActiveOpt, err := exec.Command("tmux", "show-option", "-gqv", "@fsm_active").Output()
+	fsmActive := strings.TrimSpace(string(fsmActiveOpt))
+	if err != nil {
+		// If the option doesn't exist, treat as inactive
+		fsmActive = "0"
+	}
+
+	// Get the current client key table
+	var keyTable string
+	if clientName != "" && clientName != "default" {
+		// Query specific client
+		keyTableCmd := exec.Command("tmux", "display", "-t", clientName, "-p", "#{client_key_table}")
+		output, err := keyTableCmd.Output()
+		if err != nil {
+			// Fallback to current client if specific client query fails
+			keyTableCmd = exec.Command("tmux", "display", "-p", "#{client_key_table}")
+			output, err = keyTableCmd.Output()
+			if err != nil {
+				return // Can't determine key table, skip reconciliation
+			}
+		}
+		keyTable = strings.TrimSpace(string(output))
+	} else {
+		// Query current client
+		keyTableCmd := exec.Command("tmux", "display", "-p", "#{client_key_table}")
+		output, err := keyTableCmd.Output()
+		if err != nil {
+			return // Can't determine key table, skip reconciliation
+		}
+		keyTable = strings.TrimSpace(string(output))
+	}
+
+	// Apply consistency rules based on the matrix:
+	// fsmActive | keyTable | Action
+	// 1         | fsm      | OK (do nothing)
+	// 1         | root     | Fix: switch to fsm
+	// 0         | fsm      | Fix: switch to root (dangerous state)
+	// 0         | root     | OK (do nothing)
+
+	if fsmActive == "1" && keyTable != "fsm" {
+		// FSM should be active but key table is not fsm
+		// Force switch to fsm
+		var cmd *exec.Cmd
+		if clientName != "" && clientName != "default" {
+			cmd = exec.Command("tmux", "switch-client", "-t", clientName, "-T", "fsm")
+		} else {
+			cmd = exec.Command("tmux", "switch-client", "-T", "fsm")
+		}
+		err := cmd.Run()
+		if err != nil {
+			log.Printf("Warning: Failed to reconcile FSM state (fsm active but key table not fsm): %v", err)
+		}
+	} else if fsmActive != "1" && keyTable == "fsm" {
+		// FSM should not be active but key table is fsm (dangerous!)
+		// Force switch to root
+		var cmd *exec.Cmd
+		if clientName != "" && clientName != "default" {
+			cmd = exec.Command("tmux", "switch-client", "-t", clientName, "-T", "root")
+		} else {
+			cmd = exec.Command("tmux", "switch-client", "-T", "root")
+		}
+		err := cmd.Run()
+		if err != nil {
+			log.Printf("Warning: Failed to reconcile FSM state (fsm not active but key table is fsm): %v", err)
+		}
+	}
 }
