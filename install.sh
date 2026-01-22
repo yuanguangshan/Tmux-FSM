@@ -94,6 +94,7 @@ cp "$SCRIPT_DIR"/plugin.tmux \
    "$SCRIPT_DIR"/fsm-toggle.sh \
    "$SCRIPT_DIR"/fsm-exit.sh \
    "$SCRIPT_DIR"/enter_fsm.sh \
+   "$SCRIPT_DIR"/keymap.yaml \
    "$TMP_DIR/"
 
 # 移动到目标目录
