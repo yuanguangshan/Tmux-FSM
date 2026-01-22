@@ -45,8 +45,9 @@ func ExitFSM() {
 
 	// 2️⃣ Input routing restore
 	backend.GlobalBackend.SwitchClientTable("", "root")
-	// Fix: Clear authoritative state in tmux
-	backend.GlobalBackend.SetUserOption(" @fsm_active", "0")
+	// ✅ FIX: 必须去掉空格，否则 @fsm_active 变量无法正确重置为 0
+	// 导致 reconcileFSMState 误以为还处于 FSM 模式而拒绝退出
+	backend.GlobalBackend.SetUserOption("@fsm_active", "0")
 
 	// 3️⃣ UI
 	// Note: Don't call UpdateUI() as it conflicts with HideUI()

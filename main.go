@@ -406,13 +406,11 @@ func (s *Server) handleClient(conn net.Conn) {
 			// Reconciliation no longer needed - FSM.FSMActive is the single source of truth
 			updateStatusBar(globalState, actualClient)
 
-			// ✅ FIX: 强制执行心跳锁定
-			// 如果内核认为 FSM 是激活的，确保 Tmux KeyTable 没有掉回 root
-			if fsm.FSMActive {
-				// 我们需要确保 tmux 端的 @fsm_active 也是 1
-				// (EnterFSM 已经设置了，但在某些边缘情况下可能需要补救)
-				reconcileFSMState(actualClient)
-			}
+			// ✅ FIX: 移除 if fsm.FSMActive 判断
+			// 守护进程内存中的 fsm.FSMActive 可能与实际不一致（因为 -enter 是外部进程执行的）
+			// reconcileFSMState 内部会查询 tmux 变量 @fsm_active，那是唯一的真理来源。
+			// 无条件调用它，让它根据 @fsm_active 的值自动纠正 key-table。
+			reconcileFSMState(actualClient)
 		}
 
 		conn.Write([]byte("ok"))
