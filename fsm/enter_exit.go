@@ -24,6 +24,8 @@ func EnterFSM() {
 	// 2️⃣ Input routing (critical)
 	// Switch current client to fsm key table
 	backend.GlobalBackend.SwitchClientTable("", "fsm")
+	// Fix: Sync authoritative state to tmux so external scripts/hooks respect it
+	backend.GlobalBackend.SetUserOption(" @fsm_active", "1")
 
 	// 3️⃣ UI (status bar refresh)
 	UpdateUI()
@@ -43,6 +45,8 @@ func ExitFSM() {
 
 	// 2️⃣ Input routing restore
 	backend.GlobalBackend.SwitchClientTable("", "root")
+	// Fix: Clear authoritative state in tmux
+	backend.GlobalBackend.SetUserOption(" @fsm_active", "0")
 
 	// 3️⃣ UI
 	// Note: Don't call UpdateUI() as it conflicts with HideUI()
