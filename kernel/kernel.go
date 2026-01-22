@@ -65,16 +65,8 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 
 	log.Printf("Handling key: RequestID=%s, ActorID=%s, Key=%s", requestID, actorID, key)
 
-	action, handled := k.FSM.Dispatch(key)
-	if !handled {
-		log.Printf("Key '%s' not handled by FSM", key)
-		return
-	}
-
-	if action != "" {
-		k.executeAction(action)
-	}
-
+	decision := k.Decide(key)
+	k.Execute(decision)
 }
 
 // ProcessIntent 处理意图
