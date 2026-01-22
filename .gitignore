@@ -5,3 +5,5 @@ start-claude-proxy.sh
 .DS_Store
 .weaver/evidence.log
 tools/gd
+.ai/context.json
+session-*.md
