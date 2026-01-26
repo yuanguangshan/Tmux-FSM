@@ -34,6 +34,7 @@ type Config struct {
 	NoSubdirs      bool
 	Verbose        bool
 	Version        bool
+	ShowStats      bool
 }
 
 // FileMetadata 仅存储元数据，不存内容
@@ -52,6 +53,22 @@ type Stats struct {
 	TotalSize          int64
 	TotalLines         int
 	Skipped            int // 完全不匹配规则的文件数
+	DirCount           int // 文件夹数量
+}
+
+// DirStats 目录统计信息
+type DirStats struct {
+	Path      string
+	FileCount int
+	TotalSize int64
+	TotalLines int
+}
+
+// ExtStats 文件类型统计信息
+type ExtStats struct {
+	Ext       string
+	FileCount int
+	TotalSize int64
 }
 
 var defaultIgnorePatterns = []string{
@@ -115,6 +132,16 @@ var languageMap = map[string]string{
 
 func main() {
 	cfg := parseFlags()
+	
+	// 如果是统计模式，执行统计并退出
+	if cfg.ShowStats {
+		if err := showProjectStats(cfg); err != nil {
+			fmt.Printf("❌ 统计失败: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	
 	printStartupInfo(cfg)
 
 	// Phase 1: 扫描文件结构
@@ -157,6 +184,7 @@ func parseFlags() Config {
 	flag.BoolVar(&cfg.NoSubdirs, "ns", false, "Alias for --no-subdirs")
 	flag.BoolVar(&cfg.Verbose, "v", false, "Verbose output")
 	flag.BoolVar(&cfg.Version, "version", false, "Show version")
+	flag.BoolVar(&cfg.ShowStats, "s", false, "Show project statistics")
 
 	flag.Parse()
 
@@ -656,4 +684,190 @@ func logf(verbose bool, format string, a ...any) {
 	if verbose {
 		fmt.Printf(format+"\n", a...)
 	}
+}
+
+/*
+====================================================
+ Project Statistics
+====================================================
+*/
+
+func showProjectStats(cfg Config) error {
+	fmt.Println("📊 正在统计项目信息...")
+	fmt.Printf("  Root: %s\n\n", cfg.RootDir)
+	
+	var files []FileMetadata
+	dirMap := make(map[string]*DirStats)
+	extMap := make(map[string]*ExtStats)
+	var stats Stats
+	absOutput, _ := filepath.Abs(cfg.OutputFile)
+	
+	err := filepath.WalkDir(cfg.RootDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		
+		relPath, _ := filepath.Rel(cfg.RootDir, path)
+		if relPath == "." {
+			return nil
+		}
+		
+		// 处理目录
+		if d.IsDir() {
+			if shouldIgnoreDir(d.Name()) {
+				return filepath.SkipDir
+			}
+			stats.DirCount++
+			dirMap[relPath] = &DirStats{Path: relPath}
+			return nil
+		}
+		
+		// 排除输出文件
+		if absPath, _ := filepath.Abs(path); absPath == absOutput {
+			return nil
+		}
+		
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		
+		// 过滤二进制和过大文件
+		if info.Size() > cfg.MaxFileSize || isBinaryFile(path) {
+			return nil
+		}
+		
+		lineCount, _ := countLines(path)
+		fileSize := info.Size()
+		
+		// 统计文件
+		files = append(files, FileMetadata{
+			RelPath:   relPath,
+			FullPath:  path,
+			Size:      fileSize,
+			LineCount: lineCount,
+		})
+		stats.FileCount++
+		stats.TotalLines += lineCount
+		stats.TotalSize += fileSize
+		
+		// 统计目录
+		dir := filepath.Dir(relPath)
+		if dir == "." {
+			dir = "."
+		}
+		if dirStats, ok := dirMap[dir]; ok {
+			dirStats.FileCount++
+			dirStats.TotalSize += fileSize
+			dirStats.TotalLines += lineCount
+		} else {
+			dirMap[dir] = &DirStats{
+				Path:       dir,
+				FileCount:  1,
+				TotalSize:  fileSize,
+				TotalLines: lineCount,
+			}
+		}
+		
+		// 统计文件类型
+		ext := strings.ToLower(filepath.Ext(relPath))
+		if ext == "" {
+			ext = "(no extension)"
+		}
+		if extStats, ok := extMap[ext]; ok {
+			extStats.FileCount++
+			extStats.TotalSize += fileSize
+		} else {
+			extMap[ext] = &ExtStats{
+				Ext:       ext,
+				FileCount: 1,
+				TotalSize: fileSize,
+			}
+		}
+		
+		return nil
+	})
+	
+	if err != nil {
+		return err
+	}
+	
+	// 输出统计结果
+	fmt.Println("=" + strings.Repeat("=", 70))
+	fmt.Println("📁 基本统计")
+	fmt.Println("=" + strings.Repeat("=", 70))
+	fmt.Printf("  文件夹数量: %d\n", stats.DirCount)
+	fmt.Printf("  文件数量  : %d\n", stats.FileCount)
+	fmt.Printf("  总行数    : %d\n", stats.TotalLines)
+	fmt.Printf("  总大小    : %.2f KB (%.2f MB)\n", 
+		float64(stats.TotalSize)/1024, float64(stats.TotalSize)/1024/1024)
+	
+	// Top 5 最大文件夹
+	fmt.Println("\n" + "=" + strings.Repeat("=", 70))
+	fmt.Println("📂 Top 5 最大文件夹")
+	fmt.Println("=" + strings.Repeat("=", 70))
+	
+	var dirList []DirStats
+	for _, ds := range dirMap {
+		if ds.FileCount > 0 {
+			dirList = append(dirList, *ds)
+		}
+	}
+	sort.Slice(dirList, func(i, j int) bool {
+		return dirList[i].TotalSize > dirList[j].TotalSize
+	})
+	
+	for i := 0; i < 5 && i < len(dirList); i++ {
+		ds := dirList[i]
+		sizePercent := float64(ds.TotalSize) / float64(stats.TotalSize) * 100
+		linesPercent := float64(ds.TotalLines) / float64(stats.TotalLines) * 100
+		fmt.Printf("  %d. %s\n", i+1, ds.Path)
+		fmt.Printf("     大小: %.2f KB (%.1f%%), 行数: %d (%.1f%%), 文件数: %d\n",
+			float64(ds.TotalSize)/1024, sizePercent, ds.TotalLines, linesPercent, ds.FileCount)
+	}
+	
+	// Top 5 最大文件
+	fmt.Println("\n" + "=" + strings.Repeat("=", 70))
+	fmt.Println("📄 Top 5 最大文件")
+	fmt.Println("=" + strings.Repeat("=", 70))
+	
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].Size > files[j].Size
+	})
+	
+	for i := 0; i < 5 && i < len(files); i++ {
+		f := files[i]
+		sizePercent := float64(f.Size) / float64(stats.TotalSize) * 100
+		linesPercent := float64(f.LineCount) / float64(stats.TotalLines) * 100
+		fmt.Printf("  %d. %s\n", i+1, f.RelPath)
+		fmt.Printf("     大小: %.2f KB (%.1f%%), 行数: %d (%.1f%%)\n",
+			float64(f.Size)/1024, sizePercent, f.LineCount, linesPercent)
+	}
+	
+	// 按文件类型统计
+	fmt.Println("\n" + "=" + strings.Repeat("=", 70))
+	fmt.Println("📊 按文件类型统计")
+	fmt.Println("=" + strings.Repeat("=", 70))
+	
+	var extList []ExtStats
+	for _, es := range extMap {
+		extList = append(extList, *es)
+	}
+	sort.Slice(extList, func(i, j int) bool {
+		return extList[i].TotalSize > extList[j].TotalSize
+	})
+	
+	fmt.Printf("  %-20s %10s %15s %10s\n", "类型", "文件数", "总大小", "占比")
+	fmt.Println("  " + strings.Repeat("-", 68))
+	for _, es := range extList {
+		sizePercent := float64(es.TotalSize) / float64(stats.TotalSize) * 100
+		fmt.Printf("  %-20s %10d %12.2f KB %9.1f%%\n",
+			es.Ext, es.FileCount, float64(es.TotalSize)/1024, sizePercent)
+	}
+	
+	fmt.Println("\n" + "=" + strings.Repeat("=", 70))
+	fmt.Println("✅ 统计完成!")
+	fmt.Println("=" + strings.Repeat("=", 70))
+	
+	return nil
 }
