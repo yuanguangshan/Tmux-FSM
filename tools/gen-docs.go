@@ -72,10 +72,20 @@ type ExtStats struct {
 }
 
 var defaultIgnorePatterns = []string{
-	".git", ".idea", ".vscode",
-	"node_modules", "vendor", "dist", "build", "target", "bin",
-	"__pycache__", ".DS_Store",
-	"package-lock.json", "yarn.lock", "go.sum",
+	".git", ".idea", ".vscode", ".svn", ".hg",
+	"node_modules", "vendor", "dist", "build", "target", "bin", "out", "release", "debug",
+	"__pycache__", ".pytest_cache", ".tox", ".coverage", "coverage.xml",
+	".DS_Store", ".env", ".venv", "venv", "env",
+	"package-lock.json", "yarn.lock", "go.sum", "composer.lock", "Gemfile.lock",
+	"*.log", "*.tmp", "*.temp", "*.cache", "*.swp", "*.swo",
+	"tags", "TAGS", "*.pid", "*.seed", "*.idx",
+	"Pods", "Carthage", "CocoaPods", ".xcassets",
+	"obj", "ipch", "*.user", "*.userosscache", "*.sln.docstates",
+	"*.VC.db", "*.VC.VC.opendb", "Debug", "Release", "x64", "x86", "arm64",
+	"*.aps", "*.ncb", "*.opendb", "*.opensdf", "*.sdf", "*.cachefile", "*.VC.VC.opendb",
+	"cmake-build-*", ".gradle", "build", ".sonar", ".scannerwork",
+	"*.tgz", "*.tar.gz", "*.zip", "*.rar", "*.7z",
+	"logs", "tmp", "temp", "cache", ".history", ".nyc_output",
 }
 
 // 语言映射表（全局配置，便于扩展）
@@ -228,6 +238,12 @@ func parseFlags() Config {
 	cfg.IncludeMatches = splitAndTrim(match)
 	cfg.ExcludeExts = normalizeExts(exclude)
 	cfg.ExcludeMatches = splitAndTrim(excludeMatch)
+
+	// 从配置文件加载额外的忽略规则
+	additionalExcludes, additionalExcludeMatches := loadIgnoreFile(cfg.RootDir)
+	cfg.ExcludeExts = mergeStringSlices(cfg.ExcludeExts, additionalExcludes)
+	cfg.ExcludeMatches = mergeStringSlices(cfg.ExcludeMatches, additionalExcludeMatches)
+
 	cfg.MaxFileSize = maxKB * 1024
 
 	return cfg
@@ -245,6 +261,87 @@ func splitAndTrim(input string) []string {
 			result = append(result, p)
 		}
 	}
+	return result
+}
+
+// 从配置文件加载忽略规则
+func loadIgnoreFile(rootDir string) ([]string, []string) {
+	var excludeExts []string
+	var excludeMatches []string
+
+	// 尝试多个可能的配置文件名
+	possibleFiles := []string{".gen-docs-ignore", ".gdocsignore", ".docs-ignore"}
+
+	for _, filename := range possibleFiles {
+		configPath := filepath.Join(rootDir, filename)
+
+		// 检查文件是否存在
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			continue
+		}
+
+		// 读取配置文件
+		content, err := os.ReadFile(configPath)
+		if err != nil {
+			logf(true, "⚠ 无法读取忽略配置文件 %s: %v", configPath, err)
+			continue
+		}
+
+		logf(true, "✓ 发现忽略配置文件: %s", configPath)
+
+		// 解析配置文件内容
+		scanner := bufio.NewScanner(strings.NewReader(string(content)))
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+
+			// 跳过空行和注释行
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+
+			// 根据行的内容判断是扩展名还是路径匹配
+			if strings.HasPrefix(line, ".") {
+				// 这是一个扩展名（例如 .log, .tmp）
+				excludeExts = append(excludeExts, strings.ToLower(line))
+			} else {
+				// 这是一个路径匹配模式（例如 vendor/, node_modules/）
+				excludeMatches = append(excludeMatches, line)
+			}
+		}
+
+		if err := scanner.Err(); err != nil {
+			logf(true, "⚠ 读取忽略配置文件时出错 %s: %v", configPath, err)
+		}
+
+		// 找到并成功解析了一个配置文件，跳出循环
+		break
+	}
+
+	return excludeExts, excludeMatches
+}
+
+// 合并两个字符串切片，避免重复
+func mergeStringSlices(base, additional []string) []string {
+	// 使用 map 来跟踪已存在的元素，避免重复
+	seen := make(map[string]bool)
+	var result []string
+
+	// 先添加基础切片中的元素
+	for _, item := range base {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
+		}
+	}
+
+	// 再添加附加切片中的元素
+	for _, item := range additional {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
+		}
+	}
+
 	return result
 }
 
