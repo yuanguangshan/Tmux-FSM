@@ -19,8 +19,8 @@
 
 ## 文件结构说明
 
-### `gen-docs.go`
-- 项目文档生成工具
+### `codoc.go` (原 gen-docs.go)
+- **Codoc** - 代码文档生成工具
 - 主要功能：
   - 扫描项目目录结构
   - 生成项目文档快照
@@ -37,7 +37,7 @@
 - gen-docs 工具安装脚本
 - 主要功能：
   - 检查 Go 环境
-  - 编译 gen-docs 工具
+  - 编译 codoc 工具
   - 安装到系统路径
   - 创建 `gd` 快捷命令
 - 用途：
@@ -59,6 +59,12 @@
 - **Top 5 最大文件**：按大小排序，显示每个文件的大小和行数占比
 - **按文件类型统计**：按后缀名统计文件数量、总大小和占比
 
+### JSON 输出（新功能）
+支持直接输出 JSON 格式的数据，方便程序集成：
+- **完整元数据**：包含所有文件的详细信息
+- **统计数据**：包含各阶段的统计结果
+- **结构化输出**：易于被 CI/CD 或其他工具解析
+
 ### 易用性
 - 提供简洁的命令行接口
 - 支持多种过滤选项
@@ -77,7 +83,7 @@ Tools 模块是项目的辅助开发层，它为开发者提供了便利的工�
 
 ### 功能概述
 
-使用 `gen-docs -s` 可以快速获取项目的统计信息，无需生成完整文档。这对于以下场景非常有用：
+使用 `codoc -s` 可以快速获取项目的统计信息，无需生成完整文档。这对于以下场景非常有用：
 - 快速了解项目规模和结构
 - 识别大型文件和文件夹，优化代码组织
 - 分析项目文件类型分布
@@ -121,21 +127,21 @@ Tools 模块是项目的辅助开发层，它为开发者提供了便利的工�
 
 #### 统计当前项目
 ```bash
-gen-docs -s
+codoc -s
 ```
 
 #### 统计指定目录
 ```bash
-gen-docs -s -dir /path/to/project
+codoc -s -dir /path/to/project
 ```
 
 #### 结合过滤条件统计
 ```bash
 # 只统计 Go 源代码文件
-gen-docs -s -i ".go" -xm "_test.go"
+codoc -s -i ".go" -xm "_test.go"
 
 # 统计时排除 vendor 和 node_modules
-gen-docs -s -xm "vendor/,node_modules/"
+codoc -s -xm "vendor/,node_modules/"
 ```
 
 ### 注意事项
@@ -145,11 +151,11 @@ gen-docs -s -xm "vendor/,node_modules/"
 - 大文件（超过 `-max-size`）和二进制文件会被自动排除
 - 统计结果基于实际能够读取和处理的文件
 
-# `gen-docs.go` 文件详细分析
+# `codoc.go` 文件详细分析
 
 ## 文件作用
 
-`gen-docs.go` 是一个项目文档生成工具，主要功能是扫描指定目录下的源代码文件，并将这些文件的内容整合到一个 Markdown 文档中。这个工具可以帮助开发者快速创建项目的完整文档，包含所有源代码文件的内容，便于代码审查、分享或归档。
+`codoc.go` 是一个项目文档生成工具，主要功能是扫描指定目录下的源代码文件，并将这些文件的内容整合到一个 Markdown 文档中。这个工具可以帮助开发者快速创建项目的完整文档，包含所有源代码文件的内容，便于代码审查、分享或归档。
 
 该工具具有以下核心特性：
 
@@ -237,13 +243,13 @@ yarn.lock, go.sum
 #### 方法一：直接运行
 ```bash
 cd /Users/ygs/Tmux-FSM/tools
-go run gen-docs.go [options] [directory]
+go run codoc.go [options] [directory]
 ```
 
 #### 方法二：编译后运行
 ```bash
-go build -o gen-docs gen-docs.go
-./gen-docs [options] [directory]
+go build -o codoc codoc.go
+./codoc [options] [directory]
 ```
 
 ### 命令行选项详解
@@ -260,19 +266,20 @@ go build -o gen-docs gen-docs.go
 | `-no-subdirs` 或 `-ns` | bool | 不扫描子目录 | false |
 | `-v` | bool | 详细输出模式 | false |
 | `-s` | bool | 显示项目统计信息 | false |
+| `-json` | bool | 输出 JSON 格式 | false |
 | `-version` | bool | 显示版本信息并退出 | false |
 
 ### 使用示例
 
 #### 示例 1：生成整个项目的文档
 ```bash
-go run gen-docs.go
+go run codoc.go
 ```
-这将在当前目录下生成类似 `currentdir-20260112-docs.md` 的文件，包含当前目录下所有符合条件的文件。
+这将在当前目录下生成类似 `currentdir-20260112-codoc.md` 的文件，包含当前目录下所有符合条件的文件。
 
 #### 示例 2：查看项目统计信息
 ```bash
-gen-docs -s
+codoc -s
 ```
 显示项目的统计信息，包括：
 - 文件夹和文件数量
@@ -321,55 +328,55 @@ gen-docs -s
 
 #### 示例 3：只包含 Go 和配置文件
 ```bash
-go run gen-docs.go -i ".go,.conf" -o project-go-docs.md
+go run codoc.go -i ".go,.conf" -o project-go-docs.md
 ```
 生成只包含 `.go` 和 `.conf` 文件的文档。
 
 #### 示例 4：包含特定路径关键词的文件
 ```bash
-go run gen-docs.go -m "_test.go,config" -o test-and-config-docs.md
+go run codoc.go -m "_test.go,config" -o test-and-config-docs.md
 ```
 生成包含 `_test.go` 结尾或路径中包含 `config` 的文件。
 
 #### 示例 5：排除测试文件和特定目录
 ```bash
-go run gen-docs.go -xm "_test.go,vendor/" -o clean-project-docs.md
+go run codoc.go -xm "_test.go,vendor/" -o clean-project-docs.md
 ```
 生成排除测试文件和 `vendor` 目录的文档。
 
 #### 示例 6：同时使用包含和排除规则
 ```bash
-go run gen-docs.go -i ".go,.js" -x ".min.js" -xm "test_" -o filtered-docs.md
+go run codoc.go -i ".go,.js" -x ".min.js" -xm "test_" -o filtered-docs.md
 ```
 生成包含 `.go` 和 `.js` 文件但排除 `.min.js` 文件和路径中包含 `test_` 的文件。
 
 #### 示例 7：只处理当前目录（不递归子目录）的 JavaScript 文件
 ```bash
-go run gen-docs.go -dir ./src -i ".js" -ns -o js-files.md
+go run codoc.go -dir ./src -i ".js" -ns -o js-files.md
 ```
 只扫描 `./src` 目录下的 `.js` 文件，不递归子目录。
 
 #### 示例 8：增加文件大小限制
 ```bash
-go run gen-docs.go -max-size 1000 -o large-project-docs.md
+go run codoc.go -max-size 1000 -o large-project-docs.md
 ```
 允许最大 1000KB 的文件被包含。
 
 #### 示例 9：详细输出模式
 ```bash
-go run gen-docs.go -v -o detailed-docs.md
+go run codoc.go -v -o detailed-docs.md
 ```
 显示详细的处理过程信息。
 
 #### 示例 10：指定特定目录
 ```bash
-go run gen-docs.go /path/to/project -o custom-project-docs.md
+go run codoc.go /path/to/project -o custom-project-docs.md
 ```
 扫描指定目录 `/path/to/project`。
 
 #### 示例 11：组合多个条件
 ```bash
-go run gen-docs.go -dir ./myproject -i ".go,.js,.py" -x ".min.js" -xm "node_modules,test_" -max-size 200 -o comprehensive-docs.md
+go run codoc.go -dir ./myproject -i ".go,.js,.py" -x ".min.js" -xm "node_modules,test_" -max-size 200 -o comprehensive-docs.md
 ```
 综合使用多种过滤条件生成文档。
 

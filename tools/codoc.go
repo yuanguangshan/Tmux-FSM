@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -16,11 +17,12 @@ import (
 
 /*
 ====================================================
+ Codoc - Code Documentation Made Simple
  Configuration & Globals
 ====================================================
 */
 
-const versionStr = "v2.0.0"
+const versionStr = "v2.1.0"
 
 // Config 集中管理配置
 type Config struct {
@@ -35,6 +37,7 @@ type Config struct {
 	Verbose        bool
 	Version        bool
 	ShowStats      bool
+	JSONOutput     bool // 输出 JSON 格式
 }
 
 // FileMetadata 仅存储元数据，不存内容
@@ -58,9 +61,9 @@ type Stats struct {
 
 // DirStats 目录统计信息
 type DirStats struct {
-	Path      string
-	FileCount int
-	TotalSize int64
+	Path       string
+	FileCount  int
+	TotalSize  int64
 	TotalLines int
 }
 
@@ -69,6 +72,16 @@ type ExtStats struct {
 	Ext       string
 	FileCount int
 	TotalSize int64
+}
+
+// ProjectOutput JSON 输出格式
+type ProjectOutput struct {
+	GeneratedAt string         `json:"generated_at"`
+	RootDir     string         `json:"root_dir"`
+	Stats       Stats          `json:"stats"`
+	Files       []FileMetadata `json:"files"`
+	Directories []DirStats     `json:"directories,omitempty"`
+	Extensions  []ExtStats     `json:"extensions,omitempty"`
 }
 
 var defaultIgnorePatterns = []string{
@@ -142,7 +155,7 @@ var languageMap = map[string]string{
 
 func main() {
 	cfg := parseFlags()
-	
+
 	// 如果是统计模式，执行统计并退出
 	if cfg.ShowStats {
 		if err := showProjectStats(cfg); err != nil {
@@ -151,25 +164,35 @@ func main() {
 		}
 		return
 	}
-	
-	printStartupInfo(cfg)
+
+	if !cfg.JSONOutput {
+		printStartupInfo(cfg)
+	}
 
 	// Phase 1: 扫描文件结构
-	fmt.Println("⏳ 正在扫描文件结构...")
+	if !cfg.JSONOutput {
+		fmt.Println("⏳ 正在扫描文件结构...")
+	}
 	files, stats, err := scanDirectory(cfg)
 	if err != nil {
 		fmt.Printf("❌ 扫描失败: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Phase 2: 流式写入
-	fmt.Printf("💾 正在写入文档 [文件数: %d]...\n", len(files))
-	if err := writeMarkdownStream(cfg, files, stats); err != nil {
-		fmt.Printf("❌ 写入失败: %v\n", err)
-		os.Exit(1)
+	// Phase 2: 输出（JSON 或 Markdown）
+	if cfg.JSONOutput {
+		if err := writeJSONOutput(cfg, files, stats); err != nil {
+			fmt.Printf("❌ JSON 输出失败: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		fmt.Printf("💾 正在写入文档 [文件数: %d]...\n", len(files))
+		if err := writeMarkdownStream(cfg, files, stats); err != nil {
+			fmt.Printf("❌ 写入失败: %v\n", err)
+			os.Exit(1)
+		}
+		printSummary(stats, cfg.OutputFile)
 	}
-
-	printSummary(stats, cfg.OutputFile)
 }
 
 /*
@@ -195,11 +218,12 @@ func parseFlags() Config {
 	flag.BoolVar(&cfg.Verbose, "v", false, "Verbose output")
 	flag.BoolVar(&cfg.Version, "version", false, "Show version")
 	flag.BoolVar(&cfg.ShowStats, "s", false, "Show project statistics")
+	flag.BoolVar(&cfg.JSONOutput, "json", false, "Output in JSON format")
 
 	flag.Parse()
 
 	if cfg.Version {
-		fmt.Printf("gen-docs %s\n", versionStr)
+		fmt.Printf("codoc %s\n", versionStr)
 		os.Exit(0)
 	}
 
@@ -231,7 +255,7 @@ func parseFlags() Config {
 		}
 
 		date := time.Now().Format("20060102")
-		cfg.OutputFile = fmt.Sprintf("%s-%s-docs.md", baseName, date)
+		cfg.OutputFile = fmt.Sprintf("%s-%s-codoc.md", baseName, date)
 	}
 
 	cfg.IncludeExts = normalizeExts(include)
@@ -270,7 +294,7 @@ func loadIgnoreFile(rootDir string) ([]string, []string) {
 	var excludeMatches []string
 
 	// 尝试多个可能的配置文件名
-	possibleFiles := []string{".gen-docs-ignore", ".gdocsignore", ".docs-ignore"}
+	possibleFiles := []string{".codoc-ignore", ".gen-docs-ignore", ".gdocsignore", ".docs-ignore"}
 
 	for _, filename := range possibleFiles {
 		configPath := filepath.Join(rootDir, filename)
@@ -352,7 +376,7 @@ func mergeStringSlices(base, additional []string) []string {
 */
 
 func printStartupInfo(cfg Config) {
-	fmt.Println("▶ Gen-Docs Started")
+	fmt.Println("▶ Codoc Started")
 	fmt.Printf("  Root: %s\n", cfg.RootDir)
 	fmt.Printf("  Out : %s\n", cfg.OutputFile)
 	fmt.Printf("  Max : %d KB\n", cfg.MaxFileSize/1024)
@@ -539,72 +563,7 @@ func shouldIgnoreDir(name string) bool {
 	return false
 }
 
-func shouldIgnoreFile(relPath string, size int64, cfg Config) bool {
-	// 大小限制
-	if size > cfg.MaxFileSize {
-		logf(cfg.Verbose, "⊘ 文件过大: %s", relPath)
-		return true
-	}
-
-	ext := strings.ToLower(filepath.Ext(relPath))
-
-	// 排除规则优先
-	for _, e := range cfg.ExcludeExts {
-		if ext == e {
-			return true
-		}
-	}
-
-	// 规则 0: 硬性排除 (关键字排除) - 优先级最高
-	if len(cfg.ExcludeMatches) > 0 {
-		for _, m := range cfg.ExcludeMatches {
-			if strings.Contains(relPath, m) {
-				logf(cfg.Verbose, "⊘ 匹配排除关键字 [%s]: %s", m, relPath)
-				return true
-			}
-		}
-	}
-
-	// 规则 1: 包含后缀白名单
-	if len(cfg.IncludeExts) > 0 {
-		found := false
-		for _, i := range cfg.IncludeExts {
-			if ext == i {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return true
-		}
-	}
-
-	// 规则 2: 关键字包含匹配
-	if len(cfg.IncludeMatches) > 0 {
-		found := false
-		for _, m := range cfg.IncludeMatches {
-			if strings.Contains(relPath, m) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return true
-		}
-	}
-
-	// 路径包含忽略模式
-	parts := strings.Split(relPath, string(filepath.Separator))
-	for _, part := range parts {
-		for _, pattern := range defaultIgnorePatterns {
-			if part == pattern {
-				return true
-			}
-		}
-	}
-
-	return false
-}
+// shouldIgnoreFile 已废弃 - 过滤逻辑已统一到 scanDirectory 中
 
 /*
 ====================================================
@@ -629,9 +588,15 @@ func normalizeExts(input string) []string {
 }
 
 func isBinaryFile(path string) bool {
-	// 快速路径：压缩文件
+	// 快速路径 1: 压缩文件
 	if strings.Contains(path, ".min.") {
 		return true
+	}
+
+	// 快速路径 2: 已知文本类型扩展名直接跳过 IO 检测
+	ext := strings.ToLower(filepath.Ext(path))
+	if _, ok := languageMap[ext]; ok {
+		return false // 已知文本类型，无需检测
 	}
 
 	f, err := os.Open(path)
@@ -667,6 +632,27 @@ func detectLanguage(path string) string {
 	return "text"
 }
 
+// makeGitHubAnchor 生成符合 GitHub 规范的 Markdown 锚点
+// GitHub 规则：小写化、非字母数字转为 -、连续 - 合并
+func makeGitHubAnchor(s string) string {
+	var result strings.Builder
+	lastWasDash := false
+
+	for _, r := range strings.ToLower(s) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			result.WriteRune(r)
+			lastWasDash = false
+		} else if !lastWasDash {
+			result.WriteRune('-')
+			lastWasDash = true
+		}
+	}
+
+	// 移除首尾的横杠
+	anchor := strings.Trim(result.String(), "-")
+	return anchor
+}
+
 /*
 ====================================================
  Markdown Output
@@ -695,13 +681,8 @@ func writeMarkdownStream(cfg Config, files []FileMetadata, stats Stats) error {
 	fmt.Fprintln(w, "<a name=\"toc\"></a>")
 	fmt.Fprintln(w, "## 📂 扫描目录")
 	for _, file := range files {
-		// 生成锚点，方便在 Markdown 中点击跳转
-		// 注意：锚点名称在 GitHub 中通常是将空格转为横杠并全小写
-		anchor := strings.ReplaceAll(file.RelPath, " ", "-")
-		anchor = strings.ReplaceAll(anchor, ".", "")
-		anchor = strings.ReplaceAll(anchor, "/", "")
-		anchor = strings.ToLower(anchor)
-
+		// 生成符合 GitHub 规范的锚点
+		anchor := makeGitHubAnchor(file.RelPath)
 		fmt.Fprintf(w, "- [%s](#📄-%s) (%d lines, %.2f KB)\n", file.RelPath, anchor, file.LineCount, float64(file.Size)/1024)
 	}
 	fmt.Fprintln(w, "\n---")
@@ -785,6 +766,42 @@ func logf(verbose bool, format string, a ...any) {
 
 /*
 ====================================================
+ JSON Output
+====================================================
+*/
+
+func writeJSONOutput(cfg Config, files []FileMetadata, stats Stats) error {
+	output := ProjectOutput{
+		GeneratedAt: time.Now().Format("2006-01-02 15:04:05"),
+		RootDir:     cfg.RootDir,
+		Stats:       stats,
+		Files:       files,
+	}
+
+	var jsonData []byte
+	var err error
+
+	// 美化输出
+	jsonData, err = json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		return fmt.Errorf("JSON 序列化失败: %w", err)
+	}
+
+	// 如果指定了输出文件，写入文件；否则输出到标准输出
+	if cfg.OutputFile != "" {
+		if err := os.WriteFile(cfg.OutputFile, jsonData, 0644); err != nil {
+			return fmt.Errorf("写入文件失败: %w", err)
+		}
+		fmt.Printf("✅ JSON 已写入: %s\n", cfg.OutputFile)
+	} else {
+		fmt.Println(string(jsonData))
+	}
+
+	return nil
+}
+
+/*
+====================================================
  Project Statistics
 ====================================================
 */
@@ -792,23 +809,23 @@ func logf(verbose bool, format string, a ...any) {
 func showProjectStats(cfg Config) error {
 	fmt.Println("📊 正在统计项目信息...")
 	fmt.Printf("  Root: %s\n\n", cfg.RootDir)
-	
+
 	var files []FileMetadata
 	dirMap := make(map[string]*DirStats)
 	extMap := make(map[string]*ExtStats)
 	var stats Stats
 	absOutput, _ := filepath.Abs(cfg.OutputFile)
-	
+
 	err := filepath.WalkDir(cfg.RootDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
-		
+
 		relPath, _ := filepath.Rel(cfg.RootDir, path)
 		if relPath == "." {
 			return nil
 		}
-		
+
 		// 处理目录
 		if d.IsDir() {
 			if shouldIgnoreDir(d.Name()) {
@@ -818,25 +835,25 @@ func showProjectStats(cfg Config) error {
 			dirMap[relPath] = &DirStats{Path: relPath}
 			return nil
 		}
-		
+
 		// 排除输出文件
 		if absPath, _ := filepath.Abs(path); absPath == absOutput {
 			return nil
 		}
-		
+
 		info, err := d.Info()
 		if err != nil {
 			return nil
 		}
-		
+
 		// 过滤二进制和过大文件
 		if info.Size() > cfg.MaxFileSize || isBinaryFile(path) {
 			return nil
 		}
-		
+
 		lineCount, _ := countLines(path)
 		fileSize := info.Size()
-		
+
 		// 统计文件
 		files = append(files, FileMetadata{
 			RelPath:   relPath,
@@ -847,7 +864,7 @@ func showProjectStats(cfg Config) error {
 		stats.FileCount++
 		stats.TotalLines += lineCount
 		stats.TotalSize += fileSize
-		
+
 		// 统计目录
 		dir := filepath.Dir(relPath)
 		if dir == "." {
@@ -865,7 +882,7 @@ func showProjectStats(cfg Config) error {
 				TotalLines: lineCount,
 			}
 		}
-		
+
 		// 统计文件类型
 		ext := strings.ToLower(filepath.Ext(relPath))
 		if ext == "" {
@@ -881,14 +898,14 @@ func showProjectStats(cfg Config) error {
 				TotalSize: fileSize,
 			}
 		}
-		
+
 		return nil
 	})
-	
+
 	if err != nil {
 		return err
 	}
-	
+
 	// 输出统计结果
 	fmt.Println("=" + strings.Repeat("=", 70))
 	fmt.Println("📁 基本统计")
@@ -896,14 +913,14 @@ func showProjectStats(cfg Config) error {
 	fmt.Printf("  文件夹数量: %d\n", stats.DirCount)
 	fmt.Printf("  文件数量  : %d\n", stats.FileCount)
 	fmt.Printf("  总行数    : %d\n", stats.TotalLines)
-	fmt.Printf("  总大小    : %.2f KB (%.2f MB)\n", 
+	fmt.Printf("  总大小    : %.2f KB (%.2f MB)\n",
 		float64(stats.TotalSize)/1024, float64(stats.TotalSize)/1024/1024)
-	
+
 	// Top 5 最大文件夹
 	fmt.Println("\n" + "=" + strings.Repeat("=", 70))
 	fmt.Println("📂 Top 5 最大文件夹")
 	fmt.Println("=" + strings.Repeat("=", 70))
-	
+
 	var dirList []DirStats
 	for _, ds := range dirMap {
 		if ds.FileCount > 0 {
@@ -913,7 +930,7 @@ func showProjectStats(cfg Config) error {
 	sort.Slice(dirList, func(i, j int) bool {
 		return dirList[i].TotalSize > dirList[j].TotalSize
 	})
-	
+
 	for i := 0; i < 5 && i < len(dirList); i++ {
 		ds := dirList[i]
 		sizePercent := float64(ds.TotalSize) / float64(stats.TotalSize) * 100
@@ -922,16 +939,16 @@ func showProjectStats(cfg Config) error {
 		fmt.Printf("     大小: %.2f KB (%.1f%%), 行数: %d (%.1f%%), 文件数: %d\n",
 			float64(ds.TotalSize)/1024, sizePercent, ds.TotalLines, linesPercent, ds.FileCount)
 	}
-	
+
 	// Top 5 最大文件
 	fmt.Println("\n" + "=" + strings.Repeat("=", 70))
 	fmt.Println("📄 Top 5 最大文件")
 	fmt.Println("=" + strings.Repeat("=", 70))
-	
+
 	sort.Slice(files, func(i, j int) bool {
 		return files[i].Size > files[j].Size
 	})
-	
+
 	for i := 0; i < 5 && i < len(files); i++ {
 		f := files[i]
 		sizePercent := float64(f.Size) / float64(stats.TotalSize) * 100
@@ -940,12 +957,12 @@ func showProjectStats(cfg Config) error {
 		fmt.Printf("     大小: %.2f KB (%.1f%%), 行数: %d (%.1f%%)\n",
 			float64(f.Size)/1024, sizePercent, f.LineCount, linesPercent)
 	}
-	
+
 	// 按文件类型统计
 	fmt.Println("\n" + "=" + strings.Repeat("=", 70))
 	fmt.Println("📊 按文件类型统计")
 	fmt.Println("=" + strings.Repeat("=", 70))
-	
+
 	var extList []ExtStats
 	for _, es := range extMap {
 		extList = append(extList, *es)
@@ -953,7 +970,7 @@ func showProjectStats(cfg Config) error {
 	sort.Slice(extList, func(i, j int) bool {
 		return extList[i].TotalSize > extList[j].TotalSize
 	})
-	
+
 	fmt.Printf("  %-20s %10s %15s %10s\n", "类型", "文件数", "总大小", "占比")
 	fmt.Println("  " + strings.Repeat("-", 68))
 	for _, es := range extList {
@@ -961,10 +978,10 @@ func showProjectStats(cfg Config) error {
 		fmt.Printf("  %-20s %10d %12.2f KB %9.1f%%\n",
 			es.Ext, es.FileCount, float64(es.TotalSize)/1024, sizePercent)
 	}
-	
+
 	fmt.Println("\n" + "=" + strings.Repeat("=", 70))
 	fmt.Println("✅ 统计完成!")
 	fmt.Println("=" + strings.Repeat("=", 70))
-	
+
 	return nil
 }
