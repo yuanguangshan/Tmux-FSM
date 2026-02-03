@@ -1,261 +1,261 @@
 # Project Documentation
 
-- **Generated at:** 2026-02-03 11:36:19
+- **Generated at:** 2026-02-03 11:45:09
 - **Root Dir:** `/Users/ygs/ygs/Tmux-FSM`
 - **File Count:** 245
-- **Total Size:** 1534.20 KB
+- **Total Size:** 1560.54 KB
 
 <a name="toc"></a>
 ## 📂 扫描目录
-- [.gitignore](#gitignore) (9 lines, 0.14 KB)
-- [README.md](#readme-md) (381 lines, 12.90 KB)
-- [backend/README.md](#backend-readme-md) (255 lines, 5.32 KB)
-- [backend/backend.go](#backend-backend-go) (159 lines, 4.63 KB)
-- [backend/controlModeBackend.go](#backend-controlmodebackend-go) (114 lines, 3.55 KB)
-- [build_workflow_analysis.md](#build-workflow-analysis-md) (447 lines, 10.55 KB)
-- [builder.go](#builder-go) (233 lines, 4.74 KB)
-- [chat.txt](#chat-txt) (9276 lines, 247.03 KB)
-- [client.go](#client-go) (137 lines, 3.78 KB)
-- [cmd/README.md](#cmd-readme-md) (267 lines, 4.99 KB)
-- [cmd/verifier/main.go](#cmd-verifier-main-go) (43 lines, 0.74 KB)
-- [config.go](#config-go) (68 lines, 1.37 KB)
-- [config_test.go](#config-test-go) (174 lines, 3.87 KB)
-- [crdt/README.md](#crdt-readme-md) (286 lines, 4.89 KB)
-- [crdt/crdt.go](#crdt-crdt-go) (316 lines, 6.70 KB)
-- [default.tmux.conf](#default-tmux-conf) (178 lines, 4.25 KB)
-- [docs/ARCHITECTURE.md](#docs-architecture-md) (160 lines, 4.18 KB)
-- [docs/ARCHITECTURE_INTENT_CONTRACT.md](#docs-architecture-intent-contract-md) (166 lines, 2.82 KB)
-- [docs/CMD.md](#docs-cmd-md) (367 lines, 7.14 KB)
-- [docs/COLLABORATIVE_EDITING_MODEL.md](#docs-collaborative-editing-model-md) (53 lines, 2.86 KB)
-- [docs/EDITOR_IR_SPEC.md](#docs-editor-ir-spec-md) (77 lines, 3.33 KB)
-- [docs/GOTO.md](#docs-goto-md) (137 lines, 2.69 KB)
-- [docs/INTEGRATION_GUIDE.md](#docs-integration-guide-md) (183 lines, 4.27 KB)
-- [docs/LEGACY_INTENT_DELETE_CHECKLIST.md](#docs-legacy-intent-delete-checklist-md) (117 lines, 3.56 KB)
-- [docs/NAV.md](#docs-nav-md) (234 lines, 4.81 KB)
-- [docs/PHASE_3_LEGACY_REMOVAL_CHECKLIST.md](#docs-phase-3-legacy-removal-checklist-md) (84 lines, 1.56 KB)
-- [docs/QUALITY_ASSURANCE.md](#docs-quality-assurance-md) (107 lines, 5.14 KB)
-- [docs/README.md](#docs-readme-md) (89 lines, 2.49 KB)
-- [docs/Tmux-FSM_项目全面分析.md](#docs-tmux-fsm-md) (292 lines, 8.46 KB)
-- [docs/architecture_review.md](#docs-architecture-review-md) (102 lines, 8.64 KB)
-- [docs/project_analysis.md](#docs-project-analysis-md) (1165 lines, 66.93 KB)
-- [docs/project_analysis_final.md](#docs-project-analysis-final-md) (184 lines, 6.61 KB)
-- [docs/project_map.md](#docs-project-map-md) (187 lines, 7.31 KB)
-- [docs/reference/ARCHITECTURE_CHARTER.md](#docs-reference-architecture-charter-md) (255 lines, 5.13 KB)
-- [docs/reference/ARTIFACTS.md](#docs-reference-artifacts-md) (810 lines, 34.98 KB)
-- [docs/reference/COMPUTATIONAL_NARRATIVE.md](#docs-reference-computational-narrative-md) (203 lines, 4.02 KB)
-- [docs/reference/CONSTITUTIONAL_AUDIT_REPORT.md](#docs-reference-constitutional-audit-report-md) (325 lines, 15.19 KB)
-- [docs/reference/DESIGN_PHILOSOPHY.md](#docs-reference-design-philosophy-md) (862 lines, 19.33 KB)
-- [docs/reference/DESIGN_WORLDVIEW.md](#docs-reference-design-worldview-md) (599 lines, 13.07 KB)
-- [docs/reference/ENHANCEMENT_PLAN.md](#docs-reference-enhancement-plan-md) (255 lines, 15.78 KB)
-- [docs/reference/EVOLUTION_PHILOSOPHY.md](#docs-reference-evolution-philosophy-md) (79 lines, 2.31 KB)
-- [docs/reference/FOEK_MANIFESTO.md](#docs-reference-foek-manifesto-md) (34 lines, 1.48 KB)
-- [docs/reference/FUTURE_APPLICATIONS.md](#docs-reference-future-applications-md) (437 lines, 22.40 KB)
-- [docs/reference/KERNEL_DESIGN_V1.md](#docs-reference-kernel-design-v1-md) (188 lines, 3.52 KB)
-- [docs/reference/LEGACY_REMOVAL_PLAN.md](#docs-reference-legacy-removal-plan-md) (176 lines, 4.13 KB)
-- [docs/reference/PROGRESS_REPORT.md](#docs-reference-progress-report-md) (300 lines, 6.34 KB)
-- [docs/reference/REPLAY_VS_VERIFIER.md](#docs-reference-replay-vs-verifier-md) (64 lines, 0.98 KB)
-- [docs/reference/RFC.md](#docs-reference-rfc-md) (771 lines, 13.28 KB)
-- [docs/reference/TECHNICAL_WHITEPAPER.md](#docs-reference-technical-whitepaper-md) (87 lines, 4.12 KB)
-- [docs/reference/TRANSACTION_RUNNER_EXAMPLE.md](#docs-reference-transaction-runner-example-md) (296 lines, 6.64 KB)
-- [docs/reference/VERIFIER_V0_1.md](#docs-reference-verifier-v0-1-md) (186 lines, 2.53 KB)
-- [docs/reference/WEAVER_AXIOMS.md](#docs-reference-weaver-axioms-md) (25 lines, 2.06 KB)
-- [docs/reference/WEAVER_CONSTITUTION.md](#docs-reference-weaver-constitution-md) (177 lines, 4.15 KB)
-- [editor/README.md](#editor-readme-md) (399 lines, 6.27 KB)
-- [editor/dag.go](#editor-dag-go) (153 lines, 3.92 KB)
-- [editor/dag_traversal.go](#editor-dag-traversal-go) (173 lines, 4.26 KB)
-- [editor/engine.go](#editor-engine-go) (165 lines, 3.95 KB)
-- [editor/execution_context.go](#editor-execution-context-go) (22 lines, 0.58 KB)
-- [editor/footprint.go](#editor-footprint-go) (187 lines, 4.56 KB)
-- [editor/selection_update.go](#editor-selection-update-go) (178 lines, 4.48 KB)
-- [editor/stores.go](#editor-stores-go) (97 lines, 2.14 KB)
-- [editor/text_object.go](#editor-text-object-go) (537 lines, 13.10 KB)
-- [editor/types.go](#editor-types-go) (363 lines, 9.02 KB)
-- [engine.go](#engine-go) (406 lines, 8.76 KB)
-- [engine/README.md](#engine-readme-md) (284 lines, 4.99 KB)
-- [engine/concrete_engine.go](#engine-concrete-engine-go) (245 lines, 5.41 KB)
-- [engine/engine.go](#engine-engine-go) (265 lines, 6.95 KB)
-- [enter_fsm.sh](#enter-fsm-sh) (17 lines, 0.36 KB)
-- [examples/README.md](#examples-readme-md) (90 lines, 2.68 KB)
-- [examples/invalid_history/README.md](#examples-invalid-history-readme-md) (11 lines, 0.31 KB)
-- [examples/invalid_history/parent_mismatch/README.md](#examples-invalid-history-parent-mismatch-readme-md) (7 lines, 0.21 KB)
-- [examples/invalid_history/parent_mismatch/facts.json](#examples-invalid-history-parent-mismatch-facts-json) (28 lines, 0.54 KB)
-- [examples/invalid_history/reordered_facts/README.md](#examples-invalid-history-reordered-facts-readme-md) (7 lines, 0.20 KB)
-- [examples/invalid_history/reordered_facts/facts.json](#examples-invalid-history-reordered-facts-facts-json) (28 lines, 0.55 KB)
-- [examples/invalid_history/same_text_different_root/README.md](#examples-invalid-history-same-text-different-root-readme-md) (7 lines, 0.19 KB)
-- [examples/invalid_history/same_text_different_root/facts_a.json](#examples-invalid-history-same-text-different-root-facts-a-json) (28 lines, 0.55 KB)
-- [examples/invalid_history/same_text_different_root/facts_b.json](#examples-invalid-history-same-text-different-root-facts-b-json) (16 lines, 0.29 KB)
-- [examples/transaction_demo.go](#examples-transaction-demo-go) (118 lines, 2.56 KB)
-- [examples/valid_history/README.md](#examples-valid-history-readme-md) (13 lines, 0.25 KB)
-- [examples/valid_history/multi_actor_concurrent/README.md](#examples-valid-history-multi-actor-concurrent-readme-md) (7 lines, 0.18 KB)
-- [examples/valid_history/multi_actor_concurrent/facts.json](#examples-valid-history-multi-actor-concurrent-facts-json) (28 lines, 0.54 KB)
-- [fsm-exit.sh](#fsm-exit-sh) (17 lines, 0.38 KB)
-- [fsm-toggle.sh](#fsm-toggle-sh) (55 lines, 1.21 KB)
-- [fsm/README.md](#fsm-readme-md) (437 lines, 6.07 KB)
-- [fsm/engine.go](#fsm-engine-go) (362 lines, 7.93 KB)
-- [fsm/engine_test.go](#fsm-engine-test-go) (430 lines, 9.86 KB)
-- [fsm/enter_exit.go](#fsm-enter-exit-go) (55 lines, 1.53 KB)
-- [fsm/fsm-20260111-docs.md](#fsm-fsm-20260111-docs-md) (1578 lines, 30.93 KB)
-- [fsm/keymap.go](#fsm-keymap-go) (63 lines, 1.16 KB)
-- [fsm/nvim.go](#fsm-nvim-go) (22 lines, 0.67 KB)
-- [fsm/state.go](#fsm-state-go) (16 lines, 0.48 KB)
-- [fsm/token.go](#fsm-token-go) (15 lines, 0.17 KB)
-- [fsm/ui_stub.go](#fsm-ui-stub-go) (88 lines, 2.01 KB)
-- [globals.go](#globals-go) (201 lines, 5.83 KB)
-- [globals_test.go](#globals-test-go) (231 lines, 6.24 KB)
-- [go.mod](#go-mod) (16 lines, 0.29 KB)
-- [go.sum](#go-sum) (10 lines, 0.86 KB)
-- [index/README.md](#index-readme-md) (98 lines, 3.51 KB)
-- [index/index.go](#index-index-go) (263 lines, 6.57 KB)
-- [install.sh](#install-sh) (196 lines, 6.50 KB)
-- [intent.go](#intent-go) (268 lines, 6.17 KB)
-- [intent/README.md](#intent-readme-md) (418 lines, 6.55 KB)
-- [intent/grammar_intent.go](#intent-grammar-intent-go) (9 lines, 0.20 KB)
-- [intent/intent.go](#intent-intent-go) (151 lines, 4.13 KB)
-- [intent/intent_test.go](#intent-intent-test-go) (125 lines, 2.78 KB)
-- [intent/motion.go](#intent-motion-go) (44 lines, 0.79 KB)
-- [intent/promote.go](#intent-promote-go) (126 lines, 2.93 KB)
-- [intent/range.go](#intent-range-go) (15 lines, 0.22 KB)
-- [intent/text_object.go](#intent-text-object-go) (25 lines, 0.28 KB)
-- [intent_bridge.go](#intent-bridge-go) (345 lines, 10.54 KB)
-- [invariant/README.md](#invariant-readme-md) (95 lines, 3.30 KB)
-- [invariant/test.go](#invariant-test-go) (167 lines, 4.17 KB)
-- [kernel/README.md](#kernel-readme-md) (417 lines, 6.24 KB)
-- [kernel/decide.go](#kernel-decide-go) (135 lines, 2.95 KB)
-- [kernel/execute.go](#kernel-execute-go) (108 lines, 2.56 KB)
-- [kernel/intent_executor.go](#kernel-intent-executor-go) (18 lines, 0.45 KB)
-- [kernel/kernel.go](#kernel-kernel-go) (228 lines, 6.65 KB)
-- [kernel/kernel_test.go](#kernel-kernel-test-go) (226 lines, 5.47 KB)
-- [kernel/resolver_executor.go](#kernel-resolver-executor-go) (41 lines, 1.23 KB)
-- [kernel/transaction.go](#kernel-transaction-go) (77 lines, 2.04 KB)
-- [keymap.yaml](#keymap-yaml) (49 lines, 1.34 KB)
-- [logic.go](#logic-go) (857 lines, 23.72 KB)
-- [main.go](#main-go) (809 lines, 21.60 KB)
-- [main_comm_test.go](#main-comm-test-go) (75 lines, 1.80 KB)
-- [pkg/README.md](#pkg-readme-md) (89 lines, 2.41 KB)
-- [pkg/protocol/protocol.go](#pkg-protocol-protocol-go) (28 lines, 0.77 KB)
-- [pkg/server/server.go](#pkg-server-server-go) (255 lines, 5.88 KB)
-- [pkg/state/state.go](#pkg-state-state-go) (180 lines, 5.30 KB)
-- [planner/README.md](#planner-readme-md) (464 lines, 5.62 KB)
-- [planner/grammar.go](#planner-grammar-go) (642 lines, 14.04 KB)
-- [planner/grammar_test.go](#planner-grammar-test-go) (367 lines, 11.35 KB)
-- [plugin.tmux](#plugin-tmux) (60 lines, 2.09 KB)
-- [policy/README.md](#policy-readme-md) (99 lines, 3.58 KB)
-- [policy/policy.go](#policy-policy-go) (235 lines, 7.37 KB)
-- [projects_relationship_analysis.md](#projects-relationship-analysis-md) (916 lines, 28.14 KB)
-- [protocol.go](#protocol-go) (20 lines, 0.54 KB)
-- [replay/README.md](#replay-readme-md) (82 lines, 3.10 KB)
-- [replay/replay.go](#replay-replay-go) (151 lines, 4.17 KB)
-- [resolver.go](#resolver-go) (393 lines, 9.82 KB)
-- [resolver_integration_test.go](#resolver-integration-test-go) (249 lines, 5.73 KB)
-- [resolver_text_objects.go](#resolver-text-objects-go) (481 lines, 10.65 KB)
-- [rhm-go/.gitignore](#rhm-go-gitignore) (5 lines, 0.03 KB)
-- [rhm-go/Dockerfile](#rhm-go-dockerfile) (13 lines, 0.26 KB)
-- [rhm-go/README.md](#rhm-go-readme-md) (32 lines, 0.95 KB)
-- [rhm-go/RHM-Go_深度分析报告.md](#rhm-go-rhm-go-md) (596 lines, 16.02 KB)
-- [rhm-go/STABILITY.md](#rhm-go-stability-md) (47 lines, 2.17 KB)
-- [rhm-go/api/http/handlers.go](#rhm-go-api-http-handlers-go) (38 lines, 0.87 KB)
-- [rhm-go/api/http/server.go](#rhm-go-api-http-server-go) (22 lines, 0.42 KB)
-- [rhm-go/change.patch](#rhm-go-change-patch) (0 lines, 0.00 KB)
-- [rhm-go/cmd/rhm-server/main.go](#rhm-go-cmd-rhm-server-main-go) (11 lines, 0.14 KB)
-- [rhm-go/cmd/rhm/main.go](#rhm-go-cmd-rhm-main-go) (33 lines, 0.61 KB)
-- [rhm-go/core/analysis/analysis.go](#rhm-go-core-analysis-analysis-go) (77 lines, 1.65 KB)
-- [rhm-go/core/change/change.go](#rhm-go-core-change-change-go) (43 lines, 0.98 KB)
-- [rhm-go/core/cost/registry.go](#rhm-go-core-cost-registry-go) (47 lines, 0.83 KB)
-- [rhm-go/core/history/dag.go](#rhm-go-core-history-dag-go) (41 lines, 0.84 KB)
-- [rhm-go/core/history/lca.go](#rhm-go-core-history-lca-go) (60 lines, 1.14 KB)
-- [rhm-go/core/narrative/model.go](#rhm-go-core-narrative-model-go) (20 lines, 0.57 KB)
-- [rhm-go/core/rewrite/ephemeral.go](#rhm-go-core-rewrite-ephemeral-go) (52 lines, 1.23 KB)
-- [rhm-go/core/scheduler/priority.go](#rhm-go-core-scheduler-priority-go) (62 lines, 1.38 KB)
-- [rhm-go/core/search/search.go](#rhm-go-core-search-search-go) (56 lines, 1.47 KB)
-- [rhm-go/core/solver/solver.go](#rhm-go-core-solver-solver-go) (153 lines, 3.91 KB)
-- [rhm-go/core/solver/solver_test.go](#rhm-go-core-solver-solver-test-go) (93 lines, 2.90 KB)
-- [rhm-go/core/solver/stability_test.go](#rhm-go-core-solver-stability-test-go) (70 lines, 2.47 KB)
-- [rhm-go/do.md](#rhm-go-do-md) (438 lines, 13.88 KB)
-- [rhm-go/go.mod](#rhm-go-go-mod) (22 lines, 0.69 KB)
-- [rhm-go/go.sum](#rhm-go-go-sum) (30 lines, 2.62 KB)
-- [rhm-go/internal/formatter/html.go](#rhm-go-internal-formatter-html-go) (83 lines, 2.48 KB)
-- [rhm-go/internal/formatter/markdown.go](#rhm-go-internal-formatter-markdown-go) (28 lines, 0.81 KB)
-- [rhm-go/internal/loader/loader.go](#rhm-go-internal-loader-loader-go) (21 lines, 0.56 KB)
-- [rhm-go/store/ops.go](#rhm-go-store-ops-go) (43 lines, 0.96 KB)
-- [rhm-go/telemetry/metrics.go](#rhm-go-telemetry-metrics-go) (75 lines, 1.85 KB)
-- [selection/README.md](#selection-readme-md) (101 lines, 3.60 KB)
-- [selection/selection.go](#selection-selection-go) (194 lines, 5.68 KB)
-- [semantic/README.md](#semantic-readme-md) (99 lines, 3.50 KB)
-- [semantic/capture.go](#semantic-capture-go) (294 lines, 8.16 KB)
-- [snapshot.go](#snapshot-go) (161 lines, 4.06 KB)
-- [start-claude-proxy.sh](#start-claude-proxy-sh) (144 lines, 4.97 KB)
-- [tests/BASELINE_BEHAVIOR.md](#tests-baseline-behavior-md) (238 lines, 4.62 KB)
-- [tests/EMERGENCY_ROLLBACK.md](#tests-emergency-rollback-md) (334 lines, 6.42 KB)
-- [tests/PHASE_0_COMPLETE.md](#tests-phase-0-complete-md) (125 lines, 2.63 KB)
-- [tests/PHASE_1_COMPLETE.md](#tests-phase-1-complete-md) (191 lines, 4.40 KB)
-- [tests/PHASE_2_COMPLETE.md](#tests-phase-2-complete-md) (295 lines, 6.27 KB)
-- [tests/PHASE_3_COMPLETE.md](#tests-phase-3-complete-md) (70 lines, 3.08 KB)
-- [tests/PHASE_4_COMPLETE.md](#tests-phase-4-complete-md) (57 lines, 2.83 KB)
-- [tests/PROGRESS_SUMMARY.md](#tests-progress-summary-md) (305 lines, 5.97 KB)
-- [tests/README.md](#tests-readme-md) (91 lines, 2.78 KB)
-- [tests/baseline_tests.sh](#tests-baseline-tests-sh) (95 lines, 2.33 KB)
-- [tests/integration_test.go](#tests-integration-test-go) (86 lines, 2.61 KB)
-- [tests/invalid_history_test.go](#tests-invalid-history-test-go) (41 lines, 1.04 KB)
-- [tests/test_intent.json](#tests-test-intent-json) (1 lines, 0.07 KB)
-- [tools/CHANGELOG.md](#tools-changelog-md) (36 lines, 1.73 KB)
-- [tools/CODOC_V2.1_OPTIMIZATION.md](#tools-codoc-v2-1-optimization-md) (300 lines, 6.92 KB)
-- [tools/README.md](#tools-readme-md) (995 lines, 29.70 KB)
-- [tools/codoc.go](#tools-codoc-go) (1047 lines, 25.99 KB)
-- [tools/install-codoc.sh](#tools-install-codoc-sh) (98 lines, 3.11 KB)
-- [tools/test_md](#tools-test-md) (2572 lines, 68.12 KB)
-- [tools/tools-20260125-docs.md](#tools-tools-20260125-docs-md) (17 lines, 0.28 KB)
-- [transaction.go](#transaction-go) (225 lines, 4.48 KB)
-- [types/README.md](#types-readme-md) (103 lines, 2.85 KB)
-- [types/types.go](#types-types-go) (34 lines, 1.29 KB)
-- [ui/README.md](#ui-readme-md) (96 lines, 3.02 KB)
-- [ui/interface.go](#ui-interface-go) (8 lines, 0.08 KB)
-- [ui/popup.go](#ui-popup-go) (48 lines, 0.71 KB)
-- [undo_redo.go](#undo-redo-go) (135 lines, 3.62 KB)
-- [undotree/README.md](#undotree-readme-md) (103 lines, 3.33 KB)
-- [undotree/tree.go](#undotree-tree-go) (107 lines, 2.80 KB)
-- [validate_paths.sh](#validate-paths-sh) (36 lines, 0.95 KB)
-- [verifier/README.md](#verifier-readme-md) (97 lines, 3.74 KB)
-- [verifier/verifier.go](#verifier-verifier-go) (292 lines, 8.43 KB)
-- [wal/README.md](#wal-readme-md) (100 lines, 3.20 KB)
-- [wal/wal.go](#wal-wal-go) (176 lines, 4.78 KB)
-- [weaver/README.md](#weaver-readme-md) (96 lines, 3.30 KB)
-- [weaver/adapter/backend.go](#weaver-adapter-backend-go) (108 lines, 3.00 KB)
-- [weaver/adapter/rhm_adapter.go](#weaver-adapter-rhm-adapter-go) (141 lines, 4.44 KB)
-- [weaver/adapter/rhm_adapter_test.go](#weaver-adapter-rhm-adapter-test-go) (85 lines, 2.32 KB)
-- [weaver/adapter/selection_normalizer.go](#weaver-adapter-selection-normalizer-go) (82 lines, 1.66 KB)
-- [weaver/adapter/snapshot.go](#weaver-adapter-snapshot-go) (9 lines, 0.23 KB)
-- [weaver/adapter/snapshot_hash.go](#weaver-adapter-snapshot-hash-go) (20 lines, 0.41 KB)
-- [weaver/adapter/tmux_adapter.go](#weaver-adapter-tmux-adapter-go) (70 lines, 1.86 KB)
-- [weaver/adapter/tmux_physical.go](#weaver-adapter-tmux-physical-go) (481 lines, 13.33 KB)
-- [weaver/adapter/tmux_projection.go](#weaver-adapter-tmux-projection-go) (248 lines, 7.09 KB)
-- [weaver/adapter/tmux_reality.go](#weaver-adapter-tmux-reality-go) (11 lines, 0.23 KB)
-- [weaver/adapter/tmux_snapshot.go](#weaver-adapter-tmux-snapshot-go) (19 lines, 0.36 KB)
-- [weaver/adapter/tmux_utils.go](#weaver-adapter-tmux-utils-go) (97 lines, 2.68 KB)
-- [weaver/core/allowed_lines.go](#weaver-core-allowed-lines-go) (16 lines, 0.27 KB)
-- [weaver/core/core_test.go](#weaver-core-core-test-go) (123 lines, 2.97 KB)
-- [weaver/core/evidence.go](#weaver-core-evidence-go) (64 lines, 1.23 KB)
-- [weaver/core/evidence_vault.go](#weaver-core-evidence-vault-go) (181 lines, 4.06 KB)
-- [weaver/core/hash.go](#weaver-core-hash-go) (25 lines, 0.54 KB)
-- [weaver/core/history.go](#weaver-core-history-go) (213 lines, 5.27 KB)
-- [weaver/core/intent_fusion.go](#weaver-core-intent-fusion-go) (139 lines, 4.39 KB)
-- [weaver/core/interfaces.go](#weaver-core-interfaces-go) (209 lines, 4.88 KB)
-- [weaver/core/line_hash_verifier.go](#weaver-core-line-hash-verifier-go) (34 lines, 0.68 KB)
-- [weaver/core/proof_builder.go](#weaver-core-proof-builder-go) (97 lines, 2.50 KB)
-- [weaver/core/resolved_fact.go](#weaver-core-resolved-fact-go) (22 lines, 0.69 KB)
-- [weaver/core/shadow_engine.go](#weaver-core-shadow-engine-go) (1228 lines, 40.93 KB)
-- [weaver/core/snapshot_diff.go](#weaver-core-snapshot-diff-go) (61 lines, 1.03 KB)
-- [weaver/core/snapshot_types.go](#weaver-core-snapshot-types-go) (26 lines, 0.31 KB)
-- [weaver/core/take_snapshot.go](#weaver-core-take-snapshot-go) (38 lines, 0.58 KB)
-- [weaver/core/types.go](#weaver-core-types-go) (255 lines, 7.40 KB)
-- [weaver/logic/passthrough_resolver.go](#weaver-logic-passthrough-resolver-go) (309 lines, 9.92 KB)
-- [weaver/logic/shell_fact_builder.go](#weaver-logic-shell-fact-builder-go) (181 lines, 5.78 KB)
-- [weaver/logic/text_object.go](#weaver-logic-text-object-go) (434 lines, 8.17 KB)
-- [weaver/manager/manager.go](#weaver-manager-manager-go) (268 lines, 7.44 KB)
-- [weaver/manager/manager_test.go](#weaver-manager-manager-test-go) (135 lines, 3.09 KB)
+- [📄 .gitignore](#gitignore) (9 lines, 0.14 KB)
+- [📄 README.md](#readmemd) (381 lines, 12.90 KB)
+- [📄 backend/README.md](#backendreadmemd) (255 lines, 5.32 KB)
+- [📄 backend/backend.go](#backendbackendgo) (159 lines, 4.63 KB)
+- [📄 backend/controlModeBackend.go](#backendcontrolmodebackendgo) (114 lines, 3.55 KB)
+- [📄 build_workflow_analysis.md](#build_workflow_analysismd) (447 lines, 10.55 KB)
+- [📄 builder.go](#buildergo) (233 lines, 4.74 KB)
+- [📄 chat.txt](#chattxt) (9276 lines, 247.03 KB)
+- [📄 client.go](#clientgo) (137 lines, 3.78 KB)
+- [📄 cmd/README.md](#cmdreadmemd) (267 lines, 4.99 KB)
+- [📄 cmd/verifier/main.go](#cmdverifiermaingo) (43 lines, 0.74 KB)
+- [📄 config.go](#configgo) (68 lines, 1.37 KB)
+- [📄 config_test.go](#config_testgo) (174 lines, 3.87 KB)
+- [📄 crdt/README.md](#crdtreadmemd) (286 lines, 4.89 KB)
+- [📄 crdt/crdt.go](#crdtcrdtgo) (316 lines, 6.70 KB)
+- [📄 default.tmux.conf](#defaulttmuxconf) (178 lines, 4.25 KB)
+- [📄 docs/ARCHITECTURE.md](#docsarchitecturemd) (160 lines, 4.18 KB)
+- [📄 docs/ARCHITECTURE_INTENT_CONTRACT.md](#docsarchitecture_intent_contractmd) (166 lines, 2.82 KB)
+- [📄 docs/CMD.md](#docscmdmd) (367 lines, 7.14 KB)
+- [📄 docs/COLLABORATIVE_EDITING_MODEL.md](#docscollaborative_editing_modelmd) (53 lines, 2.86 KB)
+- [📄 docs/EDITOR_IR_SPEC.md](#docseditor_ir_specmd) (77 lines, 3.33 KB)
+- [📄 docs/GOTO.md](#docsgotomd) (137 lines, 2.69 KB)
+- [📄 docs/INTEGRATION_GUIDE.md](#docsintegration_guidemd) (183 lines, 4.27 KB)
+- [📄 docs/LEGACY_INTENT_DELETE_CHECKLIST.md](#docslegacy_intent_delete_checklistmd) (117 lines, 3.56 KB)
+- [📄 docs/NAV.md](#docsnavmd) (234 lines, 4.81 KB)
+- [📄 docs/PHASE_3_LEGACY_REMOVAL_CHECKLIST.md](#docsphase_3_legacy_removal_checklistmd) (84 lines, 1.56 KB)
+- [📄 docs/QUALITY_ASSURANCE.md](#docsquality_assurancemd) (107 lines, 5.14 KB)
+- [📄 docs/README.md](#docsreadmemd) (89 lines, 2.49 KB)
+- [📄 docs/Tmux-FSM_项目全面分析.md](#docstmux-fsm_md) (292 lines, 8.46 KB)
+- [📄 docs/architecture_review.md](#docsarchitecture_reviewmd) (102 lines, 8.64 KB)
+- [📄 docs/project_analysis.md](#docsproject_analysismd) (1165 lines, 66.93 KB)
+- [📄 docs/project_analysis_final.md](#docsproject_analysis_finalmd) (184 lines, 6.61 KB)
+- [📄 docs/project_map.md](#docsproject_mapmd) (187 lines, 7.31 KB)
+- [📄 docs/reference/ARCHITECTURE_CHARTER.md](#docsreferencearchitecture_chartermd) (255 lines, 5.13 KB)
+- [📄 docs/reference/ARTIFACTS.md](#docsreferenceartifactsmd) (810 lines, 34.98 KB)
+- [📄 docs/reference/COMPUTATIONAL_NARRATIVE.md](#docsreferencecomputational_narrativemd) (203 lines, 4.02 KB)
+- [📄 docs/reference/CONSTITUTIONAL_AUDIT_REPORT.md](#docsreferenceconstitutional_audit_reportmd) (325 lines, 15.19 KB)
+- [📄 docs/reference/DESIGN_PHILOSOPHY.md](#docsreferencedesign_philosophymd) (862 lines, 19.33 KB)
+- [📄 docs/reference/DESIGN_WORLDVIEW.md](#docsreferencedesign_worldviewmd) (599 lines, 13.07 KB)
+- [📄 docs/reference/ENHANCEMENT_PLAN.md](#docsreferenceenhancement_planmd) (255 lines, 15.78 KB)
+- [📄 docs/reference/EVOLUTION_PHILOSOPHY.md](#docsreferenceevolution_philosophymd) (79 lines, 2.31 KB)
+- [📄 docs/reference/FOEK_MANIFESTO.md](#docsreferencefoek_manifestomd) (34 lines, 1.48 KB)
+- [📄 docs/reference/FUTURE_APPLICATIONS.md](#docsreferencefuture_applicationsmd) (437 lines, 22.40 KB)
+- [📄 docs/reference/KERNEL_DESIGN_V1.md](#docsreferencekernel_design_v1md) (188 lines, 3.52 KB)
+- [📄 docs/reference/LEGACY_REMOVAL_PLAN.md](#docsreferencelegacy_removal_planmd) (176 lines, 4.13 KB)
+- [📄 docs/reference/PROGRESS_REPORT.md](#docsreferenceprogress_reportmd) (300 lines, 6.34 KB)
+- [📄 docs/reference/REPLAY_VS_VERIFIER.md](#docsreferencereplay_vs_verifiermd) (64 lines, 0.98 KB)
+- [📄 docs/reference/RFC.md](#docsreferencerfcmd) (771 lines, 13.28 KB)
+- [📄 docs/reference/TECHNICAL_WHITEPAPER.md](#docsreferencetechnical_whitepapermd) (87 lines, 4.12 KB)
+- [📄 docs/reference/TRANSACTION_RUNNER_EXAMPLE.md](#docsreferencetransaction_runner_examplemd) (296 lines, 6.64 KB)
+- [📄 docs/reference/VERIFIER_V0_1.md](#docsreferenceverifier_v0_1md) (186 lines, 2.53 KB)
+- [📄 docs/reference/WEAVER_AXIOMS.md](#docsreferenceweaver_axiomsmd) (25 lines, 2.06 KB)
+- [📄 docs/reference/WEAVER_CONSTITUTION.md](#docsreferenceweaver_constitutionmd) (177 lines, 4.15 KB)
+- [📄 editor/README.md](#editorreadmemd) (399 lines, 6.27 KB)
+- [📄 editor/dag.go](#editordaggo) (153 lines, 3.92 KB)
+- [📄 editor/dag_traversal.go](#editordag_traversalgo) (173 lines, 4.26 KB)
+- [📄 editor/engine.go](#editorenginego) (165 lines, 3.95 KB)
+- [📄 editor/execution_context.go](#editorexecution_contextgo) (22 lines, 0.58 KB)
+- [📄 editor/footprint.go](#editorfootprintgo) (187 lines, 4.56 KB)
+- [📄 editor/selection_update.go](#editorselection_updatego) (178 lines, 4.48 KB)
+- [📄 editor/stores.go](#editorstoresgo) (97 lines, 2.14 KB)
+- [📄 editor/text_object.go](#editortext_objectgo) (537 lines, 13.10 KB)
+- [📄 editor/types.go](#editortypesgo) (363 lines, 9.02 KB)
+- [📄 engine.go](#enginego) (406 lines, 8.76 KB)
+- [📄 engine/README.md](#enginereadmemd) (284 lines, 4.99 KB)
+- [📄 engine/concrete_engine.go](#engineconcrete_enginego) (245 lines, 5.41 KB)
+- [📄 engine/engine.go](#engineenginego) (265 lines, 6.95 KB)
+- [📄 enter_fsm.sh](#enter_fsmsh) (17 lines, 0.36 KB)
+- [📄 examples/README.md](#examplesreadmemd) (90 lines, 2.68 KB)
+- [📄 examples/invalid_history/README.md](#examplesinvalid_historyreadmemd) (11 lines, 0.31 KB)
+- [📄 examples/invalid_history/parent_mismatch/README.md](#examplesinvalid_historyparent_mismatchreadmemd) (7 lines, 0.21 KB)
+- [📄 examples/invalid_history/parent_mismatch/facts.json](#examplesinvalid_historyparent_mismatchfactsjson) (28 lines, 0.54 KB)
+- [📄 examples/invalid_history/reordered_facts/README.md](#examplesinvalid_historyreordered_factsreadmemd) (7 lines, 0.20 KB)
+- [📄 examples/invalid_history/reordered_facts/facts.json](#examplesinvalid_historyreordered_factsfactsjson) (28 lines, 0.55 KB)
+- [📄 examples/invalid_history/same_text_different_root/README.md](#examplesinvalid_historysame_text_different_rootreadmemd) (7 lines, 0.19 KB)
+- [📄 examples/invalid_history/same_text_different_root/facts_a.json](#examplesinvalid_historysame_text_different_rootfacts_ajson) (28 lines, 0.55 KB)
+- [📄 examples/invalid_history/same_text_different_root/facts_b.json](#examplesinvalid_historysame_text_different_rootfacts_bjson) (16 lines, 0.29 KB)
+- [📄 examples/transaction_demo.go](#examplestransaction_demogo) (118 lines, 2.56 KB)
+- [📄 examples/valid_history/README.md](#examplesvalid_historyreadmemd) (13 lines, 0.25 KB)
+- [📄 examples/valid_history/multi_actor_concurrent/README.md](#examplesvalid_historymulti_actor_concurrentreadmemd) (7 lines, 0.18 KB)
+- [📄 examples/valid_history/multi_actor_concurrent/facts.json](#examplesvalid_historymulti_actor_concurrentfactsjson) (28 lines, 0.54 KB)
+- [📄 fsm-exit.sh](#fsm-exitsh) (17 lines, 0.38 KB)
+- [📄 fsm-toggle.sh](#fsm-togglesh) (55 lines, 1.21 KB)
+- [📄 fsm/README.md](#fsmreadmemd) (437 lines, 6.07 KB)
+- [📄 fsm/engine.go](#fsmenginego) (362 lines, 7.93 KB)
+- [📄 fsm/engine_test.go](#fsmengine_testgo) (430 lines, 9.86 KB)
+- [📄 fsm/enter_exit.go](#fsmenter_exitgo) (55 lines, 1.53 KB)
+- [📄 fsm/fsm-20260111-docs.md](#fsmfsm-20260111-docsmd) (1578 lines, 30.93 KB)
+- [📄 fsm/keymap.go](#fsmkeymapgo) (63 lines, 1.16 KB)
+- [📄 fsm/nvim.go](#fsmnvimgo) (22 lines, 0.67 KB)
+- [📄 fsm/state.go](#fsmstatego) (16 lines, 0.48 KB)
+- [📄 fsm/token.go](#fsmtokengo) (15 lines, 0.17 KB)
+- [📄 fsm/ui_stub.go](#fsmui_stubgo) (88 lines, 2.01 KB)
+- [📄 globals.go](#globalsgo) (201 lines, 5.83 KB)
+- [📄 globals_test.go](#globals_testgo) (231 lines, 6.24 KB)
+- [📄 go.mod](#gomod) (16 lines, 0.29 KB)
+- [📄 go.sum](#gosum) (10 lines, 0.86 KB)
+- [📄 index/README.md](#indexreadmemd) (98 lines, 3.51 KB)
+- [📄 index/index.go](#indexindexgo) (263 lines, 6.57 KB)
+- [📄 install.sh](#installsh) (196 lines, 6.50 KB)
+- [📄 intent.go](#intentgo) (268 lines, 6.17 KB)
+- [📄 intent/README.md](#intentreadmemd) (418 lines, 6.55 KB)
+- [📄 intent/grammar_intent.go](#intentgrammar_intentgo) (9 lines, 0.20 KB)
+- [📄 intent/intent.go](#intentintentgo) (151 lines, 4.13 KB)
+- [📄 intent/intent_test.go](#intentintent_testgo) (125 lines, 2.78 KB)
+- [📄 intent/motion.go](#intentmotiongo) (44 lines, 0.79 KB)
+- [📄 intent/promote.go](#intentpromotego) (126 lines, 2.93 KB)
+- [📄 intent/range.go](#intentrangego) (15 lines, 0.22 KB)
+- [📄 intent/text_object.go](#intenttext_objectgo) (25 lines, 0.28 KB)
+- [📄 intent_bridge.go](#intent_bridgego) (345 lines, 10.54 KB)
+- [📄 invariant/README.md](#invariantreadmemd) (95 lines, 3.30 KB)
+- [📄 invariant/test.go](#invarianttestgo) (167 lines, 4.17 KB)
+- [📄 kernel/README.md](#kernelreadmemd) (417 lines, 6.24 KB)
+- [📄 kernel/decide.go](#kerneldecidego) (135 lines, 2.95 KB)
+- [📄 kernel/execute.go](#kernelexecutego) (108 lines, 2.56 KB)
+- [📄 kernel/intent_executor.go](#kernelintent_executorgo) (18 lines, 0.45 KB)
+- [📄 kernel/kernel.go](#kernelkernelgo) (228 lines, 6.65 KB)
+- [📄 kernel/kernel_test.go](#kernelkernel_testgo) (226 lines, 5.47 KB)
+- [📄 kernel/resolver_executor.go](#kernelresolver_executorgo) (41 lines, 1.23 KB)
+- [📄 kernel/transaction.go](#kerneltransactiongo) (77 lines, 2.04 KB)
+- [📄 keymap.yaml](#keymapyaml) (49 lines, 1.34 KB)
+- [📄 logic.go](#logicgo) (857 lines, 23.72 KB)
+- [📄 main.go](#maingo) (809 lines, 21.60 KB)
+- [📄 main_comm_test.go](#main_comm_testgo) (75 lines, 1.80 KB)
+- [📄 pkg/README.md](#pkgreadmemd) (89 lines, 2.41 KB)
+- [📄 pkg/protocol/protocol.go](#pkgprotocolprotocolgo) (28 lines, 0.77 KB)
+- [📄 pkg/server/server.go](#pkgserverservergo) (255 lines, 5.88 KB)
+- [📄 pkg/state/state.go](#pkgstatestatego) (180 lines, 5.30 KB)
+- [📄 planner/README.md](#plannerreadmemd) (464 lines, 5.62 KB)
+- [📄 planner/grammar.go](#plannergrammargo) (642 lines, 14.04 KB)
+- [📄 planner/grammar_test.go](#plannergrammar_testgo) (367 lines, 11.35 KB)
+- [📄 plugin.tmux](#plugintmux) (60 lines, 2.09 KB)
+- [📄 policy/README.md](#policyreadmemd) (99 lines, 3.58 KB)
+- [📄 policy/policy.go](#policypolicygo) (235 lines, 7.37 KB)
+- [📄 projects_relationship_analysis.md](#projects_relationship_analysismd) (916 lines, 28.14 KB)
+- [📄 protocol.go](#protocolgo) (20 lines, 0.54 KB)
+- [📄 replay/README.md](#replayreadmemd) (82 lines, 3.10 KB)
+- [📄 replay/replay.go](#replayreplaygo) (151 lines, 4.17 KB)
+- [📄 resolver.go](#resolvergo) (393 lines, 9.82 KB)
+- [📄 resolver_integration_test.go](#resolver_integration_testgo) (249 lines, 5.73 KB)
+- [📄 resolver_text_objects.go](#resolver_text_objectsgo) (481 lines, 10.65 KB)
+- [📄 rhm-go/.gitignore](#rhm-gogitignore) (5 lines, 0.03 KB)
+- [📄 rhm-go/Dockerfile](#rhm-godockerfile) (13 lines, 0.26 KB)
+- [📄 rhm-go/README.md](#rhm-goreadmemd) (32 lines, 0.95 KB)
+- [📄 rhm-go/RHM-Go_深度分析报告.md](#rhm-gorhm-go_md) (596 lines, 16.02 KB)
+- [📄 rhm-go/STABILITY.md](#rhm-gostabilitymd) (47 lines, 2.17 KB)
+- [📄 rhm-go/api/http/handlers.go](#rhm-goapihttphandlersgo) (38 lines, 0.87 KB)
+- [📄 rhm-go/api/http/server.go](#rhm-goapihttpservergo) (22 lines, 0.42 KB)
+- [📄 rhm-go/change.patch](#rhm-gochangepatch) (0 lines, 0.00 KB)
+- [📄 rhm-go/cmd/rhm-server/main.go](#rhm-gocmdrhm-servermaingo) (11 lines, 0.14 KB)
+- [📄 rhm-go/cmd/rhm/main.go](#rhm-gocmdrhmmaingo) (33 lines, 0.61 KB)
+- [📄 rhm-go/core/analysis/analysis.go](#rhm-gocoreanalysisanalysisgo) (77 lines, 1.65 KB)
+- [📄 rhm-go/core/change/change.go](#rhm-gocorechangechangego) (43 lines, 0.98 KB)
+- [📄 rhm-go/core/cost/registry.go](#rhm-gocorecostregistrygo) (47 lines, 0.83 KB)
+- [📄 rhm-go/core/history/dag.go](#rhm-gocorehistorydaggo) (41 lines, 0.84 KB)
+- [📄 rhm-go/core/history/lca.go](#rhm-gocorehistorylcago) (60 lines, 1.14 KB)
+- [📄 rhm-go/core/narrative/model.go](#rhm-gocorenarrativemodelgo) (20 lines, 0.57 KB)
+- [📄 rhm-go/core/rewrite/ephemeral.go](#rhm-gocorerewriteephemeralgo) (52 lines, 1.23 KB)
+- [📄 rhm-go/core/scheduler/priority.go](#rhm-gocoreschedulerprioritygo) (62 lines, 1.38 KB)
+- [📄 rhm-go/core/search/search.go](#rhm-gocoresearchsearchgo) (56 lines, 1.47 KB)
+- [📄 rhm-go/core/solver/solver.go](#rhm-gocoresolversolvergo) (153 lines, 3.91 KB)
+- [📄 rhm-go/core/solver/solver_test.go](#rhm-gocoresolversolver_testgo) (93 lines, 2.90 KB)
+- [📄 rhm-go/core/solver/stability_test.go](#rhm-gocoresolverstability_testgo) (70 lines, 2.47 KB)
+- [📄 rhm-go/do.md](#rhm-godomd) (438 lines, 13.88 KB)
+- [📄 rhm-go/go.mod](#rhm-gogomod) (22 lines, 0.69 KB)
+- [📄 rhm-go/go.sum](#rhm-gogosum) (30 lines, 2.62 KB)
+- [📄 rhm-go/internal/formatter/html.go](#rhm-gointernalformatterhtmlgo) (83 lines, 2.48 KB)
+- [📄 rhm-go/internal/formatter/markdown.go](#rhm-gointernalformattermarkdowngo) (28 lines, 0.81 KB)
+- [📄 rhm-go/internal/loader/loader.go](#rhm-gointernalloaderloadergo) (21 lines, 0.56 KB)
+- [📄 rhm-go/store/ops.go](#rhm-gostoreopsgo) (43 lines, 0.96 KB)
+- [📄 rhm-go/telemetry/metrics.go](#rhm-gotelemetrymetricsgo) (75 lines, 1.85 KB)
+- [📄 selection/README.md](#selectionreadmemd) (101 lines, 3.60 KB)
+- [📄 selection/selection.go](#selectionselectiongo) (194 lines, 5.68 KB)
+- [📄 semantic/README.md](#semanticreadmemd) (99 lines, 3.50 KB)
+- [📄 semantic/capture.go](#semanticcapturego) (294 lines, 8.16 KB)
+- [📄 snapshot.go](#snapshotgo) (161 lines, 4.06 KB)
+- [📄 start-claude-proxy.sh](#start-claude-proxysh) (144 lines, 4.97 KB)
+- [📄 tests/BASELINE_BEHAVIOR.md](#testsbaseline_behaviormd) (238 lines, 4.62 KB)
+- [📄 tests/EMERGENCY_ROLLBACK.md](#testsemergency_rollbackmd) (334 lines, 6.42 KB)
+- [📄 tests/PHASE_0_COMPLETE.md](#testsphase_0_completemd) (125 lines, 2.63 KB)
+- [📄 tests/PHASE_1_COMPLETE.md](#testsphase_1_completemd) (191 lines, 4.40 KB)
+- [📄 tests/PHASE_2_COMPLETE.md](#testsphase_2_completemd) (295 lines, 6.27 KB)
+- [📄 tests/PHASE_3_COMPLETE.md](#testsphase_3_completemd) (70 lines, 3.08 KB)
+- [📄 tests/PHASE_4_COMPLETE.md](#testsphase_4_completemd) (57 lines, 2.83 KB)
+- [📄 tests/PROGRESS_SUMMARY.md](#testsprogress_summarymd) (305 lines, 5.97 KB)
+- [📄 tests/README.md](#testsreadmemd) (91 lines, 2.78 KB)
+- [📄 tests/baseline_tests.sh](#testsbaseline_testssh) (95 lines, 2.33 KB)
+- [📄 tests/integration_test.go](#testsintegration_testgo) (86 lines, 2.61 KB)
+- [📄 tests/invalid_history_test.go](#testsinvalid_history_testgo) (41 lines, 1.04 KB)
+- [📄 tests/test_intent.json](#teststest_intentjson) (1 lines, 0.07 KB)
+- [📄 tools/CHANGELOG.md](#toolschangelogmd) (36 lines, 1.73 KB)
+- [📄 tools/CODOC_V2.1_OPTIMIZATION.md](#toolscodoc_v21_optimizationmd) (300 lines, 6.92 KB)
+- [📄 tools/README.md](#toolsreadmemd) (995 lines, 29.70 KB)
+- [📄 tools/codoc.go](#toolscodocgo) (1045 lines, 26.10 KB)
+- [📄 tools/debug.md](#toolsdebugmd) (1071 lines, 26.51 KB)
+- [📄 tools/install-codoc.sh](#toolsinstall-codocsh) (98 lines, 3.11 KB)
+- [📄 tools/test_md](#toolstest_md) (2572 lines, 68.12 KB)
+- [📄 transaction.go](#transactiongo) (225 lines, 4.48 KB)
+- [📄 types/README.md](#typesreadmemd) (103 lines, 2.85 KB)
+- [📄 types/types.go](#typestypesgo) (34 lines, 1.29 KB)
+- [📄 ui/README.md](#uireadmemd) (96 lines, 3.02 KB)
+- [📄 ui/interface.go](#uiinterfacego) (8 lines, 0.08 KB)
+- [📄 ui/popup.go](#uipopupgo) (48 lines, 0.71 KB)
+- [📄 undo_redo.go](#undo_redogo) (135 lines, 3.62 KB)
+- [📄 undotree/README.md](#undotreereadmemd) (103 lines, 3.33 KB)
+- [📄 undotree/tree.go](#undotreetreego) (107 lines, 2.80 KB)
+- [📄 validate_paths.sh](#validate_pathssh) (36 lines, 0.95 KB)
+- [📄 verifier/README.md](#verifierreadmemd) (97 lines, 3.74 KB)
+- [📄 verifier/verifier.go](#verifierverifiergo) (292 lines, 8.43 KB)
+- [📄 wal/README.md](#walreadmemd) (100 lines, 3.20 KB)
+- [📄 wal/wal.go](#walwalgo) (176 lines, 4.78 KB)
+- [📄 weaver/README.md](#weaverreadmemd) (96 lines, 3.30 KB)
+- [📄 weaver/adapter/backend.go](#weaveradapterbackendgo) (108 lines, 3.00 KB)
+- [📄 weaver/adapter/rhm_adapter.go](#weaveradapterrhm_adaptergo) (141 lines, 4.44 KB)
+- [📄 weaver/adapter/rhm_adapter_test.go](#weaveradapterrhm_adapter_testgo) (85 lines, 2.32 KB)
+- [📄 weaver/adapter/selection_normalizer.go](#weaveradapterselection_normalizergo) (82 lines, 1.66 KB)
+- [📄 weaver/adapter/snapshot.go](#weaveradaptersnapshotgo) (9 lines, 0.23 KB)
+- [📄 weaver/adapter/snapshot_hash.go](#weaveradaptersnapshot_hashgo) (20 lines, 0.41 KB)
+- [📄 weaver/adapter/tmux_adapter.go](#weaveradaptertmux_adaptergo) (70 lines, 1.86 KB)
+- [📄 weaver/adapter/tmux_physical.go](#weaveradaptertmux_physicalgo) (481 lines, 13.33 KB)
+- [📄 weaver/adapter/tmux_projection.go](#weaveradaptertmux_projectiongo) (248 lines, 7.09 KB)
+- [📄 weaver/adapter/tmux_reality.go](#weaveradaptertmux_realitygo) (11 lines, 0.23 KB)
+- [📄 weaver/adapter/tmux_snapshot.go](#weaveradaptertmux_snapshotgo) (19 lines, 0.36 KB)
+- [📄 weaver/adapter/tmux_utils.go](#weaveradaptertmux_utilsgo) (97 lines, 2.68 KB)
+- [📄 weaver/core/allowed_lines.go](#weavercoreallowed_linesgo) (16 lines, 0.27 KB)
+- [📄 weaver/core/core_test.go](#weavercorecore_testgo) (123 lines, 2.97 KB)
+- [📄 weaver/core/evidence.go](#weavercoreevidencego) (64 lines, 1.23 KB)
+- [📄 weaver/core/evidence_vault.go](#weavercoreevidence_vaultgo) (181 lines, 4.06 KB)
+- [📄 weaver/core/hash.go](#weavercorehashgo) (25 lines, 0.54 KB)
+- [📄 weaver/core/history.go](#weavercorehistorygo) (213 lines, 5.27 KB)
+- [📄 weaver/core/intent_fusion.go](#weavercoreintent_fusiongo) (139 lines, 4.39 KB)
+- [📄 weaver/core/interfaces.go](#weavercoreinterfacesgo) (209 lines, 4.88 KB)
+- [📄 weaver/core/line_hash_verifier.go](#weavercoreline_hash_verifiergo) (34 lines, 0.68 KB)
+- [📄 weaver/core/proof_builder.go](#weavercoreproof_buildergo) (97 lines, 2.50 KB)
+- [📄 weaver/core/resolved_fact.go](#weavercoreresolved_factgo) (22 lines, 0.69 KB)
+- [📄 weaver/core/shadow_engine.go](#weavercoreshadow_enginego) (1228 lines, 40.93 KB)
+- [📄 weaver/core/snapshot_diff.go](#weavercoresnapshot_diffgo) (61 lines, 1.03 KB)
+- [📄 weaver/core/snapshot_types.go](#weavercoresnapshot_typesgo) (26 lines, 0.31 KB)
+- [📄 weaver/core/take_snapshot.go](#weavercoretake_snapshotgo) (38 lines, 0.58 KB)
+- [📄 weaver/core/types.go](#weavercoretypesgo) (255 lines, 7.40 KB)
+- [📄 weaver/logic/passthrough_resolver.go](#weaverlogicpassthrough_resolvergo) (309 lines, 9.92 KB)
+- [📄 weaver/logic/shell_fact_builder.go](#weaverlogicshell_fact_buildergo) (181 lines, 5.78 KB)
+- [📄 weaver/logic/text_object.go](#weaverlogictext_objectgo) (434 lines, 8.17 KB)
+- [📄 weaver/manager/manager.go](#weavermanagermanagergo) (268 lines, 7.44 KB)
+- [📄 weaver/manager/manager_test.go](#weavermanagermanager_testgo) (135 lines, 3.09 KB)
 
 ---
 
-## 📄 .gitignore
+## .gitignore
 
 ```text
 tmux-fsm
@@ -272,7 +272,7 @@ session-*.md
 
 [⬆ 回到目录](#toc)
 
-## 📄 README.md
+## README.md
 
 ```markdown
 # tmux-fsm
@@ -660,7 +660,7 @@ func (k *Kernel) HandleIntent(i Intent) Verdict {
 
 [⬆ 回到目录](#toc)
 
-## 📄 backend/README.md
+## backend/README.md
 
 ```markdown
 
@@ -923,7 +923,7 @@ exec.Command("tmux", ...)
 
 [⬆ 回到目录](#toc)
 
-## 📄 backend/backend.go
+## backend/backend.go
 
 ```go
 package backend
@@ -1090,7 +1090,7 @@ func (b *TmuxBackend) Unsubscribe(ch <-chan Event) error {
 
 [⬆ 回到目录](#toc)
 
-## 📄 backend/controlModeBackend.go
+## backend/controlModeBackend.go
 
 ```go
 package backend
@@ -1212,7 +1212,7 @@ func (b *ControlModeBackend) Unsubscribe(ch <-chan Event) error {
 
 [⬆ 回到目录](#toc)
 
-## 📄 build_workflow_analysis.md
+## build_workflow_analysis.md
 
 ```markdown
 # Yuangs VSCode Extension 构建流程详细分析
@@ -1667,7 +1667,7 @@ npm install
 
 [⬆ 回到目录](#toc)
 
-## 📄 builder.go
+## builder.go
 
 ```go
 package main
@@ -1908,7 +1908,7 @@ func CursorAnchor(ref CursorRef) Anchor {
 
 [⬆ 回到目录](#toc)
 
-## 📄 chat.txt
+## chat.txt
 
 ```text
 
@@ -11192,7 +11192,7 @@ Phase 6 完成后，你可以无风险进入任一方向：
 
 [⬆ 回到目录](#toc)
 
-## 📄 client.go
+## client.go
 
 ```go
 package main
@@ -11337,7 +11337,7 @@ func runClient(key, paneAndClient string) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 cmd/README.md
+## cmd/README.md
 
 ```markdown
 
@@ -11612,7 +11612,7 @@ verifier verify ./input.json
 
 [⬆ 回到目录](#toc)
 
-## 📄 cmd/verifier/main.go
+## cmd/verifier/main.go
 
 ```go
 package main
@@ -11663,7 +11663,7 @@ func main() {
 
 [⬆ 回到目录](#toc)
 
-## 📄 config.go
+## config.go
 
 ```go
 package main
@@ -11739,7 +11739,7 @@ func ShouldFailFast() bool {
 
 [⬆ 回到目录](#toc)
 
-## 📄 config_test.go
+## config_test.go
 
 ```go
 package main
@@ -11921,7 +11921,7 @@ func TestConfigGetters(t *testing.T) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 crdt/README.md
+## crdt/README.md
 
 ```markdown
 
@@ -12215,7 +12215,7 @@ func BuildLocalChain(events []SemanticEvent) []SemanticEvent
 
 [⬆ 回到目录](#toc)
 
-## 📄 crdt/crdt.go
+## crdt/crdt.go
 
 ```go
 package crdt
@@ -12539,7 +12539,7 @@ func UndoFilter(me ActorID, undoPoint EventID, events map[EventID]SemanticEvent)
 
 [⬆ 回到目录](#toc)
 
-## 📄 default.tmux.conf
+## default.tmux.conf
 
 ```conf
 # UTF-8 Support
@@ -12725,7 +12725,7 @@ source-file "$HOME/.tmux/plugins/tmux-fsm/plugin.tmux"
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/ARCHITECTURE.md
+## docs/ARCHITECTURE.md
 
 ```markdown
 
@@ -12893,7 +12893,7 @@ UI 是派生结果，不能驱动语义或逻辑。
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/ARCHITECTURE_INTENT_CONTRACT.md
+## docs/ARCHITECTURE_INTENT_CONTRACT.md
 
 ```markdown
 # Intent / Resolver 架构公约
@@ -13067,7 +13067,7 @@ FSM：
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/CMD.md
+## docs/CMD.md
 
 ```markdown
 以下内容视为 **《NAV 键权定律》的姊妹法案**。
@@ -13442,7 +13442,7 @@ CMD 只能属于以下 **4 种之一**：
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/COLLABORATIVE_EDITING_MODEL.md
+## docs/COLLABORATIVE_EDITING_MODEL.md
 
 ```markdown
 # Collaborative Editing Model: Operation DAG
@@ -13503,7 +13503,7 @@ The Operation DAG maps naturally to Git's object model but at a finer granularit
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/EDITOR_IR_SPEC.md
+## docs/EDITOR_IR_SPEC.md
 
 ```markdown
 # Editor IR Design Specification
@@ -13588,7 +13588,7 @@ While the internal IR is a DAG, we can project this onto Git's version control m
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/GOTO.md
+## docs/GOTO.md
 
 ```markdown
 
@@ -13732,7 +13732,7 @@ While the internal IR is a DAG, we can project this onto Git's version control m
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/INTEGRATION_GUIDE.md
+## docs/INTEGRATION_GUIDE.md
 
 ```markdown
 # Transaction Runner 集成指南
@@ -13923,7 +13923,7 @@ func TestApplyResolvedOperation(t *testing.T) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/LEGACY_INTENT_DELETE_CHECKLIST.md
+## docs/LEGACY_INTENT_DELETE_CHECKLIST.md
 
 ```markdown
 # Legacy Intent 删除 Checklist
@@ -14047,7 +14047,7 @@ if intent.IsNative() && intent.HasLegacyAnchor() {
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/NAV.md
+## docs/NAV.md
 
 ```markdown
 // NAV-010: Semantic keys must never be intercepted here
@@ -14289,7 +14289,7 @@ nav/
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/PHASE_3_LEGACY_REMOVAL_CHECKLIST.md
+## docs/PHASE_3_LEGACY_REMOVAL_CHECKLIST.md
 
 ```markdown
 # “删 resolver legacy 清洗器那一天”的最后检查表
@@ -14381,7 +14381,7 @@ commit: Remove legacy intent resolver
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/QUALITY_ASSURANCE.md
+## docs/QUALITY_ASSURANCE.md
 
 ```markdown
 # Tmux-FSM 质量保证与测试规范 (v1.0)
@@ -14496,7 +14496,7 @@ go test -v -cover ./...
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/README.md
+## docs/README.md
 
 ```markdown
 # docs 模块
@@ -14592,7 +14592,7 @@ Docs 模块是项目的知识库，它为开发者、用户和维护者提供必
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/Tmux-FSM_项目全面分析.md
+## docs/Tmux-FSM_项目全面分析.md
 
 ```markdown
 # Tmux-FSM 项目全面分析
@@ -14892,7 +14892,7 @@ Tmux-FSM/
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/architecture_review.md
+## docs/architecture_review.md
 
 ```markdown
 # Tmux-FSM 架构级代码审查
@@ -15002,7 +15002,7 @@ Tmux-FSM/
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/project_analysis.md
+## docs/project_analysis.md
 
 ```markdown
 # Tmux-FSM 项目架构全景深度分析报告 (超详细版)
@@ -16174,7 +16174,7 @@ Weaver 是项目的灵魂，采用了 **“影子引擎 (Shadow Engine)”** 架
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/project_analysis_final.md
+## docs/project_analysis_final.md
 
 ```markdown
 # Tmux-FSM 项目分析
@@ -16365,7 +16365,7 @@ Tmux-FSM/
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/project_map.md
+## docs/project_map.md
 
 ```markdown
 # Tmux-FSM 项目结构分析
@@ -16559,7 +16559,7 @@ Tmux-FSM/
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/ARCHITECTURE_CHARTER.md
+## docs/reference/ARCHITECTURE_CHARTER.md
 
 ```markdown
 ## 下面这份文本不是说明、不是愿景、不是设计笔记。  
@@ -16822,7 +16822,7 @@ Intent
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/ARTIFACTS.md
+## docs/reference/ARTIFACTS.md
 
 ```markdown
 # 前言
@@ -17639,7 +17639,7 @@ Intent 不是实现细节，它是认知与现实之间的接口。
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/COMPUTATIONAL_NARRATIVE.md
+## docs/reference/COMPUTATIONAL_NARRATIVE.md
 
 ```markdown
 # 🌌《计算叙事系统宪章》
@@ -17849,7 +17849,7 @@ Software → Ontology
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/CONSTITUTIONAL_AUDIT_REPORT.md
+## docs/reference/CONSTITUTIONAL_AUDIT_REPORT.md
 
 ```markdown
 # Weaver 系统宪法审计报告
@@ -18181,7 +18181,7 @@ if err := verifier.VerifyHistory(h); err != nil {
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/DESIGN_PHILOSOPHY.md
+## docs/reference/DESIGN_PHILOSOPHY.md
 
 ```markdown
 # 🧠 Tmux‑FSM / Weaver Core Design Philosophy
@@ -19050,7 +19050,7 @@ Execution (on confirm)
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/DESIGN_WORLDVIEW.md
+## docs/reference/DESIGN_WORLDVIEW.md
 
 ```markdown
 # Design Worldview  
@@ -19657,7 +19657,7 @@ interface WorldModel {
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/ENHANCEMENT_PLAN.md
+## docs/reference/ENHANCEMENT_PLAN.md
 
 ```markdown
 这份文档记录了 `tmux-fsm` 从一个简单的脚本插件向**工业级编辑内核 (FOEK)** 进化的完整过程。
@@ -19920,7 +19920,7 @@ Heartbeat Lock (心跳锁定)：攻克了 tmux 在执行 run-shell 后自动重�
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/EVOLUTION_PHILOSOPHY.md
+## docs/reference/EVOLUTION_PHILOSOPHY.md
 
 ```markdown
 # The Ascent to Kernel Sovereignty
@@ -20007,7 +20007,7 @@ Weaver Core 不再是脚本，而是一个有原则的裁判：
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/FOEK_MANIFESTO.md
+## docs/reference/FOEK_MANIFESTO.md
 
 ```markdown
 # FOEK (Fact-Oriented Editing Kernel) Manifesto
@@ -20049,7 +20049,7 @@ Weaver Core 不再是脚本，而是一个有原则的裁判：
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/FUTURE_APPLICATIONS.md
+## docs/reference/FUTURE_APPLICATIONS.md
 
 ```markdown
 
@@ -20493,7 +20493,7 @@ Weaver Core 值得你投入每一个字节的精力。
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/KERNEL_DESIGN_V1.md
+## docs/reference/KERNEL_DESIGN_V1.md
 
 ```markdown
 
@@ -20688,7 +20688,7 @@ Text Object 只参与 Resolve 阶段。
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/LEGACY_REMOVAL_PLAN.md
+## docs/reference/LEGACY_REMOVAL_PLAN.md
 
 ```markdown
 # Legacy 删除清单
@@ -20871,7 +20871,7 @@ func TestGrammarComplete(t *testing.T) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/PROGRESS_REPORT.md
+## docs/reference/PROGRESS_REPORT.md
 
 ```markdown
 # 🎯 Transaction Runner 系统实施报告
@@ -21179,7 +21179,7 @@ type OperationRecord struct {
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/REPLAY_VS_VERIFIER.md
+## docs/reference/REPLAY_VS_VERIFIER.md
 
 ```markdown
 # Replay vs Verifier
@@ -21250,7 +21250,7 @@ Only the verifier enables:
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/RFC.md
+## docs/reference/RFC.md
 
 ```markdown
 
@@ -22029,7 +22029,7 @@ Weaver Core 的价值在于：
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/TECHNICAL_WHITEPAPER.md
+## docs/reference/TECHNICAL_WHITEPAPER.md
 
 ```markdown
 # Weaver Core Architecture Evolution Report
@@ -22123,7 +22123,7 @@ Weaver Core 的价值在于：
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/TRANSACTION_RUNNER_EXAMPLE.md
+## docs/reference/TRANSACTION_RUNNER_EXAMPLE.md
 
 ```markdown
 # Transaction Runner 使用示例
@@ -22427,7 +22427,7 @@ runner.Apply(tx)
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/VERIFIER_V0_1.md
+## docs/reference/VERIFIER_V0_1.md
 
 ```markdown
 # Verifier Protocol v0.1
@@ -22620,7 +22620,7 @@ These are deferred to v0.2+.
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/WEAVER_AXIOMS.md
+## docs/reference/WEAVER_AXIOMS.md
 
 ```markdown
 # Weaver System Design Axioms (Phases 5-7)
@@ -22653,7 +22653,7 @@ This document consolidates the core architectural principles (Axioms) that gover
 
 [⬆ 回到目录](#toc)
 
-## 📄 docs/reference/WEAVER_CONSTITUTION.md
+## docs/reference/WEAVER_CONSTITUTION.md
 
 ```markdown
 # `WEAVER_CONSTITUTION.md`
@@ -22837,7 +22837,7 @@ Kernel = **语义变换引擎**
 
 [⬆ 回到目录](#toc)
 
-## 📄 editor/README.md
+## editor/README.md
 
 ```markdown
 
@@ -23244,7 +23244,7 @@ ConcreteTextObjectCalculator
 
 [⬆ 回到目录](#toc)
 
-## 📄 editor/dag.go
+## editor/dag.go
 
 ```go
 package editor
@@ -23405,7 +23405,7 @@ func DeserializeDAG(data []byte) (*OperationDAG, error) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 editor/dag_traversal.go
+## editor/dag_traversal.go
 
 ```go
 package editor
@@ -23586,7 +23586,7 @@ func (dag *OperationDAG) Diff(base, target DAGNodeID) ([]*DAGNode, error) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 editor/engine.go
+## editor/engine.go
 
 ```go
 package editor
@@ -23759,7 +23759,7 @@ func clamp(value, min, max int) int {
 
 [⬆ 回到目录](#toc)
 
-## 📄 editor/execution_context.go
+## editor/execution_context.go
 
 ```go
 package editor
@@ -23789,7 +23789,7 @@ func NewExecutionContext(buffers BufferStore, windows WindowStore, selections Se
 
 [⬆ 回到目录](#toc)
 
-## 📄 editor/footprint.go
+## editor/footprint.go
 
 ```go
 package editor
@@ -23984,7 +23984,7 @@ type ConflictID string
 
 [⬆ 回到目录](#toc)
 
-## 📄 editor/selection_update.go
+## editor/selection_update.go
 
 ```go
 package editor
@@ -24170,7 +24170,7 @@ func (c Cursor) Equal(other Cursor) bool {
 
 [⬆ 回到目录](#toc)
 
-## 📄 editor/stores.go
+## editor/stores.go
 
 ```go
 package editor
@@ -24275,7 +24275,7 @@ func (s *SimpleSelectionStore) Set(buffer BufferID, selections []Selection) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 editor/text_object.go
+## editor/text_object.go
 
 ```go
 package editor
@@ -24820,7 +24820,7 @@ func ParseTextObject(textObjectStr string) (*TextObjectMotion, error) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 editor/types.go
+## editor/types.go
 
 ```go
 package editor
@@ -25191,7 +25191,7 @@ type SelectionStore interface {
 
 [⬆ 回到目录](#toc)
 
-## 📄 engine.go
+## engine.go
 
 ```go
 package main
@@ -25605,7 +25605,7 @@ func nextWord(b Buffer, row, col int) (int, int) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 engine/README.md
+## engine/README.md
 
 ```markdown
 
@@ -25897,7 +25897,7 @@ type Snapshot struct {
 
 [⬆ 回到目录](#toc)
 
-## 📄 engine/concrete_engine.go
+## engine/concrete_engine.go
 
 ```go
 package engine
@@ -26150,7 +26150,7 @@ func (e *ConcreteEngine) ChangeRange(r editor.MotionRange) error {
 
 [⬆ 回到目录](#toc)
 
-## 📄 engine/engine.go
+## engine/engine.go
 
 ```go
 package engine
@@ -26423,7 +26423,7 @@ func (e *HeadlessEngine) QueryAIChanges(aiActorPrefix string) []crdt.EventID {
 
 [⬆ 回到目录](#toc)
 
-## 📄 enter_fsm.sh
+## enter_fsm.sh
 
 ```bash
 #!/bin/sh
@@ -26448,7 +26448,7 @@ tmux switch-client -T fsm
 
 [⬆ 回到目录](#toc)
 
-## 📄 examples/README.md
+## examples/README.md
 
 ```markdown
 # examples 模块
@@ -26545,7 +26545,7 @@ Examples 模块是项目的实践指导层，它通过具体的示例代码帮�
 
 [⬆ 回到目录](#toc)
 
-## 📄 examples/invalid_history/README.md
+## examples/invalid_history/README.md
 
 ```markdown
 # Invalid History Examples
@@ -26563,7 +26563,7 @@ Purpose:
 
 [⬆ 回到目录](#toc)
 
-## 📄 examples/invalid_history/parent_mismatch/README.md
+## examples/invalid_history/parent_mismatch/README.md
 
 ```markdown
 # Parent Mismatch
@@ -26577,7 +26577,7 @@ The verifier must reject this history.
 
 [⬆ 回到目录](#toc)
 
-## 📄 examples/invalid_history/parent_mismatch/facts.json
+## examples/invalid_history/parent_mismatch/facts.json
 
 ```json
 {
@@ -26612,7 +26612,7 @@ The verifier must reject this history.
 
 [⬆ 回到目录](#toc)
 
-## 📄 examples/invalid_history/reordered_facts/README.md
+## examples/invalid_history/reordered_facts/README.md
 
 ```markdown
 # Reordered Facts
@@ -26626,7 +26626,7 @@ The verifier must canonicalize order via DAG + Fact.ID.
 
 [⬆ 回到目录](#toc)
 
-## 📄 examples/invalid_history/reordered_facts/facts.json
+## examples/invalid_history/reordered_facts/facts.json
 
 ```json
 {
@@ -26661,7 +26661,7 @@ The verifier must canonicalize order via DAG + Fact.ID.
 
 [⬆ 回到目录](#toc)
 
-## 📄 examples/invalid_history/same_text_different_root/README.md
+## examples/invalid_history/same_text_different_root/README.md
 
 ```markdown
 # Same Text, Different Root
@@ -26675,7 +26675,7 @@ The verifier commits to history via StateRoot.
 
 [⬆ 回到目录](#toc)
 
-## 📄 examples/invalid_history/same_text_different_root/facts_a.json
+## examples/invalid_history/same_text_different_root/facts_a.json
 
 ```json
 {
@@ -26710,7 +26710,7 @@ The verifier commits to history via StateRoot.
 
 [⬆ 回到目录](#toc)
 
-## 📄 examples/invalid_history/same_text_different_root/facts_b.json
+## examples/invalid_history/same_text_different_root/facts_b.json
 
 ```json
 {
@@ -26733,7 +26733,7 @@ The verifier commits to history via StateRoot.
 
 [⬆ 回到目录](#toc)
 
-## 📄 examples/transaction_demo.go
+## examples/transaction_demo.go
 
 ```go
 package main
@@ -26859,7 +26859,7 @@ func printBuffer(buf editor.Buffer) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 examples/valid_history/README.md
+## examples/valid_history/README.md
 
 ```markdown
 # Valid History Examples
@@ -26879,7 +26879,7 @@ but enables safe collaboration.
 
 [⬆ 回到目录](#toc)
 
-## 📄 examples/valid_history/multi_actor_concurrent/README.md
+## examples/valid_history/multi_actor_concurrent/README.md
 
 ```markdown
 # Multi-Actor Concurrent History
@@ -26893,7 +26893,7 @@ The verifier must accept both.
 
 [⬆ 回到目录](#toc)
 
-## 📄 examples/valid_history/multi_actor_concurrent/facts.json
+## examples/valid_history/multi_actor_concurrent/facts.json
 
 ```json
 {
@@ -26928,7 +26928,7 @@ The verifier must accept both.
 
 [⬆ 回到目录](#toc)
 
-## 📄 fsm-exit.sh
+## fsm-exit.sh
 
 ```bash
 #!/usr/bin/env bash
@@ -26953,7 +26953,7 @@ tmux switch-client -T root
 
 [⬆ 回到目录](#toc)
 
-## 📄 fsm-toggle.sh
+## fsm-toggle.sh
 
 ```bash
 #!/usr/bin/env bash
@@ -27016,7 +27016,7 @@ fi
 
 [⬆ 回到目录](#toc)
 
-## 📄 fsm/README.md
+## fsm/README.md
 
 ```markdown
 
@@ -27461,7 +27461,7 @@ FSM **不尝试同步 nvim 状态**
 
 [⬆ 回到目录](#toc)
 
-## 📄 fsm/engine.go
+## fsm/engine.go
 
 ```go
 package fsm
@@ -27831,7 +27831,7 @@ func (e *Engine) GetCount() int {
 
 [⬆ 回到目录](#toc)
 
-## 📄 fsm/engine_test.go
+## fsm/engine_test.go
 
 ```go
 package fsm
@@ -28269,7 +28269,7 @@ func TestEngineDispatchZeroAtStart(t *testing.T) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 fsm/enter_exit.go
+## fsm/enter_exit.go
 
 ```go
 package fsm
@@ -28332,7 +28332,7 @@ func ExitFSM() {
 
 [⬆ 回到目录](#toc)
 
-## 📄 fsm/fsm-20260111-docs.md
+## fsm/fsm-20260111-docs.md
 
 ```markdown
 # Project Documentation
@@ -29918,7 +29918,7 @@ func HideUI() {
 
 [⬆ 回到目录](#toc)
 
-## 📄 fsm/keymap.go
+## fsm/keymap.go
 
 ```go
 package fsm
@@ -29989,7 +29989,7 @@ var (
 
 [⬆ 回到目录](#toc)
 
-## 📄 fsm/nvim.go
+## fsm/nvim.go
 
 ```go
 package fsm
@@ -30019,7 +30019,7 @@ func NotifyNvimMode() {
 
 [⬆ 回到目录](#toc)
 
-## 📄 fsm/state.go
+## fsm/state.go
 
 ```go
 package fsm
@@ -30043,7 +30043,7 @@ func RefreshUI() {
 
 [⬆ 回到目录](#toc)
 
-## 📄 fsm/token.go
+## fsm/token.go
 
 ```go
 package fsm
@@ -30066,7 +30066,7 @@ type RawToken struct {
 
 [⬆ 回到目录](#toc)
 
-## 📄 fsm/ui_stub.go
+## fsm/ui_stub.go
 
 ```go
 package fsm
@@ -30162,7 +30162,7 @@ func HideUI() {
 
 [⬆ 回到目录](#toc)
 
-## 📄 globals.go
+## globals.go
 
 ```go
 package main
@@ -30371,7 +30371,7 @@ func updateStatusBar(state FSMState, clientName string) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 globals_test.go
+## globals_test.go
 
 ```go
 package main
@@ -30610,7 +30610,7 @@ func TestUpdateStatusBar(t *testing.T) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 go.mod
+## go.mod
 
 ```text
 module tmux-fsm
@@ -30634,7 +30634,7 @@ replace rhm-go => ./rhm-go
 
 [⬆ 回到目录](#toc)
 
-## 📄 go.sum
+## go.sum
 
 ```text
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
@@ -30652,7 +30652,7 @@ gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 
 [⬆ 回到目录](#toc)
 
-## 📄 index/README.md
+## index/README.md
 
 ```markdown
 # index 模块
@@ -30757,7 +30757,7 @@ Index 模块是系统的查询加速层，它通过建立高效的索引结构�
 
 [⬆ 回到目录](#toc)
 
-## 📄 index/index.go
+## index/index.go
 
 ```go
 package index
@@ -31028,7 +31028,7 @@ func (idx *EventIndex) GetActors() []crdt.ActorID {
 
 [⬆ 回到目录](#toc)
 
-## 📄 install.sh
+## install.sh
 
 ```bash
 #!/usr/bin/env bash
@@ -31232,7 +31232,7 @@ echo ""
 
 [⬆ 回到目录](#toc)
 
-## 📄 intent.go
+## intent.go
 
 ```go
 package main
@@ -31508,7 +31508,7 @@ func (i Intent) ToActionString() string {
 
 [⬆ 回到目录](#toc)
 
-## 📄 intent/README.md
+## intent/README.md
 
 ```markdown
 
@@ -31934,7 +31934,7 @@ TextObjectBuilder 仍通过字符串 Value 表达
 
 [⬆ 回到目录](#toc)
 
-## 📄 intent/grammar_intent.go
+## intent/grammar_intent.go
 
 ```go
 package intent
@@ -31951,7 +31951,7 @@ type GrammarIntent struct {
 
 [⬆ 回到目录](#toc)
 
-## 📄 intent/intent.go
+## intent/intent.go
 
 ```go
 package intent
@@ -32110,7 +32110,7 @@ func (i Intent) GetOperator() *int {
 
 [⬆ 回到目录](#toc)
 
-## 📄 intent/intent_test.go
+## intent/intent_test.go
 
 ```go
 package intent
@@ -32243,7 +32243,7 @@ func TestIntentWithEmptyOperator(t *testing.T) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 intent/motion.go
+## intent/motion.go
 
 ```go
 package intent
@@ -32295,7 +32295,7 @@ type Motion struct {
 
 [⬆ 回到目录](#toc)
 
-## 📄 intent/promote.go
+## intent/promote.go
 
 ```go
 package intent
@@ -32429,7 +32429,7 @@ func populateLegacyMotionMeta(meta map[string]interface{}, motion *Motion) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 intent/range.go
+## intent/range.go
 
 ```go
 package intent
@@ -32452,7 +32452,7 @@ type RangeMotion struct {
 
 [⬆ 回到目录](#toc)
 
-## 📄 intent/text_object.go
+## intent/text_object.go
 
 ```go
 package intent
@@ -32485,7 +32485,7 @@ type TextObject struct {
 
 [⬆ 回到目录](#toc)
 
-## 📄 intent_bridge.go
+## intent_bridge.go
 
 ```go
 // LEGACY — DO NOT EXTEND
@@ -32838,7 +32838,7 @@ func isTextObject(motion string) bool {
 
 [⬆ 回到目录](#toc)
 
-## 📄 invariant/README.md
+## invariant/README.md
 
 ```markdown
 # invariant 模块
@@ -32940,7 +32940,7 @@ Invariant 模块是系统的正确性保障层，它通过持续监控和验证�
 
 [⬆ 回到目录](#toc)
 
-## 📄 invariant/test.go
+## invariant/test.go
 
 ```go
 package invariant
@@ -33115,7 +33115,7 @@ func randomTransaction(maxPos int) Transaction {
 
 [⬆ 回到目录](#toc)
 
-## 📄 kernel/README.md
+## kernel/README.md
 
 ```markdown
 
@@ -33540,7 +33540,7 @@ weaverMgr.ProcessIntentGlobalWithContext(coreHctx, intent)
 
 [⬆ 回到目录](#toc)
 
-## 📄 kernel/decide.go
+## kernel/decide.go
 
 ```go
 package kernel
@@ -33683,7 +33683,7 @@ func (k *Kernel) GetCount() int {
 
 [⬆ 回到目录](#toc)
 
-## 📄 kernel/execute.go
+## kernel/execute.go
 
 ```go
 package kernel
@@ -33799,7 +33799,7 @@ func getTmuxCommandForAction(action string) string {
 
 [⬆ 回到目录](#toc)
 
-## 📄 kernel/intent_executor.go
+## kernel/intent_executor.go
 
 ```go
 package kernel
@@ -33825,7 +33825,7 @@ type ContextualIntentExecutor interface {
 
 [⬆ 回到目录](#toc)
 
-## 📄 kernel/kernel.go
+## kernel/kernel.go
 
 ```go
 package kernel
@@ -34061,7 +34061,7 @@ func tmux(cmd string) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 kernel/kernel_test.go
+## kernel/kernel_test.go
 
 ```go
 package kernel
@@ -34295,7 +34295,7 @@ func TestDecisionStruct(t *testing.T) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 kernel/resolver_executor.go
+## kernel/resolver_executor.go
 
 ```go
 package kernel
@@ -34344,7 +34344,7 @@ func (e *ResolverExecutor) ProcessWithContext(ctx context.Context, hctx HandleCo
 
 [⬆ 回到目录](#toc)
 
-## 📄 kernel/transaction.go
+## kernel/transaction.go
 
 ```go
 package kernel
@@ -34429,7 +34429,7 @@ func (tr *TransactionRunner) updateSelectionsAfterOps(ops []editor.ResolvedOpera
 
 [⬆ 回到目录](#toc)
 
-## 📄 keymap.yaml
+## keymap.yaml
 
 ```yaml
 states:
@@ -34486,7 +34486,7 @@ states:
 
 [⬆ 回到目录](#toc)
 
-## 📄 logic.go
+## logic.go
 
 ```go
 package main
@@ -35351,7 +35351,7 @@ func handleReplaceChar(state *FSMState, key string) string {
 
 [⬆ 回到目录](#toc)
 
-## 📄 main.go
+## main.go
 
 ```go
 package main
@@ -36168,7 +36168,7 @@ func reconcileFSMState(clientName string) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 main_comm_test.go
+## main_comm_test.go
 
 ```go
 package main
@@ -36251,7 +36251,7 @@ func TestHeartbeatMessage(t *testing.T) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 pkg/README.md
+## pkg/README.md
 
 ```markdown
 # pkg 模块
@@ -36347,7 +36347,7 @@ Pkg 模块是项目的公共库层，它提供了可被外部使用的通用功�
 
 [⬆ 回到目录](#toc)
 
-## 📄 pkg/protocol/protocol.go
+## pkg/protocol/protocol.go
 
 ```go
 package protocol
@@ -36383,7 +36383,7 @@ type ActionRecord struct {
 
 [⬆ 回到目录](#toc)
 
-## 📄 pkg/server/server.go
+## pkg/server/server.go
 
 ```go
 package server
@@ -36646,7 +36646,7 @@ func RunClient(key, paneAndClient string) error {
 
 [⬆ 回到目录](#toc)
 
-## 📄 pkg/state/state.go
+## pkg/state/state.go
 
 ```go
 package state
@@ -36834,7 +36834,7 @@ func (sm *StateManager) SetState(state FSMState) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 planner/README.md
+## planner/README.md
 
 ```markdown
 
@@ -37306,7 +37306,7 @@ func (g *Grammar) reset()
 
 [⬆ 回到目录](#toc)
 
-## 📄 planner/grammar.go
+## planner/grammar.go
 
 ```go
 package planner
@@ -37956,7 +37956,7 @@ func (g *Grammar) GetPendingOp() string {
 
 [⬆ 回到目录](#toc)
 
-## 📄 planner/grammar_test.go
+## planner/grammar_test.go
 
 ```go
 package planner
@@ -38331,7 +38331,7 @@ func TestGrammarInvalidKeyResets(t *testing.T) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 plugin.tmux
+## plugin.tmux
 
 ```text
 ##### tmux-fsm plugin (New Architecture with Legacy Support) #####
@@ -38398,7 +38398,7 @@ $HOME/.tmux/plugins/tmux-fsm/tmux-fsm -server >/dev/null 2>&1 &
 
 [⬆ 回到目录](#toc)
 
-## 📄 policy/README.md
+## policy/README.md
 
 ```markdown
 # policy 模块
@@ -38504,7 +38504,7 @@ Policy 模块是系统的安全控制层，它确保所有操作都符合预定�
 
 [⬆ 回到目录](#toc)
 
-## 📄 policy/policy.go
+## policy/policy.go
 
 ```go
 package policy
@@ -38747,7 +38747,7 @@ func factKindToOpKind(kind semantic.FactKind) OpKind {
 
 [⬆ 回到目录](#toc)
 
-## 📄 projects_relationship_analysis.md
+## projects_relationship_analysis.md
 
 ```markdown
 # 四个项目关系分析
@@ -39670,7 +39670,7 @@ Input → Intent/Context → Governance → Transaction → Execution
 
 [⬆ 回到目录](#toc)
 
-## 📄 protocol.go
+## protocol.go
 
 ```go
 package main
@@ -39698,7 +39698,7 @@ type ActionRecord struct {
 
 [⬆ 回到目录](#toc)
 
-## 📄 replay/README.md
+## replay/README.md
 
 ```markdown
 # replay 模块
@@ -39787,7 +39787,7 @@ Replay 模块是系统可验证性的核心组件，它确保了所有操作的�
 
 [⬆ 回到目录](#toc)
 
-## 📄 replay/replay.go
+## replay/replay.go
 
 ```go
 package replay
@@ -39946,7 +39946,7 @@ func UndoCheckout(
 
 [⬆ 回到目录](#toc)
 
-## 📄 resolver.go
+## resolver.go
 
 ```go
 package main
@@ -40347,7 +40347,7 @@ var ErrLineNotFound = "line not found"
 
 [⬆ 回到目录](#toc)
 
-## 📄 resolver_integration_test.go
+## resolver_integration_test.go
 
 ```go
 package main
@@ -40604,7 +40604,7 @@ func TestIsLegacyAnchor_Detection(t *testing.T) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 resolver_text_objects.go
+## resolver_text_objects.go
 
 ```go
 package main
@@ -41093,7 +41093,7 @@ func expandWhitespace(doc Document, r LocRange) LocRange {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/.gitignore
+## rhm-go/.gitignore
 
 ```text
 rhm
@@ -41106,7 +41106,7 @@ rhm-server
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/Dockerfile
+## rhm-go/Dockerfile
 
 ```text
 # Build Stage
@@ -41127,7 +41127,7 @@ CMD ["./rhm-server"]
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/README.md
+## rhm-go/README.md
 
 ```markdown
 # RHM: Reversible History Model (Go Engine v1.0)
@@ -41167,7 +41167,7 @@ curl "http://localhost:8080/solve?format=markdown"
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/RHM-Go_深度分析报告.md
+## rhm-go/RHM-Go_深度分析报告.md
 
 ```markdown
 # RHM-Go 子模块深度分析报告
@@ -41771,7 +41771,7 @@ RHM-Go 是一个**高度创新的版本控制引擎**，它通过以下核心特
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/STABILITY.md
+## rhm-go/STABILITY.md
 
 ```markdown
 # RHM-Go Stability & Semantic Manifesto (v1.0)
@@ -41826,7 +41826,7 @@ RHM Solver 必须始终严格遵守 `core/solver/solver.go` 中定义的四项�
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/api/http/handlers.go
+## rhm-go/api/http/handlers.go
 
 ```go
 package httpapi
@@ -41872,7 +41872,7 @@ func solveHandler(w http.ResponseWriter, r *http.Request) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/api/http/server.go
+## rhm-go/api/http/server.go
 
 ```go
 package httpapi
@@ -41902,7 +41902,7 @@ func Start(addr string) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/change.patch
+## rhm-go/change.patch
 
 ```text
 
@@ -41910,7 +41910,7 @@ func Start(addr string) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/cmd/rhm-server/main.go
+## rhm-go/cmd/rhm-server/main.go
 
 ```go
 package main
@@ -41929,7 +41929,7 @@ func main() {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/cmd/rhm/main.go
+## rhm-go/cmd/rhm/main.go
 
 ```go
 package main
@@ -41970,7 +41970,7 @@ func main() {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/core/analysis/analysis.go
+## rhm-go/core/analysis/analysis.go
 
 ```go
 package analysis
@@ -42055,7 +42055,7 @@ func ConflictSeverity(c Conflict) int {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/core/change/change.go
+## rhm-go/core/change/change.go
 
 ```go
 package change
@@ -42106,7 +42106,7 @@ func (m Mutation) String() string {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/core/cost/registry.go
+## rhm-go/core/cost/registry.go
 
 ```go
 package cost
@@ -42161,7 +42161,7 @@ func (d DefaultModel) Calculate(m change.Mutation, ctx Context) Cost {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/core/history/dag.go
+## rhm-go/core/history/dag.go
 
 ```go
 package history
@@ -42210,7 +42210,7 @@ func (d *HistoryDAG) GetParents(id NodeID) []NodeID {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/core/history/lca.go
+## rhm-go/core/history/lca.go
 
 ```go
 package history
@@ -42278,7 +42278,7 @@ func (d *HistoryDAG) getAllAncestors(id NodeID) map[NodeID]bool {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/core/narrative/model.go
+## rhm-go/core/narrative/model.go
 
 ```go
 package narrative
@@ -42306,7 +42306,7 @@ type RejectedAlternative struct {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/core/rewrite/ephemeral.go
+## rhm-go/core/rewrite/ephemeral.go
 
 ```go
 package rewrite
@@ -42366,7 +42366,7 @@ func RewriteBatch(base history.DagView, startPoint history.NodeID, mutations []c
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/core/scheduler/priority.go
+## rhm-go/core/scheduler/priority.go
 
 ```go
 package scheduler
@@ -42436,7 +42436,7 @@ func (s *ConflictScheduler) Next() analysis.Conflict {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/core/search/search.go
+## rhm-go/core/search/search.go
 
 ```go
 package search
@@ -42500,7 +42500,7 @@ func (pq *PriorityQueue) Pop() interface{} {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/core/solver/solver.go
+## rhm-go/core/solver/solver.go
 
 ```go
 package solver
@@ -42661,7 +42661,7 @@ func generateTargetedCandidates(view history.DagView, id history.NodeID) []chang
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/core/solver/solver_test.go
+## rhm-go/core/solver/solver_test.go
 
 ```go
 package solver
@@ -42761,7 +42761,7 @@ func TestSolveWithCreateVsCreateConflict(t *testing.T) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/core/solver/stability_test.go
+## rhm-go/core/solver/stability_test.go
 
 ```go
 package solver
@@ -42839,7 +42839,7 @@ func TestStability_Determinism(t *testing.T) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/do.md
+## rhm-go/do.md
 
 ```markdown
 既然我们已经完成了从“骨架”到“肌肉”的进化，现在我将这些零散的逻辑整合，为你提供一套生产级内核标准的完整文件。
@@ -43285,7 +43285,7 @@ func generateTargetedCandidates(view history.DagView, id history.NodeID) []chang
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/go.mod
+## rhm-go/go.mod
 
 ```text
 module rhm-go
@@ -43315,7 +43315,7 @@ require (
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/go.sum
+## rhm-go/go.sum
 
 ```text
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
@@ -43353,7 +43353,7 @@ gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/internal/formatter/html.go
+## rhm-go/internal/formatter/html.go
 
 ```go
 package formatter
@@ -43444,7 +43444,7 @@ func ToHTML(n narrative.Narrative) (string, error) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/internal/formatter/markdown.go
+## rhm-go/internal/formatter/markdown.go
 
 ```go
 package formatter
@@ -43480,7 +43480,7 @@ func ToMarkdown(n narrative.Narrative) string {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/internal/loader/loader.go
+## rhm-go/internal/loader/loader.go
 
 ```go
 package loader
@@ -43509,7 +43509,7 @@ func LoadDemoScenario() (*history.HistoryDAG, history.NodeID, history.NodeID) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/store/ops.go
+## rhm-go/store/ops.go
 
 ```go
 package store
@@ -43560,7 +43560,7 @@ func (op FileSystemOp) Hash() string { return op.Kind + ":" + op.Arg }
 
 [⬆ 回到目录](#toc)
 
-## 📄 rhm-go/telemetry/metrics.go
+## rhm-go/telemetry/metrics.go
 
 ```go
 package telemetry
@@ -43643,7 +43643,7 @@ func RecordConflictRecord(c analysis.Conflict) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 selection/README.md
+## selection/README.md
 
 ```markdown
 # selection 模块
@@ -43751,7 +43751,7 @@ Selection 模块是系统的文本选择管理层，它精确管理用户的选�
 
 [⬆ 回到目录](#toc)
 
-## 📄 selection/selection.go
+## selection/selection.go
 
 ```go
 package selection
@@ -43953,7 +43953,7 @@ func (sm *SelectionManager) GetAllSelections() map[CursorID]Selection {
 
 [⬆ 回到目录](#toc)
 
-## 📄 semantic/README.md
+## semantic/README.md
 
 ```markdown
 # semantic 模块
@@ -44059,7 +44059,7 @@ Semantic 模块是系统的智能理解层，它为系统提供了深层次的�
 
 [⬆ 回到目录](#toc)
 
-## 📄 semantic/capture.go
+## semantic/capture.go
 
 ```go
 package semantic
@@ -44361,7 +44361,7 @@ func max(a, b int) int {
 
 [⬆ 回到目录](#toc)
 
-## 📄 snapshot.go
+## snapshot.go
 
 ```go
 package main
@@ -44530,7 +44530,7 @@ func (h *HistoryForResolver) HasRedo() bool {
 
 [⬆ 回到目录](#toc)
 
-## 📄 start-claude-proxy.sh
+## start-claude-proxy.sh
 
 ```bash
 #!/usr/bin/env bash
@@ -44682,7 +44682,7 @@ exec "$LITELLM_BIN" --config "$CONFIG_FILE" --port "$PORT" --host 0.0.0.0
 
 [⬆ 回到目录](#toc)
 
-## 📄 tests/BASELINE_BEHAVIOR.md
+## tests/BASELINE_BEHAVIOR.md
 
 ```markdown
 # tmux-fsn 基线行为文档
@@ -44928,7 +44928,7 @@ line3: apple
 
 [⬆ 回到目录](#toc)
 
-## 📄 tests/EMERGENCY_ROLLBACK.md
+## tests/EMERGENCY_ROLLBACK.md
 
 ```markdown
 # 🚨 迁移失败止损清单
@@ -45270,7 +45270,7 @@ tail -100 ~/tmux-fsm.log | grep -i "error"
 
 [⬆ 回到目录](#toc)
 
-## 📄 tests/PHASE_0_COMPLETE.md
+## tests/PHASE_0_COMPLETE.md
 
 ```markdown
 # 阶段 0 完成报告
@@ -45403,7 +45403,7 @@ git tag phase-0-complete
 
 [⬆ 回到目录](#toc)
 
-## 📄 tests/PHASE_1_COMPLETE.md
+## tests/PHASE_1_COMPLETE.md
 
 ```markdown
 # 阶段 1 完成报告
@@ -45602,7 +45602,7 @@ go build -o tmux-fsm
 
 [⬆ 回到目录](#toc)
 
-## 📄 tests/PHASE_2_COMPLETE.md
+## tests/PHASE_2_COMPLETE.md
 
 ```markdown
 # 阶段 2 完成报告
@@ -45905,7 +45905,7 @@ ps aux | grep tmux-fsm
 
 [⬆ 回到目录](#toc)
 
-## 📄 tests/PHASE_3_COMPLETE.md
+## tests/PHASE_3_COMPLETE.md
 
 ```markdown
 # Phase 3 Completion Report: Weaver Core Projection Takeover
@@ -45983,7 +45983,7 @@ Restart the service. The system will revert to the original stable code path.
 
 [⬆ 回到目录](#toc)
 
-## 📄 tests/PHASE_4_COMPLETE.md
+## tests/PHASE_4_COMPLETE.md
 
 ```markdown
 # Phase 4 Completion Report: Undo Power Transfer
@@ -46048,7 +46048,7 @@ If Undo becomes unstable:
 
 [⬆ 回到目录](#toc)
 
-## 📄 tests/PROGRESS_SUMMARY.md
+## tests/PROGRESS_SUMMARY.md
 
 ```markdown
 # 🎉 阶段 0-2 完成总结
@@ -46361,7 +46361,7 @@ Shadow 模式让我们可以：
 
 [⬆ 回到目录](#toc)
 
-## 📄 tests/README.md
+## tests/README.md
 
 ```markdown
 # tests 模块
@@ -46459,7 +46459,7 @@ Tests 模块是系统的质量保障层，它通过全面的测试套件确保�
 
 [⬆ 回到目录](#toc)
 
-## 📄 tests/baseline_tests.sh
+## tests/baseline_tests.sh
 
 ```bash
 #!/bin/bash
@@ -46562,7 +46562,7 @@ echo "  git show pre-weaver-migration"
 
 [⬆ 回到目录](#toc)
 
-## 📄 tests/integration_test.go
+## tests/integration_test.go
 
 ```go
 package tests
@@ -46656,7 +46656,7 @@ func TestFsmLayerTimeout(t *testing.T) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 tests/invalid_history_test.go
+## tests/invalid_history_test.go
 
 ```go
 package tests
@@ -46705,7 +46705,7 @@ func TestInvalidHistory_SameTextDifferentRoot(t *testing.T) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 tests/test_intent.json
+## tests/test_intent.json
 
 ```json
 {"kind": 7, "count": 1, "pane_id": "test", "allow_partial": false}
@@ -46714,7 +46714,7 @@ func TestInvalidHistory_SameTextDifferentRoot(t *testing.T) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 tools/CHANGELOG.md
+## tools/CHANGELOG.md
 
 ```markdown
 # Changelog
@@ -46758,7 +46758,7 @@ func TestInvalidHistory_SameTextDifferentRoot(t *testing.T) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 tools/CODOC_V2.1_OPTIMIZATION.md
+## tools/CODOC_V2.1_OPTIMIZATION.md
 
 ```markdown
 # Codoc v2.1 优化总结
@@ -47066,7 +47066,7 @@ func copyAndCount(w io.Writer, path string) (lines int, err error) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 tools/README.md
+## tools/README.md
 
 ```markdown
 # tools 模块
@@ -48069,7 +48069,7 @@ if err := copyFileContent(w, file); err != nil {
 
 [⬆ 回到目录](#toc)
 
-## 📄 tools/codoc.go
+## tools/codoc.go
 
 ```go
 package main
@@ -48729,21 +48729,17 @@ func detectLanguage(path string) string {
 // GitHub 规则：小写化、非字母数字转为 -、连续 - 合并
 func makeGitHubAnchor(s string) string {
 	var result strings.Builder
-	lastWasDash := false
 
 	for _, r := range strings.ToLower(s) {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			result.WriteRune(r)
-			lastWasDash = false
-		} else if !lastWasDash {
+		if r == ' ' {
 			result.WriteRune('-')
-			lastWasDash = true
+		} else if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			result.WriteRune(r)
 		}
+		// GitHub 规则：其他符号（如 . /）直接丢弃，不是转为横杠
 	}
 
-	// 移除首尾的横杠
-	anchor := strings.Trim(result.String(), "-")
-	return anchor
+	return result.String()
 }
 
 /*
@@ -48776,7 +48772,8 @@ func writeMarkdownStream(cfg Config, files []FileMetadata, stats Stats) error {
 	for _, file := range files {
 		// 生成符合 GitHub 规范的锚点
 		anchor := makeGitHubAnchor(file.RelPath)
-		fmt.Fprintf(w, "- [%s](#%s) (%d lines, %.2f KB)\n", file.RelPath, anchor, file.LineCount, float64(file.Size)/1024)
+		// 目录中保留 Emoji，美观且不影响链接
+		fmt.Fprintf(w, "- [📄 %s](#%s) (%d lines, %.2f KB)\n", file.RelPath, anchor, file.LineCount, float64(file.Size)/1024)
 	}
 	fmt.Fprintln(w, "\n---")
 
@@ -48814,7 +48811,8 @@ func copyFileContent(w *bufio.Writer, file FileMetadata) error {
 	lang := detectLanguage(file.RelPath)
 
 	fmt.Fprintln(w)
-	fmt.Fprintf(w, "## 📄 %s\n\n", file.RelPath)
+	// 标题中移除 Emoji，避免 ID 生成出现不可控前缀（如 -toolscodocgo）
+	fmt.Fprintf(w, "## %s\n\n", file.RelPath)
 	// anchor 由 GitHub 自动生成（emoji 不参与）
 	fmt.Fprintf(w, "```%s\n", lang)
 
@@ -49124,7 +49122,1086 @@ func contains(list []string, v string) bool {
 
 [⬆ 回到目录](#toc)
 
-## 📄 tools/install-codoc.sh
+## tools/debug.md
+
+```markdown
+# Project Documentation
+
+- **Generated at:** 2026-02-03 11:43:15
+- **Root Dir:** `/Users/ygs/ygs/Tmux-FSM/tools`
+- **File Count:** 1
+- **Total Size:** 26.10 KB
+
+<a name="toc"></a>
+## 📂 扫描目录
+- [📄 codoc.go](#codocgo) (1045 lines, 26.10 KB)
+
+---
+
+## codoc.go
+
+```go
+package main
+
+import (
+	"bufio"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+	"unicode/utf8"
+)
+
+/*
+====================================================
+ Codoc - Code Documentation Made Simple
+ Configuration & Globals
+====================================================
+*/
+
+var versionStr = "v2.1.0"
+
+// Config 集中管理配置
+type Config struct {
+	RootDir        string
+	OutputFile     string
+	IncludeExts    []string
+	IncludeMatches []string
+	ExcludeExts    []string
+	ExcludeMatches []string
+	MaxFileSize    int64
+	NoSubdirs      bool
+	Verbose        bool
+	Version        bool
+	ShowStats      bool
+	JSONOutput     bool // 输出 JSON 格式
+}
+
+// FileMetadata 仅存储元数据，不存内容
+type FileMetadata struct {
+	RelPath   string
+	FullPath  string
+	Size      int64
+	LineCount int
+}
+
+// Stats 统计信息
+type Stats struct {
+	PotentialMatches   int // 符合包含规则的文件数
+	ExplicitlyExcluded int // 符合包含规则但被排除规则踢掉的文件数
+	FileCount          int // 最终写入的文件数
+	TotalSize          int64
+	TotalLines         int
+	Skipped            int // 完全不匹配规则的文件数
+	DirCount           int // 文件夹数量
+}
+
+// DirStats 目录统计信息
+type DirStats struct {
+	Path       string
+	FileCount  int
+	TotalSize  int64
+	TotalLines int
+}
+
+// ExtStats 文件类型统计信息
+type ExtStats struct {
+	Ext       string
+	FileCount int
+	TotalSize int64
+}
+
+// ProjectOutput JSON 输出格式
+type ProjectOutput struct {
+	GeneratedAt string         `json:"generated_at"`
+	RootDir     string         `json:"root_dir"`
+	Stats       Stats          `json:"stats"`
+	Files       []FileMetadata `json:"files"`
+	Directories []DirStats     `json:"directories,omitempty"`
+	Extensions  []ExtStats     `json:"extensions,omitempty"`
+}
+
+var defaultIgnorePatterns = []string{
+	".git", ".idea", ".vscode", ".svn", ".hg",
+	"node_modules", "vendor", "dist", "build", "target", "bin", "out", "release", "debug",
+	"__pycache__", ".pytest_cache", ".tox", ".coverage", "coverage.xml",
+	".DS_Store", ".env", ".venv", "venv", "env",
+	"package-lock.json", "yarn.lock", "go.sum", "composer.lock", "Gemfile.lock",
+	"*.log", "*.tmp", "*.temp", "*.cache", "*.swp", "*.swo",
+	"tags", "TAGS", "*.pid", "*.seed", "*.idx",
+	"Pods", "Carthage", "CocoaPods", ".xcassets",
+	"obj", "ipch", "*.user", "*.userosscache", "*.sln.docstates",
+	"*.VC.db", "*.VC.VC.opendb", "Debug", "Release", "x64", "x86", "arm64",
+	"*.aps", "*.ncb", "*.opendb", "*.opensdf", "*.sdf", "*.cachefile", "*.VC.VC.opendb",
+	"cmake-build-*", ".gradle", "build", ".sonar", ".scannerwork",
+	"*.tgz", "*.tar.gz", "*.zip", "*.rar", "*.7z",
+	"logs", "tmp", "temp", "cache", ".history", ".nyc_output",
+}
+
+// 语言映射表（全局配置，便于扩展）
+var languageMap = map[string]string{
+	".go":    "go",
+	".js":    "javascript",
+	".ts":    "typescript",
+	".tsx":   "typescript",
+	".jsx":   "javascript",
+	".py":    "python",
+	".java":  "java",
+	".c":     "c",
+	".cpp":   "cpp",
+	".cc":    "cpp",
+	".cxx":   "cpp",
+	".h":     "c",
+	".hpp":   "cpp",
+	".rs":    "rust",
+	".rb":    "ruby",
+	".php":   "php",
+	".cs":    "csharp",
+	".swift": "swift",
+	".kt":    "kotlin",
+	".scala": "scala",
+	".r":     "r",
+	".sql":   "sql",
+	".sh":    "bash",
+	".bash":  "bash",
+	".zsh":   "bash",
+	".fish":  "fish",
+	".ps1":   "powershell",
+	".md":    "markdown",
+	".html":  "html",
+	".htm":   "html",
+	".css":   "css",
+	".scss":  "scss",
+	".sass":  "sass",
+	".less":  "less",
+	".xml":   "xml",
+	".json":  "json",
+	".yaml":  "yaml",
+	".yml":   "yaml",
+	".toml":  "toml",
+	".ini":   "ini",
+	".conf":  "conf",
+	".txt":   "text",
+}
+
+/*
+====================================================
+ Main Entry
+====================================================
+*/
+
+func main() {
+	cfg := parseFlags()
+
+	// 如果是统计模式，执行统计并退出
+	if cfg.ShowStats {
+		if err := showProjectStats(cfg); err != nil {
+			fmt.Printf("❌ 统计失败: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if !cfg.JSONOutput {
+		printStartupInfo(cfg)
+	}
+
+	// Phase 1: 扫描文件结构
+	if !cfg.JSONOutput {
+		fmt.Println("⏳ 正在扫描文件结构...")
+	}
+	files, stats, err := scanDirectory(cfg)
+	if err != nil {
+		fmt.Printf("❌ 扫描失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Phase 2: 输出（JSON 或 Markdown）
+	if cfg.JSONOutput {
+		if err := writeJSONOutput(cfg, files, stats); err != nil {
+			fmt.Printf("❌ JSON 输出失败: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		fmt.Printf("💾 正在写入文档 [文件数: %d]...\n", len(files))
+		if err := writeMarkdownStream(cfg, files, stats); err != nil {
+			fmt.Printf("❌ 写入失败: %v\n", err)
+			os.Exit(1)
+		}
+		printSummary(stats, cfg.OutputFile)
+	}
+}
+
+/*
+====================================================
+ Flag Parsing
+====================================================
+*/
+
+func parseFlags() Config {
+	var cfg Config
+	var include, match, exclude, excludeMatch string
+	var maxKB int64
+
+	flag.StringVar(&cfg.RootDir, "dir", ".", "Root directory to scan")
+	flag.StringVar(&cfg.OutputFile, "o", "", "Output markdown file")
+	flag.StringVar(&include, "i", "", "Include extensions (e.g. .go,.js)")
+	flag.StringVar(&match, "m", "", "Include path keywords (e.g. _test.go)")
+	flag.StringVar(&exclude, "x", "", "Exclude extensions (e.g. .exe,.o)")
+	flag.StringVar(&excludeMatch, "xm", "", "Exclude path keywords (e.g. vendor/,node_modules/)")
+	flag.Int64Var(&maxKB, "max-size", 500, "Max file size in KB")
+	flag.BoolVar(&cfg.NoSubdirs, "no-subdirs", false, "Do not scan subdirectories")
+	var nsAlias bool
+	flag.BoolVar(&nsAlias, "ns", false, "Alias for --no-subdirs")
+	flag.BoolVar(&cfg.Verbose, "v", false, "Verbose output")
+	flag.BoolVar(&cfg.Version, "version", false, "Show version")
+	flag.BoolVar(&cfg.ShowStats, "s", false, "Show project statistics")
+	flag.BoolVar(&cfg.JSONOutput, "json", false, "Output in JSON format")
+
+	flag.Parse()
+
+	if nsAlias {
+		cfg.NoSubdirs = true
+	}
+
+	if cfg.Version {
+		fmt.Printf("codoc %s\n", versionStr)
+		os.Exit(0)
+	}
+
+	// 支持位置参数
+	if args := flag.Args(); len(args) > 0 {
+		cfg.RootDir = args[0]
+	}
+
+	cfg.RootDir, _ = filepath.Abs(cfg.RootDir)
+
+	// JSON 输出时修正默认输出行为
+	if cfg.JSONOutput {
+		if cfg.OutputFile != "" && strings.HasSuffix(cfg.OutputFile, ".md") {
+			cfg.OutputFile = strings.TrimSuffix(cfg.OutputFile, ".md") + ".json"
+		}
+	}
+
+	// 自动生成输出文件名
+	if cfg.OutputFile == "" {
+		baseName := "project"
+		cleanRoot := filepath.Clean(cfg.RootDir)
+
+		if cleanRoot == "." || cleanRoot == string(filepath.Separator) {
+			// 如果是当前目录，尝试获取文件夹真实名称
+			if abs, err := filepath.Abs(cleanRoot); err == nil {
+				baseName = filepath.Base(abs)
+			}
+		} else {
+			// 将路径中的分隔符和点替换为下划线
+			baseName = cleanRoot
+			baseName = strings.ReplaceAll(baseName, string(filepath.Separator), "_")
+			baseName = strings.ReplaceAll(baseName, ".", "_")
+			// 清理连续的下划线
+			for strings.Contains(baseName, "__") {
+				baseName = strings.ReplaceAll(baseName, "__", "_")
+			}
+			baseName = strings.Trim(baseName, "_")
+		}
+
+		date := time.Now().Format("20060102")
+		ext := "md"
+		if cfg.JSONOutput {
+			ext = "json"
+		}
+		cfg.OutputFile = fmt.Sprintf("%s-%s-codoc.%s", baseName, date, ext)
+	}
+
+	cfg.IncludeExts = normalizeExts(include)
+	cfg.IncludeMatches = splitAndTrim(match)
+	cfg.ExcludeExts = normalizeExts(exclude)
+	cfg.ExcludeMatches = splitAndTrim(excludeMatch)
+
+	// 从配置文件加载额外的忽略规则
+	additionalExcludes, additionalExcludeMatches := loadIgnoreFile(cfg.RootDir)
+	cfg.ExcludeExts = mergeStringSlices(cfg.ExcludeExts, additionalExcludes)
+	cfg.ExcludeMatches = mergeStringSlices(cfg.ExcludeMatches, additionalExcludeMatches)
+
+	cfg.MaxFileSize = maxKB * 1024
+
+	return cfg
+}
+
+func splitAndTrim(input string) []string {
+	if input == "" {
+		return nil
+	}
+	parts := strings.Split(input, ",")
+	var result []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
+// 从配置文件加载忽略规则
+func loadIgnoreFile(rootDir string) ([]string, []string) {
+	var excludeExts []string
+	var excludeMatches []string
+
+	// 尝试多个可能的配置文件名
+	possibleFiles := []string{".codoc-ignore", ".gen-docs-ignore", ".gdocsignore", ".docs-ignore"}
+
+	for _, filename := range possibleFiles {
+		configPath := filepath.Join(rootDir, filename)
+
+		// 检查文件是否存在
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			continue
+		}
+
+		// 读取配置文件
+		content, err := os.ReadFile(configPath)
+		if err != nil {
+			logf(true, "⚠ 无法读取忽略配置文件 %s: %v", configPath, err)
+			continue
+		}
+
+		logf(true, "✓ 发现忽略配置文件: %s", configPath)
+
+		// 解析配置文件内容
+		scanner := bufio.NewScanner(strings.NewReader(string(content)))
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+
+			// 跳过空行和注释行
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+
+			// 根据行的内容判断是扩展名还是路径匹配
+			if strings.HasPrefix(line, ".") {
+				// 这是一个扩展名（例如 .log, .tmp）
+				excludeExts = append(excludeExts, strings.ToLower(line))
+			} else {
+				// 这是一个路径匹配模式（例如 vendor/, node_modules/）
+				excludeMatches = append(excludeMatches, line)
+			}
+		}
+
+		if err := scanner.Err(); err != nil {
+			logf(true, "⚠ 读取忽略配置文件时出错 %s: %v", configPath, err)
+		}
+
+		// 找到并成功解析了一个配置文件，跳出循环
+		break
+	}
+
+	return excludeExts, excludeMatches
+}
+
+// 合并两个字符串切片，避免重复
+func mergeStringSlices(base, additional []string) []string {
+	// 使用 map 来跟踪已存在的元素，避免重复
+	seen := make(map[string]bool)
+	var result []string
+
+	// 先添加基础切片中的元素
+	for _, item := range base {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
+		}
+	}
+
+	// 再添加附加切片中的元素
+	for _, item := range additional {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
+		}
+	}
+
+	return result
+}
+
+/*
+====================================================
+ Startup & Summary
+====================================================
+*/
+
+func printStartupInfo(cfg Config) {
+	fmt.Println("▶ Codoc Started")
+	fmt.Printf("  Root: %s\n", cfg.RootDir)
+	fmt.Printf("  Out : %s\n", cfg.OutputFile)
+	fmt.Printf("  Max : %d KB\n", cfg.MaxFileSize/1024)
+	if len(cfg.IncludeExts) > 0 {
+		fmt.Printf("  Only Ext: %v\n", cfg.IncludeExts)
+	}
+	if len(cfg.IncludeMatches) > 0 {
+		fmt.Printf("  Match   : %v\n", cfg.IncludeMatches)
+	}
+	if len(cfg.ExcludeExts) > 0 {
+		fmt.Printf("  Skip Ext: %v\n", cfg.ExcludeExts)
+	}
+	if len(cfg.ExcludeMatches) > 0 {
+		fmt.Printf("  Skip Key: %v\n", cfg.ExcludeMatches)
+	}
+	fmt.Println()
+}
+
+func printSummary(stats Stats, output string) {
+	fmt.Println("\n✔ 完成!")
+	fmt.Printf("  符合包含规则 (Potential) : %d\n", stats.PotentialMatches)
+	fmt.Printf("  由于排除规则被踢除 (Excluded): %d\n", stats.ExplicitlyExcluded)
+	fmt.Printf("  最终写入文件数 (Final)    : %d\n", stats.FileCount)
+	fmt.Printf("  总行数 (Total Lines)      : %d\n", stats.TotalLines)
+	fmt.Printf("  总物理大小 (Total Size)   : %.2f KB\n", float64(stats.TotalSize)/1024)
+	fmt.Printf("  无需处理的无关文件          : %d\n", stats.Skipped)
+	fmt.Printf("  输出路径                  : %s\n", output)
+}
+
+/*
+====================================================
+ Directory Scanning
+====================================================
+*/
+
+func scanDirectory(cfg Config) ([]FileMetadata, Stats, error) {
+	var files []FileMetadata
+	var stats Stats
+
+	absOutput, _ := filepath.Abs(cfg.OutputFile)
+
+	err := filepath.WalkDir(cfg.RootDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			logf(cfg.Verbose, "⚠ 无法访问: %s", path)
+			stats.Skipped++
+			return nil
+		}
+
+		relPath, _ := filepath.Rel(cfg.RootDir, path)
+		if relPath == "." {
+			return nil
+		}
+
+		// 处理目录
+		if d.IsDir() {
+			if cfg.NoSubdirs && relPath != "." {
+				return filepath.SkipDir
+			}
+			if shouldIgnoreDir(d.Name()) {
+				logf(cfg.Verbose, "⊘ 跳过目录: %s", relPath)
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// 排除输出文件自身
+		if absPath, _ := filepath.Abs(path); absPath == absOutput {
+			return nil
+		}
+
+		// 获取文件信息
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+
+		// --- 细化过滤逻辑 ---
+		// 1. 基础过滤：过大或二进制
+		if info.Size() > cfg.MaxFileSize || isBinaryFile(path) {
+			stats.Skipped++
+			return nil
+		}
+
+		// 2. 检查是否符合“包含”意图
+		isIncluded := true
+		if len(cfg.IncludeExts) > 0 || len(cfg.IncludeMatches) > 0 {
+			extMatched := false
+			if len(cfg.IncludeExts) > 0 {
+				ext := strings.ToLower(filepath.Ext(relPath))
+				for _, e := range cfg.IncludeExts {
+					if ext == e {
+						extMatched = true
+						break
+					}
+				}
+			} else {
+				extMatched = true // 如果没设后缀白名单，默认后缀通过
+			}
+
+			pathMatched := false
+			if len(cfg.IncludeMatches) > 0 {
+				for _, m := range cfg.IncludeMatches {
+					if strings.Contains(relPath, m) {
+						pathMatched = true
+						break
+					}
+				}
+			} else {
+				pathMatched = true // 如果没设关键字匹配，默认路径通过
+			}
+			isIncluded = extMatched && pathMatched
+		}
+
+		if !isIncluded {
+			stats.Skipped++
+			return nil
+		}
+
+		// 3. 符合包含意图 (Potential Match)
+		stats.PotentialMatches++
+
+		// 4. 检查是否被“排除”规则拦截
+		isExcluded := false
+		ext := strings.ToLower(filepath.Ext(relPath))
+		for _, e := range cfg.ExcludeExts {
+			if ext == e {
+				isExcluded = true
+				break
+			}
+		}
+		if !isExcluded && len(cfg.ExcludeMatches) > 0 {
+			for _, m := range cfg.ExcludeMatches {
+				if strings.Contains(relPath, m) {
+					isExcluded = true
+					break
+				}
+			}
+		}
+
+		if isExcluded {
+			stats.ExplicitlyExcluded++
+			return nil
+		}
+
+		// --- 最终通过 ---
+		lineCount, _ := countLines(path)
+		files = append(files, FileMetadata{
+			RelPath:   relPath,
+			FullPath:  path,
+			Size:      info.Size(),
+			LineCount: lineCount,
+		})
+		stats.FileCount++
+		stats.TotalLines += lineCount
+		stats.TotalSize += info.Size()
+
+		logf(cfg.Verbose, "✓ 添加: %s (%d lines)", relPath, lineCount)
+		return nil
+	})
+
+	// 排序保证输出一致性
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].RelPath < files[j].RelPath
+	})
+
+	return files, stats, err
+}
+
+/*
+====================================================
+ Ignore Rules
+====================================================
+*/
+
+func shouldIgnoreDir(name string) bool {
+	if strings.HasPrefix(name, ".") && name != "." {
+		return true
+	}
+	for _, pattern := range defaultIgnorePatterns {
+		if strings.Contains(name, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// shouldIgnoreFile 已废弃 - 过滤逻辑已统一到 scanDirectory 中
+
+/*
+====================================================
+ File Utilities
+====================================================
+*/
+
+func normalizeExts(input string) []string {
+	if input == "" {
+		return nil
+	}
+	parts := strings.Split(input, ",")
+	var exts []string
+	for _, p := range parts {
+		p = strings.TrimSpace(strings.ToLower(p))
+		if !strings.HasPrefix(p, ".") {
+			p = "." + p
+		}
+		exts = append(exts, p)
+	}
+	return exts
+}
+
+func isBinaryFile(path string) bool {
+	// 快速路径 1: 压缩文件 (仅匹配 .min.js, .min.css 等常见后缀)
+	// 避免误伤 admin.go, terminal.py 等
+	if strings.HasSuffix(path, ".min.js") || strings.HasSuffix(path, ".min.css") || strings.HasSuffix(path, ".min.html") {
+		return true
+	}
+
+	// 快速路径 2: 已知文本类型扩展名直接跳过 IO 检测
+	ext := strings.ToLower(filepath.Ext(path))
+	if _, ok := languageMap[ext]; ok {
+		return false // 已知文本类型，无需检测
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return true
+	}
+	defer f.Close()
+
+	// 只读前 512 字节
+	buf := make([]byte, 512)
+	n, err := f.Read(buf)
+	if err != nil && err != io.EOF {
+		return true // 读取错误时保守处理，视为二进制（或者跳过）
+	}
+	buf = buf[:n]
+
+	// NULL 字节检测
+	for _, b := range buf {
+		if b == 0 {
+			return true
+		}
+	}
+
+	// UTF-8 有效性检测
+	return !utf8.Valid(buf)
+}
+
+func detectLanguage(path string) string {
+	ext := strings.ToLower(filepath.Ext(path))
+	if lang, ok := languageMap[ext]; ok {
+		return lang
+	}
+	return "text"
+}
+
+// makeGitHubAnchor 生成符合 GitHub 规范的 Markdown 锚点
+// GitHub 规则：小写化、非字母数字转为 -、连续 - 合并
+func makeGitHubAnchor(s string) string {
+	var result strings.Builder
+
+	for _, r := range strings.ToLower(s) {
+		if r == ' ' {
+			result.WriteRune('-')
+		} else if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			result.WriteRune(r)
+		}
+		// GitHub 规则：其他符号（如 . /）直接丢弃，不是转为横杠
+	}
+
+	return result.String()
+}
+
+/*
+====================================================
+ Markdown Output
+====================================================
+*/
+
+func writeMarkdownStream(cfg Config, files []FileMetadata, stats Stats) error {
+	f, err := os.Create(cfg.OutputFile)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	w := bufio.NewWriterSize(f, 64*1024)
+
+	// 写入头部
+	fmt.Fprintln(w, "# Project Documentation")
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "- **Generated at:** %s\n", time.Now().Format("2006-01-02 15:04:05"))
+	fmt.Fprintf(w, "- **Root Dir:** `%s`\n", cfg.RootDir)
+	fmt.Fprintf(w, "- **File Count:** %d\n", stats.FileCount)
+	fmt.Fprintf(w, "- **Total Size:** %.2f KB\n", float64(stats.TotalSize)/1024)
+	fmt.Fprintln(w)
+
+	// 写入目录
+	fmt.Fprintln(w, "<a name=\"toc\"></a>")
+	fmt.Fprintln(w, "## 📂 扫描目录")
+	for _, file := range files {
+		// 生成符合 GitHub 规范的锚点
+		anchor := makeGitHubAnchor(file.RelPath)
+		// 目录中保留 Emoji，美观且不影响链接
+		fmt.Fprintf(w, "- [📄 %s](#%s) (%d lines, %.2f KB)\n", file.RelPath, anchor, file.LineCount, float64(file.Size)/1024)
+	}
+	fmt.Fprintln(w, "\n---")
+
+	// 流式写入文件内容
+	total := len(files)
+	for i, file := range files {
+		if !cfg.Verbose && (i%10 == 0 || i == total-1) {
+			fmt.Printf("\r🚀 写入进度: %d/%d (%.1f%%)", i+1, total, float64(i+1)/float64(total)*100)
+		}
+
+		if err := copyFileContent(w, file); err != nil {
+			logf(true, "\n⚠ 读取失败 %s: %v", file.RelPath, err)
+			continue
+		}
+	}
+	fmt.Println()
+
+	//【补充统计】
+	fmt.Fprintln(w, "\n---")
+	fmt.Fprintf(w, "### 📊 最终统计汇总\n")
+	fmt.Fprintf(w, "- **文件总数:** %d\n", stats.FileCount)
+	fmt.Fprintf(w, "- **代码总行数:** %d\n", stats.TotalLines)
+	fmt.Fprintf(w, "- **物理总大小:** %.2f KB\n", float64(stats.TotalSize)/1024)
+
+	return w.Flush()
+}
+
+func copyFileContent(w *bufio.Writer, file FileMetadata) error {
+	src, err := os.Open(file.FullPath)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	lang := detectLanguage(file.RelPath)
+
+	fmt.Fprintln(w)
+	// 标题中移除 Emoji，避免 ID 生成出现不可控前缀（如 -toolscodocgo）
+	fmt.Fprintf(w, "## %s\n\n", file.RelPath)
+	// anchor 由 GitHub 自动生成（emoji 不参与）
+	fmt.Fprintf(w, "```%s\n", lang)
+
+	// 使用 io.Copy 替代 scanner，更安全且不限行长
+	if _, err := io.Copy(w, src); err != nil {
+		return err
+	}
+
+	fmt.Fprintln(w, "\n```")
+	fmt.Fprintln(w, "\n[⬆ 回到目录](#toc)")
+	return nil
+}
+
+func countLines(path string) (int, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	count := 0
+	scanner := bufio.NewScanner(f)
+	// 增加缓冲区以支持超长行
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
+	for scanner.Scan() {
+		count++
+	}
+	return count, scanner.Err()
+}
+
+/*
+====================================================
+ Logging
+====================================================
+*/
+
+func logf(verbose bool, format string, a ...any) {
+	if verbose {
+		fmt.Printf(format+"\n", a...)
+	}
+}
+
+/*
+====================================================
+ JSON Output
+====================================================
+*/
+
+func writeJSONOutput(cfg Config, files []FileMetadata, stats Stats) error {
+	output := ProjectOutput{
+		GeneratedAt: time.Now().Format("2006-01-02 15:04:05"),
+		RootDir:     cfg.RootDir,
+		Stats:       stats,
+		Files:       files,
+	}
+
+	var jsonData []byte
+	var err error
+
+	// 美化输出
+	jsonData, err = json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		return fmt.Errorf("JSON 序列化失败: %w", err)
+	}
+
+	// 如果指定了输出文件，写入文件；否则输出到标准输出
+	if cfg.OutputFile != "" {
+		if err := os.WriteFile(cfg.OutputFile, jsonData, 0644); err != nil {
+			return fmt.Errorf("写入文件失败: %w", err)
+		}
+		fmt.Printf("✅ JSON 已写入: %s\n", cfg.OutputFile)
+	} else {
+		fmt.Println(string(jsonData))
+	}
+
+	return nil
+}
+
+/*
+====================================================
+ Project Statistics
+====================================================
+*/
+
+func showProjectStats(cfg Config) error {
+	fmt.Println("📊 正在统计项目信息...")
+	fmt.Printf("  Root: %s\n\n", cfg.RootDir)
+
+	var files []FileMetadata
+	dirMap := make(map[string]*DirStats)
+	extMap := make(map[string]*ExtStats)
+	var stats Stats
+	absOutput, _ := filepath.Abs(cfg.OutputFile)
+
+	err := filepath.WalkDir(cfg.RootDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		relPath, _ := filepath.Rel(cfg.RootDir, path)
+		if relPath == "." {
+			return nil
+		}
+
+		// 处理目录
+		if d.IsDir() {
+			if shouldIgnoreDir(d.Name()) {
+				return filepath.SkipDir
+			}
+			stats.DirCount++
+			dirMap[relPath] = &DirStats{Path: relPath}
+			return nil
+		}
+
+		// 排除输出文件
+		if absPath, _ := filepath.Abs(path); absPath == absOutput {
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+
+		// 统计时也必须遵循 include / exclude 规则
+		if !shouldIncludeFile(relPath, &cfg) {
+			return nil
+		}
+
+		// 过滤二进制和过大文件
+		if info.Size() > cfg.MaxFileSize || isBinaryFile(path) {
+			return nil
+		}
+
+		lineCount, _ := countLines(path)
+		fileSize := info.Size()
+
+		// 统计文件
+		files = append(files, FileMetadata{
+			RelPath:   relPath,
+			FullPath:  path,
+			Size:      fileSize,
+			LineCount: lineCount,
+		})
+		stats.FileCount++
+		stats.TotalLines += lineCount
+		stats.TotalSize += fileSize
+
+		// 统计目录
+		dir := filepath.Dir(relPath)
+		if dir == "." {
+			dir = "."
+		}
+		if dirStats, ok := dirMap[dir]; ok {
+			dirStats.FileCount++
+			dirStats.TotalSize += fileSize
+			dirStats.TotalLines += lineCount
+		} else {
+			dirMap[dir] = &DirStats{
+				Path:       dir,
+				FileCount:  1,
+				TotalSize:  fileSize,
+				TotalLines: lineCount,
+			}
+		}
+
+		// 统计文件类型
+		ext := strings.ToLower(filepath.Ext(relPath))
+		if ext == "" {
+			ext = "(no extension)"
+		}
+		if extStats, ok := extMap[ext]; ok {
+			extStats.FileCount++
+			extStats.TotalSize += fileSize
+		} else {
+			extMap[ext] = &ExtStats{
+				Ext:       ext,
+				FileCount: 1,
+				TotalSize: fileSize,
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// 输出统计结果
+	fmt.Println("=" + strings.Repeat("=", 70))
+	fmt.Println("📁 基本统计")
+	fmt.Println("=" + strings.Repeat("=", 70))
+	fmt.Printf("  文件夹数量: %d\n", stats.DirCount)
+	fmt.Printf("  文件数量  : %d\n", stats.FileCount)
+	fmt.Printf("  总行数    : %d\n", stats.TotalLines)
+	fmt.Printf("  总大小    : %.2f KB (%.2f MB)\n",
+		float64(stats.TotalSize)/1024, float64(stats.TotalSize)/1024/1024)
+
+	// Top 5 最大文件夹
+	fmt.Println("\n" + "=" + strings.Repeat("=", 70))
+	fmt.Println("📂 Top 5 最大文件夹")
+	fmt.Println("=" + strings.Repeat("=", 70))
+
+	var dirList []DirStats
+	for _, ds := range dirMap {
+		if ds.FileCount > 0 {
+			dirList = append(dirList, *ds)
+		}
+	}
+	sort.Slice(dirList, func(i, j int) bool {
+		return dirList[i].TotalSize > dirList[j].TotalSize
+	})
+
+	for i := 0; i < 5 && i < len(dirList); i++ {
+		ds := dirList[i]
+		sizePercent := float64(ds.TotalSize) / float64(stats.TotalSize) * 100
+		linesPercent := float64(ds.TotalLines) / float64(stats.TotalLines) * 100
+		fmt.Printf("  %d. %s\n", i+1, ds.Path)
+		fmt.Printf("     大小: %.2f KB (%.1f%%), 行数: %d (%.1f%%), 文件数: %d\n",
+			float64(ds.TotalSize)/1024, sizePercent, ds.TotalLines, linesPercent, ds.FileCount)
+	}
+
+	// Top 5 最大文件
+	fmt.Println("\n" + "=" + strings.Repeat("=", 70))
+	fmt.Println("📄 Top 5 最大文件")
+	fmt.Println("=" + strings.Repeat("=", 70))
+
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].Size > files[j].Size
+	})
+
+	for i := 0; i < 5 && i < len(files); i++ {
+		f := files[i]
+		sizePercent := float64(f.Size) / float64(stats.TotalSize) * 100
+		linesPercent := float64(f.LineCount) / float64(stats.TotalLines) * 100
+		fmt.Printf("  %d. %s\n", i+1, f.RelPath)
+		fmt.Printf("     大小: %.2f KB (%.1f%%), 行数: %d (%.1f%%)\n",
+			float64(f.Size)/1024, sizePercent, f.LineCount, linesPercent)
+	}
+
+	// 按文件类型统计
+	fmt.Println("\n" + "=" + strings.Repeat("=", 70))
+	fmt.Println("📊 按文件类型统计")
+	fmt.Println("=" + strings.Repeat("=", 70))
+
+	var extList []ExtStats
+	for _, es := range extMap {
+		extList = append(extList, *es)
+	}
+	sort.Slice(extList, func(i, j int) bool {
+		return extList[i].TotalSize > extList[j].TotalSize
+	})
+
+	fmt.Printf("  %-20s %10s %15s %10s\n", "类型", "文件数", "总大小", "占比")
+	fmt.Println("  " + strings.Repeat("-", 68))
+	for _, es := range extList {
+		sizePercent := float64(es.TotalSize) / float64(stats.TotalSize) * 100
+		fmt.Printf("  %-20s %10d %12.2f KB %9.1f%%\n",
+			es.Ext, es.FileCount, float64(es.TotalSize)/1024, sizePercent)
+	}
+
+	fmt.Println("\n" + "=" + strings.Repeat("=", 70))
+	fmt.Println("✅ 统计完成!")
+	fmt.Println("=" + strings.Repeat("=", 70))
+
+	return nil
+}
+
+// shouldIncludeFile 判断文件是否应被纳入处理（stats / markdown / json 共用）
+func shouldIncludeFile(path string, cfg *Config) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+
+	if len(cfg.IncludeExts) > 0 && !contains(cfg.IncludeExts, ext) {
+		return false
+	}
+	if contains(cfg.ExcludeExts, ext) {
+		return false
+	}
+	for _, m := range cfg.ExcludeMatches {
+		if strings.Contains(path, m) {
+			return false
+		}
+	}
+	if len(cfg.IncludeMatches) > 0 {
+		for _, m := range cfg.IncludeMatches {
+			if strings.Contains(path, m) {
+				return true
+			}
+		}
+		return false
+	}
+	return true
+}
+
+func contains(list []string, v string) bool {
+	for _, s := range list {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
+
+```
+
+[⬆ 回到目录](#toc)
+
+---
+### 📊 最终统计汇总
+- **文件总数:** 1
+- **代码总行数:** 1045
+- **物理总大小:** 26.10 KB
+
+```
+
+[⬆ 回到目录](#toc)
+
+## tools/install-codoc.sh
 
 ```bash
 #!/usr/bin/env bash
@@ -49230,7 +50307,7 @@ echo ""
 
 [⬆ 回到目录](#toc)
 
-## 📄 tools/test_md
+## tools/test_md
 
 ```text
 # Project Documentation
@@ -51810,32 +52887,7 @@ echo ""
 
 [⬆ 回到目录](#toc)
 
-## 📄 tools/tools-20260125-docs.md
-
-```markdown
-# Project Documentation
-
-- **Generated at:** 2026-01-25 10:55:56
-- **Root Dir:** `.`
-- **File Count:** 0
-- **Total Size:** 0.00 KB
-
-<a name="toc"></a>
-## 📂 扫描目录
-
----
-
----
-### 📊 最终统计汇总
-- **文件总数:** 0
-- **代码总行数:** 0
-- **物理总大小:** 0.00 KB
-
-```
-
-[⬆ 回到目录](#toc)
-
-## 📄 transaction.go
+## transaction.go
 
 ```go
 package main
@@ -52068,7 +53120,7 @@ func (j *TxJournal) appendTx(tx Transaction) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 types/README.md
+## types/README.md
 
 ```markdown
 # types 模块
@@ -52178,7 +53230,7 @@ Types 模块是系统的类型基础设施，它为所有其他模块提供统�
 
 [⬆ 回到目录](#toc)
 
-## 📄 types/types.go
+## types/types.go
 
 ```go
 package types
@@ -52220,7 +53272,7 @@ type Transaction struct {
 
 [⬆ 回到目录](#toc)
 
-## 📄 ui/README.md
+## ui/README.md
 
 ```markdown
 # ui 模块
@@ -52323,7 +53375,7 @@ UI 模块是系统的用户交互前端，它为用户提供直观的状态反�
 
 [⬆ 回到目录](#toc)
 
-## 📄 ui/interface.go
+## ui/interface.go
 
 ```go
 package ui
@@ -52339,7 +53391,7 @@ type UI interface {
 
 [⬆ 回到目录](#toc)
 
-## 📄 ui/popup.go
+## ui/popup.go
 
 ```go
 package ui
@@ -52395,7 +53447,7 @@ func (p *PopupUI) Hide() {
 
 [⬆ 回到目录](#toc)
 
-## 📄 undo_redo.go
+## undo_redo.go
 
 ```go
 package main
@@ -52538,7 +53590,7 @@ func generateSnapshotID() string {
 
 [⬆ 回到目录](#toc)
 
-## 📄 undotree/README.md
+## undotree/README.md
 
 ```markdown
 # undotree 模块
@@ -52648,7 +53700,7 @@ Undotree 模块是系统的高级撤销管理层，它提供了比传统线性�
 
 [⬆ 回到目录](#toc)
 
-## 📄 undotree/tree.go
+## undotree/tree.go
 
 ```go
 package undotree
@@ -52763,7 +53815,7 @@ func PathToRoot(n *UndoNode) []*wal.SemanticEvent {
 
 [⬆ 回到目录](#toc)
 
-## 📄 validate_paths.sh
+## validate_paths.sh
 
 ```bash
 #!/usr/bin/env bash
@@ -52806,7 +53858,7 @@ echo "所有路径配置正确，tmux-fsm 可以正常工作"
 
 [⬆ 回到目录](#toc)
 
-## 📄 verifier/README.md
+## verifier/README.md
 
 ```markdown
 # verifier 模块
@@ -52910,7 +53962,7 @@ Verifier 模块是系统的质量保障层，它确保所有操作都符合预�
 
 [⬆ 回到目录](#toc)
 
-## 📄 verifier/verifier.go
+## verifier/verifier.go
 
 ```go
 package verifier
@@ -53210,7 +54262,7 @@ func (v *Verifier) VerifyFromJSON(
 
 [⬆ 回到目录](#toc)
 
-## 📄 wal/README.md
+## wal/README.md
 
 ```markdown
 # wal 模块
@@ -53317,7 +54369,7 @@ WAL 模块是系统的持久化保障层，它确保所有重要的状态变更�
 
 [⬆ 回到目录](#toc)
 
-## 📄 wal/wal.go
+## wal/wal.go
 
 ```go
 package wal
@@ -53501,7 +54553,7 @@ func LoadFromWAL(filename string) ([]SemanticEvent, error) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/README.md
+## weaver/README.md
 
 ```markdown
 # weaver 模块
@@ -53604,7 +54656,7 @@ Weaver 模块是系统的执行枢纽，它确保所有操作都能被正确解�
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/adapter/backend.go
+## weaver/adapter/backend.go
 
 ```go
 //go:build !legacy
@@ -53720,7 +54772,7 @@ func (b *TmuxBackend) ExecRaw(cmd string) error {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/adapter/rhm_adapter.go
+## weaver/adapter/rhm_adapter.go
 
 ```go
 package adapter
@@ -53869,7 +54921,7 @@ func (a *RHMAdapter) ExtractActions(plan solver.ResolutionPlan) []ResolutionActi
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/adapter/rhm_adapter_test.go
+## weaver/adapter/rhm_adapter_test.go
 
 ```go
 package adapter
@@ -53962,7 +55014,7 @@ func (m *mockOpWrapper) Downgrade() change.ReversibleChange {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/adapter/selection_normalizer.go
+## weaver/adapter/selection_normalizer.go
 
 ```go
 package adapter
@@ -54052,7 +55104,7 @@ func NormalizeSelections(selections []Selection) ([]core.Anchor, error) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/adapter/snapshot.go
+## weaver/adapter/snapshot.go
 
 ```go
 package adapter
@@ -54069,7 +55121,7 @@ type SnapshotProvider interface {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/adapter/snapshot_hash.go
+## weaver/adapter/snapshot_hash.go
 
 ```go
 package adapter
@@ -54097,7 +55149,7 @@ func computeSnapshotHash(s core.Snapshot) core.SnapshotHash {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/adapter/tmux_adapter.go
+## weaver/adapter/tmux_adapter.go
 
 ```go
 package adapter
@@ -54175,7 +55227,7 @@ func (p *NoopProjection) Verify(pre core.Snapshot, facts []core.ResolvedFact, po
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/adapter/tmux_physical.go
+## weaver/adapter/tmux_physical.go
 
 ```go
 package adapter
@@ -54664,7 +55716,7 @@ func PerformPhysicalRawInsert(text, targetPane string) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/adapter/tmux_projection.go
+## weaver/adapter/tmux_projection.go
 
 ```go
 package adapter
@@ -54920,7 +55972,7 @@ func detectProjectionConflicts(facts []core.ResolvedFact) error {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/adapter/tmux_reality.go
+## weaver/adapter/tmux_reality.go
 
 ```go
 package adapter
@@ -54939,7 +55991,7 @@ func (r *TmuxRealityReader) ReadCurrent(paneID string) (core.Snapshot, error) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/adapter/tmux_snapshot.go
+## weaver/adapter/tmux_snapshot.go
 
 ```go
 package adapter
@@ -54966,7 +56018,7 @@ func (p *TmuxSnapshotProvider) TakeSnapshot(paneID string) (core.Snapshot, error
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/adapter/tmux_utils.go
+## weaver/adapter/tmux_utils.go
 
 ```go
 package adapter
@@ -55071,7 +56123,7 @@ func TmuxIsVimPane(targetPane string) bool {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/core/allowed_lines.go
+## weaver/core/allowed_lines.go
 
 ```go
 package core
@@ -55095,7 +56147,7 @@ func (s LineIDSet) Contains(id LineID) bool {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/core/core_test.go
+## weaver/core/core_test.go
 
 ```go
 package core
@@ -55226,7 +56278,7 @@ func TestEvidenceMeta(t *testing.T) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/core/evidence.go
+## weaver/core/evidence.go
 
 ```go
 package core
@@ -55298,7 +56350,7 @@ func (l *InMemoryEvidenceLibrary) Traverse(fn func(meta EvidenceMeta) error) err
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/core/evidence_vault.go
+## weaver/core/evidence_vault.go
 
 ```go
 package core
@@ -55487,7 +56539,7 @@ func (l *FileAppenderEvidenceLibrary) rebuildIndex() error {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/core/hash.go
+## weaver/core/hash.go
 
 ```go
 package core
@@ -55520,7 +56572,7 @@ func hashSnapshot(s Snapshot) SnapshotHash {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/core/history.go
+## weaver/core/history.go
 
 ```go
 package core
@@ -55741,7 +56793,7 @@ func (h *InMemoryHistory) CanRedo() bool {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/core/intent_fusion.go
+## weaver/core/intent_fusion.go
 
 ```go
 // package core
@@ -55888,7 +56940,7 @@ func FuseIntents(a, b Intent) Intent {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/core/interfaces.go
+## weaver/core/interfaces.go
 
 ```go
 package core
@@ -56105,7 +57157,7 @@ type Planner interface {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/core/line_hash_verifier.go
+## weaver/core/line_hash_verifier.go
 
 ```go
 package core
@@ -56147,7 +57199,7 @@ func (v *LineHashVerifier) Verify(
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/core/proof_builder.go
+## weaver/core/proof_builder.go
 
 ```go
 package core
@@ -56252,7 +57304,7 @@ func (pb *ProofBuilder) VerifyProof(proof *Proof, tx *Transaction, auditRecord *
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/core/resolved_fact.go
+## weaver/core/resolved_fact.go
 
 ```go
 package core
@@ -56282,7 +57334,7 @@ type ResolvedFact struct {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/core/shadow_engine.go
+## weaver/core/shadow_engine.go
 
 ```go
 package core
@@ -57518,7 +58570,7 @@ func convertFactToOp(f ResolvedFact) editor.ResolvedOperation {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/core/snapshot_diff.go
+## weaver/core/snapshot_diff.go
 
 ```go
 package core
@@ -57587,7 +58639,7 @@ func DiffSnapshot(pre, post Snapshot) []SnapshotDiff {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/core/snapshot_types.go
+## weaver/core/snapshot_types.go
 
 ```go
 package core
@@ -57621,7 +58673,7 @@ type CursorPos struct {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/core/take_snapshot.go
+## weaver/core/take_snapshot.go
 
 ```go
 package core
@@ -57667,7 +58719,7 @@ func TakeSnapshot(
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/core/types.go
+## weaver/core/types.go
 
 ```go
 package core
@@ -57930,7 +58982,7 @@ type UndoEntry struct {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/logic/passthrough_resolver.go
+## weaver/logic/passthrough_resolver.go
 
 ```go
 package logic
@@ -58247,7 +59299,7 @@ func findWordRange(line string, x int, around bool) (int, int) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/logic/shell_fact_builder.go
+## weaver/logic/shell_fact_builder.go
 
 ```go
 package logic
@@ -58436,7 +59488,7 @@ func populateMotionMeta(meta map[string]interface{}, intent core.Intent) map[str
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/logic/text_object.go
+## weaver/logic/text_object.go
 
 ```go
 package logic
@@ -58878,7 +59930,7 @@ func expandWhitespace(doc Document, r LocRange) LocRange {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/manager/manager.go
+## weaver/manager/manager.go
 
 ```go
 package manager
@@ -59154,7 +60206,7 @@ func logWeaver(format string, args ...interface{}) {
 
 [⬆ 回到目录](#toc)
 
-## 📄 weaver/manager/manager_test.go
+## weaver/manager/manager_test.go
 
 ```go
 package manager
@@ -59300,5 +60352,5 @@ func TestWeaverManagerProcess(t *testing.T) {
 ---
 ### 📊 最终统计汇总
 - **文件总数:** 245
-- **代码总行数:** 57130
-- **物理总大小:** 1534.20 KB
+- **代码总行数:** 58182
+- **物理总大小:** 1560.54 KB
