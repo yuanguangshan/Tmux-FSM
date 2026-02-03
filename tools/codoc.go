@@ -37,7 +37,8 @@ type Config struct {
 	Verbose        bool
 	Version        bool
 	ShowStats      bool
-	JSONOutput     bool // 输出 JSON 格式
+	JSONOutput     bool   // 输出 JSON 格式
+	AnchorStyle    string // 锚点风格: github (默认), html (兼容性更好)
 }
 
 // FileMetadata 仅存储元数据，不存内容
@@ -220,6 +221,7 @@ func parseFlags() Config {
 	flag.BoolVar(&cfg.Version, "version", false, "Show version")
 	flag.BoolVar(&cfg.ShowStats, "s", false, "Show project statistics")
 	flag.BoolVar(&cfg.JSONOutput, "json", false, "Output in JSON format")
+	flag.StringVar(&cfg.AnchorStyle, "anchor", "github", "Anchor style: github (default), html (max compatibility)")
 
 	flag.Parse()
 
@@ -652,10 +654,30 @@ func detectLanguage(path string) string {
 }
 
 // makeGitHubAnchor 生成符合 GitHub 规范的 Markdown 锚点
-// GitHub 规则：小写化、非字母数字转为 -、连续 - 合并
-func makeGitHubAnchor(s string) string {
+// GitHub 规则：小写化、非字母数字转为 - (但其实是移除)、连续 - 合并
+// style: "github" (strict), "html" (relaxed, with dash)
+func makeAnchor(s string, style string) string {
 	var result strings.Builder
 
+	// 如果是 html 模式，我们保留更多字符以提高可读性，
+	// 因为我们会显式生成 <a name="...">，不用担心渲染器推断
+	if style == "html" {
+		for _, r := range strings.ToLower(s) {
+			if r == ' ' || r == '/' || r == '\\' {
+				result.WriteRune('-')
+			} else if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
+				result.WriteRune(r)
+			}
+		}
+		// 移除多余的连字符
+		res := result.String()
+		for strings.Contains(res, "--") {
+			res = strings.ReplaceAll(res, "--", "-")
+		}
+		return strings.Trim(res, "-")
+	}
+
+	// 默认 github 模式
 	for _, r := range strings.ToLower(s) {
 		if r == ' ' {
 			result.WriteRune('-')
@@ -696,8 +718,8 @@ func writeMarkdownStream(cfg Config, files []FileMetadata, stats Stats) error {
 	fmt.Fprintln(w, "<a name=\"toc\"></a>")
 	fmt.Fprintln(w, "## 📂 扫描目录")
 	for _, file := range files {
-		// 生成符合 GitHub 规范的锚点
-		anchor := makeGitHubAnchor(file.RelPath)
+		// 生成锚点
+		anchor := makeAnchor(file.RelPath, cfg.AnchorStyle)
 		// 目录中保留 Emoji，美观且不影响链接
 		fmt.Fprintf(w, "- [📄 %s](#%s) (%d lines, %.2f KB)\n", file.RelPath, anchor, file.LineCount, float64(file.Size)/1024)
 	}
@@ -710,7 +732,7 @@ func writeMarkdownStream(cfg Config, files []FileMetadata, stats Stats) error {
 			fmt.Printf("\r🚀 写入进度: %d/%d (%.1f%%)", i+1, total, float64(i+1)/float64(total)*100)
 		}
 
-		if err := copyFileContent(w, file); err != nil {
+		if err := copyFileContent(w, file, cfg); err != nil {
 			logf(true, "\n⚠ 读取失败 %s: %v", file.RelPath, err)
 			continue
 		}
@@ -727,7 +749,7 @@ func writeMarkdownStream(cfg Config, files []FileMetadata, stats Stats) error {
 	return w.Flush()
 }
 
-func copyFileContent(w *bufio.Writer, file FileMetadata) error {
+func copyFileContent(w *bufio.Writer, file FileMetadata, cfg Config) error {
 	src, err := os.Open(file.FullPath)
 	if err != nil {
 		return err
@@ -735,10 +757,17 @@ func copyFileContent(w *bufio.Writer, file FileMetadata) error {
 	defer src.Close()
 
 	lang := detectLanguage(file.RelPath)
+	anchor := makeAnchor(file.RelPath, cfg.AnchorStyle)
 
 	fmt.Fprintln(w)
-	// 标题中移除 Emoji，避免 ID 生成出现不可控前缀（如 -toolscodocgo）
-	fmt.Fprintf(w, "## %s\n\n", file.RelPath)
+	// 标题中移除 Emoji
+	if cfg.AnchorStyle == "html" {
+		// HTML 兼容模式：显式注入 HTML Anchor
+		fmt.Fprintf(w, "## %s <a name=\"%s\"></a>\n\n", file.RelPath, anchor)
+	} else {
+		// 默认模式：依赖渲染器自动生成 ID
+		fmt.Fprintf(w, "## %s\n\n", file.RelPath)
+	}
 	// anchor 由 GitHub 自动生成（emoji 不参与）
 	fmt.Fprintf(w, "```%s\n", lang)
 
