@@ -39,7 +39,13 @@ mkdir -p "$INSTALL_DIR"
 
 # -------- 编译 --------
 echo "📦 正在本地编译..."
-go build -o codoc_new codoc.go
+# 尝试获取 git hash，如果失败则使用 current
+GIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "current")
+BUILD_DATE=$(date +%Y%m%d)
+# 注入版本信息 (main.versionStr 必须是 var 且原本在 main 包中)
+GO_LDFLAGS="-X main.versionStr=v2.1.0-${BUILD_DATE}-${GIT_HASH}"
+
+go build -ldflags "${GO_LDFLAGS}" -o codoc_new codoc.go
 
 # -------- 安装主程序 --------
 echo "📥 正在安装到 $INSTALL_DIR/codoc ..."

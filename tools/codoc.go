@@ -22,7 +22,7 @@ import (
 ====================================================
 */
 
-const versionStr = "v2.1.0"
+var versionStr = "v2.1.0"
 
 // Config 集中管理配置
 type Config struct {
@@ -214,13 +214,18 @@ func parseFlags() Config {
 	flag.StringVar(&excludeMatch, "xm", "", "Exclude path keywords (e.g. vendor/,node_modules/)")
 	flag.Int64Var(&maxKB, "max-size", 500, "Max file size in KB")
 	flag.BoolVar(&cfg.NoSubdirs, "no-subdirs", false, "Do not scan subdirectories")
-	flag.BoolVar(&cfg.NoSubdirs, "ns", false, "Alias for --no-subdirs")
+	var nsAlias bool
+	flag.BoolVar(&nsAlias, "ns", false, "Alias for --no-subdirs")
 	flag.BoolVar(&cfg.Verbose, "v", false, "Verbose output")
 	flag.BoolVar(&cfg.Version, "version", false, "Show version")
 	flag.BoolVar(&cfg.ShowStats, "s", false, "Show project statistics")
 	flag.BoolVar(&cfg.JSONOutput, "json", false, "Output in JSON format")
 
 	flag.Parse()
+
+	if nsAlias {
+		cfg.NoSubdirs = true
+	}
 
 	if cfg.Version {
 		fmt.Printf("codoc %s\n", versionStr)
@@ -230,6 +235,15 @@ func parseFlags() Config {
 	// 支持位置参数
 	if args := flag.Args(); len(args) > 0 {
 		cfg.RootDir = args[0]
+	}
+
+	cfg.RootDir, _ = filepath.Abs(cfg.RootDir)
+
+	// JSON 输出时修正默认输出行为
+	if cfg.JSONOutput {
+		if cfg.OutputFile != "" && strings.HasSuffix(cfg.OutputFile, ".md") {
+			cfg.OutputFile = strings.TrimSuffix(cfg.OutputFile, ".md") + ".json"
+		}
 	}
 
 	// 自动生成输出文件名
@@ -255,7 +269,11 @@ func parseFlags() Config {
 		}
 
 		date := time.Now().Format("20060102")
-		cfg.OutputFile = fmt.Sprintf("%s-%s-codoc.md", baseName, date)
+		ext := "md"
+		if cfg.JSONOutput {
+			ext = "json"
+		}
+		cfg.OutputFile = fmt.Sprintf("%s-%s-codoc.%s", baseName, date, ext)
 	}
 
 	cfg.IncludeExts = normalizeExts(include)
@@ -556,7 +574,7 @@ func shouldIgnoreDir(name string) bool {
 		return true
 	}
 	for _, pattern := range defaultIgnorePatterns {
-		if name == pattern {
+		if strings.Contains(name, pattern) {
 			return true
 		}
 	}
@@ -588,8 +606,9 @@ func normalizeExts(input string) []string {
 }
 
 func isBinaryFile(path string) bool {
-	// 快速路径 1: 压缩文件
-	if strings.Contains(path, ".min.") {
+	// 快速路径 1: 压缩文件 (仅匹配 .min.js, .min.css 等常见后缀)
+	// 避免误伤 admin.go, terminal.py 等
+	if strings.HasSuffix(path, ".min.js") || strings.HasSuffix(path, ".min.css") || strings.HasSuffix(path, ".min.html") {
 		return true
 	}
 
@@ -609,7 +628,7 @@ func isBinaryFile(path string) bool {
 	buf := make([]byte, 512)
 	n, err := f.Read(buf)
 	if err != nil && err != io.EOF {
-		return false
+		return true // 读取错误时保守处理，视为二进制（或者跳过）
 	}
 	buf = buf[:n]
 
@@ -683,7 +702,7 @@ func writeMarkdownStream(cfg Config, files []FileMetadata, stats Stats) error {
 	for _, file := range files {
 		// 生成符合 GitHub 规范的锚点
 		anchor := makeGitHubAnchor(file.RelPath)
-		fmt.Fprintf(w, "- [%s](#📄-%s) (%d lines, %.2f KB)\n", file.RelPath, anchor, file.LineCount, float64(file.Size)/1024)
+		fmt.Fprintf(w, "- [%s](#%s) (%d lines, %.2f KB)\n", file.RelPath, anchor, file.LineCount, float64(file.Size)/1024)
 	}
 	fmt.Fprintln(w, "\n---")
 
@@ -722,14 +741,15 @@ func copyFileContent(w *bufio.Writer, file FileMetadata) error {
 
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "## 📄 %s\n\n", file.RelPath)
-	fmt.Fprintf(w, "````%s\n", lang)
+	// anchor 由 GitHub 自动生成（emoji 不参与）
+	fmt.Fprintf(w, "```%s\n", lang)
 
 	// 使用 io.Copy 替代 scanner，更安全且不限行长
 	if _, err := io.Copy(w, src); err != nil {
 		return err
 	}
 
-	fmt.Fprintln(w, "\n````")
+	fmt.Fprintln(w, "\n```")
 	fmt.Fprintln(w, "\n[⬆ 回到目录](#toc)")
 	return nil
 }
@@ -843,6 +863,11 @@ func showProjectStats(cfg Config) error {
 
 		info, err := d.Info()
 		if err != nil {
+			return nil
+		}
+
+		// 统计时也必须遵循 include / exclude 规则
+		if !shouldIncludeFile(relPath, &cfg) {
 			return nil
 		}
 
@@ -984,4 +1009,39 @@ func showProjectStats(cfg Config) error {
 	fmt.Println("=" + strings.Repeat("=", 70))
 
 	return nil
+}
+
+// shouldIncludeFile 判断文件是否应被纳入处理（stats / markdown / json 共用）
+func shouldIncludeFile(path string, cfg *Config) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+
+	if len(cfg.IncludeExts) > 0 && !contains(cfg.IncludeExts, ext) {
+		return false
+	}
+	if contains(cfg.ExcludeExts, ext) {
+		return false
+	}
+	for _, m := range cfg.ExcludeMatches {
+		if strings.Contains(path, m) {
+			return false
+		}
+	}
+	if len(cfg.IncludeMatches) > 0 {
+		for _, m := range cfg.IncludeMatches {
+			if strings.Contains(path, m) {
+				return true
+			}
+		}
+		return false
+	}
+	return true
+}
+
+func contains(list []string, v string) bool {
+	for _, s := range list {
+		if s == v {
+			return true
+		}
+	}
+	return false
 }
