@@ -1,3 +1,19 @@
+# Project Documentation
+
+- **Generated at:** 2026-02-03 11:43:15
+- **Root Dir:** `/Users/ygs/ygs/Tmux-FSM/tools`
+- **File Count:** 1
+- **Total Size:** 26.10 KB
+
+<a name="toc"></a>
+## 📂 扫描目录
+- [📄 codoc.go](#codocgo) (1045 lines, 26.10 KB)
+
+---
+
+## codoc.go
+
+```go
 package main
 
 import (
@@ -1043,3 +1059,13 @@ func contains(list []string, v string) bool {
 	}
 	return false
 }
+
+```
+
+[⬆ 回到目录](#toc)
+
+---
+### 📊 最终统计汇总
+- **文件总数:** 1
+- **代码总行数:** 1045
+- **物理总大小:** 26.10 KB
