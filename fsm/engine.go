@@ -357,6 +357,13 @@ func GetDefaultEngine() *Engine {
 }
 
 // GetCount 获取当前计数
+// ResetCount 清零计数器（2026-09-06 M1.2 修复）：
+// 一次完整意图被消化后由 Kernel 调用。此前 count 只在未知键和
+// Reset 时清零——"3j" 之后再按 "0" 会被拼成 count=30，状态栏残留。
+func (e *Engine) ResetCount() {
+	e.count = 0
+}
+
 func (e *Engine) GetCount() int {
 	return e.count
 }

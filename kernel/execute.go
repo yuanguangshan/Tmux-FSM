@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 	"tmux-fsm/backend"
+	"tmux-fsm/fsm"
 )
 
 // Execute a decision made by the kernel.
@@ -45,6 +46,10 @@ func (k *Kernel) Execute(hctx HandleContext, decision *Decision) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			_ = ctxExec.ProcessWithContext(ctx, hctx, decision.Intent)
+			// M1.2：意图已完整消化，清零 FSM 侧计数（单一来源在 Grammar 侧）
+			if k.FSM != nil {
+				k.FSM.ResetCount()
+			}
 			return
 		}
 		_ = k.Exec.Process(decision.Intent)
@@ -64,6 +69,14 @@ func (k *Kernel) Execute(hctx HandleContext, decision *Decision) {
 
 // executeFSMAction 执行 FSM 动作，通过适当的后端
 func executeFSMAction(action string) {
+	// M1.1 修复（P0-1）：exit 是生命周期动作，必须走 fsm.ExitFSM()
+	// （解除 key-table + 持久化状态）。此前 getTmuxCommandForAction("exit")
+	// 返回空串、stdout 又被守护进程丢弃，q 键形同虚设。
+	if action == "exit" {
+		fsm.ExitFSM()
+		return
+	}
+
 	// 根据动作类型执行相应的 tmux 命令
 	cmd := getTmuxCommandForAction(action)
 	if cmd != "" {
