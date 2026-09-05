@@ -243,8 +243,13 @@ func (e *Engine) Dispatch(key string) (string, bool) {
 		return "", true
 	}
 
-	e.count = 0
-	return "", false
+	// M1.3 修复（P0-3）：keymap 未声明的键不再静默蒸发。
+	// 此处发 TokenKey 交给 Grammar 判定语法归属——f/t/F/T 的查找目标、
+	// 文本对象的 i/a 与引号/括号等都靠这条通路进入语法层；
+	// Grammar 不认识时会自行重置 pendingOp。计数生命周期已收敛到
+	// M1.2 的 ResetCount（意图派发后清零），不再在此处逃逸式清零。
+	e.emitInternal(RawToken{Kind: TokenKey, Value: key})
+	return "", true
 }
 
 // isDigit 检查字符串是否为单个数字字符
