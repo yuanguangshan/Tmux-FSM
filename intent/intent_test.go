@@ -113,7 +113,7 @@ func TestIntentWithOperator(t *testing.T) {
 // TestIntentWithEmptyOperator 测试空Operator的意图
 func TestIntentWithEmptyOperator(t *testing.T) {
 	intent := Intent{
-		Kind: IntentMove,
+		Kind:  IntentMove,
 		Count: 1,
 	}
 

@@ -80,7 +80,7 @@ func (k *Kernel) HandleKey(hctx HandleContext, key string) {
 	log.Printf("Handling key: RequestID=%s, ActorID=%s, Key=%s", requestID, actorID, key)
 
 	decision := k.Decide(key)
-	k.Execute(decision)
+	k.Execute(hctx, decision)
 
 	// --- Shadow Intent Coverage Stats ---
 	if k.ShadowIntent {

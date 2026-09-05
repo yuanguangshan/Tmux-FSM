@@ -1,3 +1,9 @@
+//go:build ignore
+
+// Codoc v2.1.0 —— 旧代文档生成器（已被 gen-docs.go v3.1.0 取代）。
+// 两者曾同居于 package main 造成 versionStr/Config 重复声明、整包编译失败。
+// 以 build tag `ignore` 保留源码备查；如需启用：go run gen-docs 时代的
+// 方式改为移除本行上方的 build tag 并隔离 gen-docs.go。
 package main
 
 import (

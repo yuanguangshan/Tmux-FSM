@@ -83,7 +83,7 @@ func TestConvertToCoreIntent(t *testing.T) {
 	coreIntent := convertToCoreIntent(originalIntent)
 
 	if coreIntent.GetKind() != core.IntentKind(intent.IntentDelete) {
-		t.Errorf("Expected converted intent kind to be %d, got %d", 
+		t.Errorf("Expected converted intent kind to be %d, got %d",
 			core.IntentKind(intent.IntentDelete), coreIntent.GetKind())
 	}
 

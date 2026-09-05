@@ -113,7 +113,7 @@ func TestFSMStateJSONSerialization(t *testing.T) {
 	}
 
 	if newState.Cursor.Row != originalState.Cursor.Row || newState.Cursor.Col != originalState.Cursor.Col {
-		t.Errorf("Expected Cursor to be {%d, %d}, got {%d, %d}", 
+		t.Errorf("Expected Cursor to be {%d, %d}, got {%d, %d}",
 			originalState.Cursor.Row, originalState.Cursor.Col,
 			newState.Cursor.Row, newState.Cursor.Col)
 	}
@@ -185,22 +185,22 @@ func TestLoadStateDefault(t *testing.T) {
 func TestSaveFSMState(t *testing.T) {
 	// 保存当前状态
 	originalState := globalState
-	
+
 	// 设置一些测试值
 	testState := FSMState{
-		Mode:     "TEST",
-		Count:    42,
-		Cursor:   Cursor{Row: 10, Col: 20},
+		Mode:   "TEST",
+		Count:  42,
+		Cursor: Cursor{Row: 10, Col: 20},
 	}
-	
+
 	globalState = testState
-	
+
 	// 调用保存函数（这会尝试保存到tmux，但测试中可能失败，这是正常的）
 	saveFSMState()
-	
+
 	// 恢复原始状态
 	globalState = originalState
-	
+
 	// 我们只是确保函数不panic
 }
 
@@ -222,10 +222,10 @@ func TestUpdateStatusBar(t *testing.T) {
 		Count:    5,
 		Operator: "delete",
 	}
-	
+
 	// 调用更新状态栏函数
 	// 在测试环境中，这可能会失败，但不应该panic
 	updateStatusBar(state, "test-client")
-	
+
 	// 我们只是确保函数不panic
 }

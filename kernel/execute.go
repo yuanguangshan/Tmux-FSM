@@ -1,13 +1,19 @@
 package kernel
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"strings"
+	"time"
 	"tmux-fsm/backend"
 )
 
 // Execute a decision made by the kernel.
-func (k *Kernel) Execute(decision *Decision) {
+// hctx 携带 RequestID/ActorID——ActorID 用于在边界注入 PaneID
+// （Grammar 永不产生 PaneID），此前该值未传到这里，
+// 导致 weaver 路径的 intent.PaneID 恒为空。
+func (k *Kernel) Execute(hctx HandleContext, decision *Decision) {
 	if decision == nil {
 		log.Println("kernel.Execute called with nil decision")
 		return
@@ -24,9 +30,21 @@ func (k *Kernel) Execute(decision *Decision) {
 
 	case DecisionIntent:
 		// This is a full-fledged intent from the grammar.
-		// Process it via the standard execution path.
-		if decision.Intent == nil {
-			log.Println("DecisionIntent without an intent")
+		// 优先走上下文路径：执行器能拿到 RequestID/ActorID，
+		// 并在边界完成 PaneID 注入；否则回退无上下文 Process。
+
+		// PaneID 边界注入（Kernel 职责，与 legacy ProcessIntent 对齐）：
+		// Grammar 永不产生 PaneID；ActorID 格式 "paneID|clientName"。
+		if decision.Intent != nil && decision.Intent.PaneID == "" && hctx.ActorID != "" {
+			if parts := strings.SplitN(hctx.ActorID, "|", 2); len(parts) > 0 {
+				decision.Intent.PaneID = parts[0]
+			}
+		}
+
+		if ctxExec, ok := k.Exec.(ContextualIntentExecutor); ok {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = ctxExec.ProcessWithContext(ctx, hctx, decision.Intent)
 			return
 		}
 		_ = k.Exec.Process(decision.Intent)

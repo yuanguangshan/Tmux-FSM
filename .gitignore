@@ -7,3 +7,8 @@ start-claude-proxy.sh
 tools/gd
 .ai/context.json
 session-*.md
+chat.txt
+Users_ygs_ygs_Tmux-FSM-*.md
+*.log
+.DS_Store
+tmux-fsm

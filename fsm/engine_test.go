@@ -73,9 +73,9 @@ func TestEngineDispatchBasic(t *testing.T) {
 	engine.AddEmitter(mockEmitter)
 
 	// 测试基本按键
-	result := engine.Dispatch("h")
-	if !result {
-		t.Error("Expected dispatch to return true for valid key")
+	_, handled := engine.Dispatch("h")
+	if !handled {
+		t.Error("Expected dispatch to report handled for valid key")
 	}
 
 	if len(mockEmitter.receivedTokens) != 1 {
@@ -118,9 +118,9 @@ func TestEngineDispatchLayerSwitch(t *testing.T) {
 	}
 
 	// 分发 'f' 键，应该切换到 GOTO 层
-	result := engine.Dispatch("f")
-	if !result {
-		t.Error("Expected dispatch to return true for layer switch key")
+	_, handled := engine.Dispatch("f")
+	if !handled {
+		t.Error("Expected dispatch to report handled for layer switch key")
 	}
 
 	if engine.Active != "GOTO" {
@@ -332,10 +332,10 @@ func TestEngineRepeat(t *testing.T) {
 	mockEmitter := &MockRawTokenEmitter{}
 	engine.AddEmitter(mockEmitter)
 
-	// 分发 '.' 键
-	result := engine.Dispatch(".")
-	if !result {
-		t.Error("Expected dispatch to return true for repeat key")
+	// 分发 '.' 键：新签名返回 (action, handled)，repeat 时 action=="repeat"
+	action, handled := engine.Dispatch(".")
+	if !handled || action != "repeat" {
+		t.Errorf("Expected repeat handled with action=repeat, got %q/%v", action, handled)
 	}
 
 	if len(mockEmitter.receivedTokens) != 1 {
@@ -366,10 +366,16 @@ func TestEngineRunAction(t *testing.T) {
 
 	engine := NewEngine(&km)
 
-	// 测试 exit 动作
-	// 注意：这里我们不能真正测试 ExitFSM 的效果，因为它会影响全局状态
-	// 所以我们只是验证方法被调用不会崩溃
-	engine.RunAction("exit")
+	// 测试 exit 动作：Engine 层只负责把 action 报出去（"exit"），
+	// 真正执行退出的 kernel.executeAction → fsm.ExitFSM() 在 kernel 层，
+	// 因此这里验证的是"按键被处理且 action 正确上报"。
+	action, handled := engine.Dispatch("x")
+	if !handled {
+		t.Fatal("Expected x to be handled")
+	}
+	if action != "exit" {
+		t.Errorf("action = %q, want exit", action)
+	}
 }
 
 // TestEngineGetCount 测试获取计数
