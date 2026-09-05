@@ -5,7 +5,7 @@
 > IN_PROGRESS 协议：开始任务前把「当前任务」行填上；完成后清空。
 > 若本轮读取时发现 IN_PROGRESS 已挂 25 分钟以上，视为上轮中断，可直接接手。
 
-当前任务: （无——等待下一轮 cron 领取 M1.4）
+当前任务: （无——等待下一轮 cron 领取 M1.6）
 当前里程碑: M1
 
 ## 任务队列状态
@@ -19,8 +19,8 @@
 - [x] M1.1 exit 死路
 - [x] M1.2 计数器生命周期
 - [x] M1.3 未知键透传 Grammar
-- [ ] M1.4 Direction 元数据
-- [ ] M1.5 f/t/F/T 目标字符
+- [x] M1.4 Direction 元数据
+- [x] M1.5 f/t/F/T 目标字符
 - [ ] M1.6 M1 验收（端到端回归）
 - [ ] M2.1 HandleKey 串行化 + race 测试
 - [ ] M2.2 daemon 单实例 Flock
@@ -51,6 +51,9 @@
   fsm.ExitFSM + plugin.tmux 剔除 q 循环绑定）；ResetCount + Kernel 意图派发后清零计数。
 - 2026-09-06 06:4x M1.3（dispatch 透传）：keymap 未声明键发 TokenKey 交 Grammar；
   新增 ciw/dfa/d2fb 端到端回归 3 条全过。
+- 2026-09-06 07:0x M1.4+M1.5：grammar 双 switch 补 w/b/e/ge 方向与 G/gg 区分；
+  promote 补 word_forward/backward 与 end_of_file/start_of_file 映射；
+  新增 dw/db/dG/dt meta 断言 4 条。
 
 ## 日志
 
