@@ -144,7 +144,7 @@ func TestM13_TillMotion_DT(t *testing.T) {
 		t.Fatal("dt a 应产生 Intent")
 	}
 	meta := exec.CapturedIntent.Meta
-	if got, _ := meta["motion"].(string); got != "find_char_before" {
+	if got, _ := meta["motion"].(string); got != "find_char_before_forward" {
 		t.Errorf("dt meta[motion] = %v, want find_char_before", got)
 	}
 }
