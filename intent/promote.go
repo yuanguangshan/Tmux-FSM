@@ -1,5 +1,7 @@
 package intent
 
+import "log"
+
 // Promote 是 GrammarIntent → Intent 的唯一合法通道
 // Grammar 不允许直接构造 Intent
 func Promote(g *GrammarIntent) *Intent {
@@ -55,10 +57,15 @@ func populateLegacyMotionMeta(meta map[string]interface{}, motion *Motion) {
 			motionStr = "down"
 		}
 	case MotionWord:
+		// M1.4：补 DirectionNone 兜底并显式告警（此前 None → meta 缺失 →
+		// 物理层静默退化 default 发 M-d，语义无声漂移）
 		switch motion.Direction {
 		case DirectionLeft:
 			motionStr = "word_backward"
-		case DirectionRight:
+		default:
+			if motion.Direction != DirectionRight {
+				log.Printf("[PROMOTE][WARN] MotionWord direction=%v 未映射，按向前处理", motion.Direction)
+			}
 			motionStr = "word_forward"
 		}
 	case MotionLine:
@@ -71,20 +78,17 @@ func populateLegacyMotionMeta(meta map[string]interface{}, motion *Motion) {
 			motionStr = "line"
 		}
 	case MotionGoto:
+		// M1.4：grammar 现在为 G/gg 设置 Down/Up 方向，精准映射文件尾/头
 		switch motion.Direction {
-		case DirectionLeft:
-			motionStr = "goto_line_start"
-		case DirectionRight:
-			motionStr = "goto_line_end"
+		case DirectionDown:
+			motionStr = "end_of_file"
+		case DirectionUp:
+			motionStr = "start_of_file"
 		default:
-			// gg or G
 			if motion.Count > 1 {
-				motionStr = "goto_line" // Not fully supported yet?
+				motionStr = "goto_line" // Ngg/N G 尚未完全支持
 			} else {
-				// Assuming if no count and goto, it is gg/G?
-				// Grammar sets MotionGoto but doesn't set direction for gg/G
-				// TmuxPhysical expects start_of_file/end_of_file
-				// For now let's leave it as is or handle in next step
+				motionStr = "start_of_file" // 无方向时按 gg（文件头）处理
 			}
 		}
 	case MotionFind:

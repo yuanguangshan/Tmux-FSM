@@ -293,8 +293,21 @@ func makeMoveGrammarIntent(m intentPkg.MotionKind, count int, key string) *inten
 	case "$":
 		motion.Kind = intentPkg.MotionRange
 		motion.Range = &intentPkg.RangeMotion{Kind: intentPkg.RangeLineEnd}
-	case "G", "gg":
+	// M1.4：词级 motion 的 Direction 元数据（此前缺失 → promote 层
+	// meta["motion"] 为空 → 下游全部退化 default 发 M-d）
+	case "w", "e":
+		motion.Direction = intentPkg.DirectionRight // w=词首向前 / e=词尾向前（readline M-d 同向）
+	case "b":
+		motion.Direction = intentPkg.DirectionLeft // 上一词首（readline C-w 同向）
+	case "ge":
+		motion.Direction = intentPkg.DirectionLeft // 近似：上一词尾（readline 无精确对应）
+	// M1.4：G 与 gg 方向区分（此前同码，dG/gg 语义无法区分）
+	case "G":
 		motion.Kind = intentPkg.MotionGoto
+		motion.Direction = intentPkg.DirectionDown // 文件尾
+	case "gg":
+		motion.Kind = intentPkg.MotionGoto
+		motion.Direction = intentPkg.DirectionUp // 文件头
 	case "H", "M", "L":
 		motion.Kind = intentPkg.MotionLine
 	}
@@ -329,8 +342,21 @@ func makeOpMotionGrammarIntent(op intentPkg.OperatorKind, m intentPkg.MotionKind
 	case "$":
 		motion.Kind = intentPkg.MotionRange
 		motion.Range = &intentPkg.RangeMotion{Kind: intentPkg.RangeLineEnd}
-	case "G", "gg":
+	// M1.4：词级 motion 的 Direction 元数据（此前缺失 → promote 层
+	// meta["motion"] 为空 → 下游全部退化 default 发 M-d）
+	case "w", "e":
+		motion.Direction = intentPkg.DirectionRight // w=词首向前 / e=词尾向前（readline M-d 同向）
+	case "b":
+		motion.Direction = intentPkg.DirectionLeft // 上一词首（readline C-w 同向）
+	case "ge":
+		motion.Direction = intentPkg.DirectionLeft // 近似：上一词尾（readline 无精确对应）
+	// M1.4：G 与 gg 方向区分（此前同码，dG/gg 语义无法区分）
+	case "G":
 		motion.Kind = intentPkg.MotionGoto
+		motion.Direction = intentPkg.DirectionDown // 文件尾
+	case "gg":
+		motion.Kind = intentPkg.MotionGoto
+		motion.Direction = intentPkg.DirectionUp // 文件头
 	case "H", "M", "L":
 		motion.Kind = intentPkg.MotionLine
 	}

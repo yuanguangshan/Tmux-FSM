@@ -88,3 +88,63 @@ func TestM13_CountedFindMotion(t *testing.T) {
 		t.Errorf("Count = %d, want 2", exec.CapturedIntent.Count)
 	}
 }
+
+// M1.4 回归：词级 motion 必须携带 Direction → promote 层映射 meta["motion"]
+func TestM14_WordMotionMeta(t *testing.T) {
+	k, exec := newM1Kernel(t)
+	pressKey(k, "d")
+	pressKey(k, "w")
+
+	if exec.CapturedIntent == nil {
+		t.Fatal("dw 应产生 Intent")
+	}
+	meta := exec.CapturedIntent.Meta
+	if got, _ := meta["motion"].(string); got != "word_forward" {
+		t.Errorf("dw meta[motion] = %v, want word_forward", got)
+	}
+}
+
+func TestM14_WordBackwardMeta(t *testing.T) {
+	k, exec := newM1Kernel(t)
+	pressKey(k, "d")
+	pressKey(k, "b")
+
+	if exec.CapturedIntent == nil {
+		t.Fatal("db 应产生 Intent")
+	}
+	meta := exec.CapturedIntent.Meta
+	if got, _ := meta["motion"].(string); got != "word_backward" {
+		t.Errorf("db meta[motion] = %v, want word_backward", got)
+	}
+}
+
+// M1.4 回归：G/gg 方向区分——dG 应删到文件尾（此前 gg/G 同码、meta 为空）
+func TestM14_GotoMeta(t *testing.T) {
+	k, exec := newM1Kernel(t)
+	pressKey(k, "d")
+	pressKey(k, "G")
+
+	if exec.CapturedIntent == nil {
+		t.Fatal("dG 应产生 Intent")
+	}
+	meta := exec.CapturedIntent.Meta
+	if got, _ := meta["motion"].(string); got != "end_of_file" {
+		t.Errorf("dG meta[motion] = %v, want end_of_file", got)
+	}
+}
+
+// M1.5 回归：till 变体（dt→find_char_before）——此前目标字符被吞
+func TestM13_TillMotion_DT(t *testing.T) {
+	k, exec := newM1Kernel(t)
+	pressKey(k, "d")
+	pressKey(k, "t")
+	pressKey(k, "a")
+
+	if exec.CapturedIntent == nil {
+		t.Fatal("dt a 应产生 Intent")
+	}
+	meta := exec.CapturedIntent.Meta
+	if got, _ := meta["motion"].(string); got != "find_char_before" {
+		t.Errorf("dt meta[motion] = %v, want find_char_before", got)
+	}
+}
