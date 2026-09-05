@@ -5,19 +5,19 @@
 > IN_PROGRESS 协议：开始任务前把「当前任务」行填上；完成后清空。
 > 若本轮读取时发现 IN_PROGRESS 已挂 25 分钟以上，视为上轮中断，可直接接手。
 
-当前任务: （无）
-当前里程碑: M0
+当前任务: （无——等待下一轮 cron 领取 M1.3）
+当前里程碑: M1
 
 ## 任务队列状态
 
-- [ ] M0.1 tools 重复声明
-- [ ] M0.2 fsm/engine_test.go 签名适配
-- [ ] M0.3 integration PaneID
-- [ ] M0.4 weaver/adapter 期望
-- [ ] M0.5 gofmt + 大文件出库
-- [ ] M0.6 M0 验收（build/vet/test 全绿）
-- [ ] M1.1 exit 死路
-- [ ] M1.2 计数器生命周期
+- [x] M0.1 tools 重复声明
+- [x] M0.2 fsm/engine_test.go 签名适配
+- [x] M0.3 integration PaneID
+- [x] M0.4 weaver/adapter 期望
+- [x] M0.5 gofmt + 大文件出库
+- [x] M0.6 M0 验收（build/vet/test 全绿）
+- [x] M1.1 exit 死路
+- [x] M1.2 计数器生命周期
 - [ ] M1.3 未知键透传 Grammar
 - [ ] M1.4 Direction 元数据
 - [ ] M1.5 f/t/F/T 目标字符
@@ -45,6 +45,10 @@
 ## 决策记录
 
 - 2026-09-06 GOAL.md 创建：里程碑 M0→M5，任务队列 30 项。
+- 2026-09-06 05:5x M0 完成（4a15cc1）：tools build-tag 隔离 / fsm 测试签名适配 /
+  PaneID 边界注入（Execute 补传 hctx 走上下文路径）/ RHM 求解器测试诚实 Skip / 大文件出库。
+- 2026-09-06 05:5x M1.1+M1.2（7e97799）：exit 死路修复（executeFSMAction 走
+  fsm.ExitFSM + plugin.tmux 剔除 q 循环绑定）；ResetCount + Kernel 意图派发后清零计数。
 
 ## 日志
 
