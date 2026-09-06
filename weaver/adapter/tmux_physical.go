@@ -139,6 +139,12 @@ func PerformPhysicalDelete(motion string, targetPane string) {
 	if targetPane == "default" || targetPane == "{current}" {
 		targetPane = ""
 	}
+	// M4.5：文本对象字符串（inner_X / around_X）路由到专用的
+	// 光标数学实现；普通 motion 走下方 switch
+	if strings.HasPrefix(motion, "inner_") || strings.HasPrefix(motion, "around_") {
+		PerformPhysicalTextObject("delete", motion, targetPane)
+		return
+	}
 	// 首先取消任何现有的选择
 	exec.Command("tmux", "send-keys", "-t", targetPane, "-X", "cancel").Run()
 

@@ -30,9 +30,45 @@ func Promote(g *GrammarIntent) *Intent {
 	// Operator 提升（强类型）
 	if g.Op != nil {
 		i.Operator = g.Op
+		// M4.5：操作名进入 meta——weaver 投影的 change 分支据此
+		// 在删除后进入插入模式
+		switch *g.Op {
+		case OpDelete:
+			meta["operation"] = "delete"
+		case OpYank:
+			meta["operation"] = "yank"
+		case OpChange:
+			meta["operation"] = "change"
+		}
 	}
 
 	return i
+}
+
+// textObjectSpec 生成物理层可匹配的规范名：
+// inner_X / around_X（X ∈ word/paren/bracket/brace/quote_double/quote_single/quote_backtick）
+func textObjectSpec(scope TextObjectScope, object TextObjectKind) string {
+	prefix := "inner_"
+	if scope == Around {
+		prefix = "around_"
+	}
+	switch object {
+	case Word:
+		return prefix + "word"
+	case Paren:
+		return prefix + "paren"
+	case Bracket:
+		return prefix + "bracket"
+	case Brace:
+		return prefix + "brace"
+	case QuoteSingle:
+		return prefix + "quote_single"
+	case QuoteDouble:
+		return prefix + "quote_double"
+	case Backtick:
+		return prefix + "quote_backtick"
+	}
+	return prefix + "unknown"
 }
 
 // populateLegacyMotionMeta 将强类型的 Motion 结构转换为遗留的 Meta 字段
@@ -114,6 +150,12 @@ func populateLegacyMotionMeta(meta map[string]interface{}, motion *Motion) {
 				motionStr = "goto_line_start"
 			case RangeLineEnd:
 				motionStr = "goto_line_end"
+			case RangeTextObject:
+				// M4.5：文本对象的元数据桥接——物理层
+				// PerformPhysicalTextObject 按 Contains 匹配这些 canonical 名
+				if to := motion.Range.TextObject; to != nil {
+					meta["text_object"] = textObjectSpec(to.Scope, to.Object)
+				}
 			}
 		}
 	}
