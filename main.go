@@ -404,21 +404,55 @@ func (s *Server) handleClient(conn net.Conn) {
 				RequestID: requestID,
 				ActorID:   actorID,
 			}
-			// M2.1：按键经串行队列处理（单一 worker 消除并发竞态）
-			s.keyQueue <- func() { kernelInstance.HandleKey(hctx, key) }
+			// ── M3.1 性能重构：整段 post-key 同步移入串行队列 ──
+			// （修复 M2.1 遗留：状态栏同步此前在 HandleKey 入队后立即执行，
+			//   与 worker 内的处理存在时序竞争；移入后顺序有保证）
+			// 每键 tmux 往返从 11-13 次削减：
+			//   - loadState 的 GetUserOption 往返删除（daemon 内存即真相）
+			//   - reconcileFSMState 只在层变化/退出候选键时执行
+			//   - UpdateUI 的 3 次 exec 已在 M2.4 消除
+			done := make(chan struct{})
+			var layerChanged bool
+			s.keyQueue <- func() {
+				before := ""
+				if kernelInstance.FSM != nil {
+					before = kernelInstance.FSM.ActiveState()
+				}
+				kernelInstance.HandleKey(hctx, key)
+				after := ""
+				if kernelInstance.FSM != nil {
+					after = kernelInstance.FSM.ActiveState()
+				}
+				layerChanged = after != before
+				close(done)
+			}
+			<-done
 
-			// M2.5 修正（取代错误的进程内 FSMActive 判定）：
-			// 以 @fsm_active（跨进程真理，EnterFSM/ExitFSM 经全局后端写入）
-			// 判断模态——FSM 已退出时不写状态栏，保持 ExitFSM 的 HideUI
-			// 清理效果；否则此前 post-key 会把状态重写成 "NAV"
+			// M2.5：以 @fsm_active（跨进程真理）判断模态——FSM 已退出时
+			// 不写状态栏，保持 ExitFSM 的 HideUI 清理效果
 			fsmActiveOpt, _ := exec.Command("tmux", "show-option", "-gqv", "@fsm_active").Output()
 			if strings.TrimSpace(string(fsmActiveOpt)) != "1" {
 				fsm.HideUI()
 				return
 			}
 
+			// Extract clientName（reconcile 与状态栏共用）
+			actualClient := clientName
+			if actualClient == "" || actualClient == "default" {
+				parts := strings.Split(actorID, "|")
+				if len(parts) >= 2 {
+					actualClient = parts[1]
+				}
+			}
+
+			// M3.1：reconcile 只在层变化（含 q/Escape 退出候选）时执行
+			if layerChanged || key == "q" {
+				reconcileFSMState(actualClient)
+			}
+
 			// Phase 4.1: Sync State & Refresh UI
-			state := loadState()
+			// M3.1：不再每键从 tmux 选项读回状态（daemon 内存即真相）
+			state := globalState
 			if kernelInstance.FSM != nil {
 				state.Mode = kernelInstance.FSM.Active
 				state.Count = kernelInstance.GetCount()
@@ -429,26 +463,9 @@ func (s *Server) handleClient(conn net.Conn) {
 			globalState = state
 			saveFSMState()
 
-			// Extract clientName again to be sure
-			actualClient := clientName
-			if actualClient == "" || actualClient == "default" {
-				// Try to parse from actorID if it was "pane|client"
-				parts := strings.Split(actorID, "|")
-				if len(parts) >= 2 {
-					actualClient = parts[1]
-				}
-			}
-
 			// Two-Phase FSM Latch: Consistency Check
 			// Phase 6: FSM is now authoritative source of truth for @fsm_active
-			// Reconciliation no longer needed - FSM.FSMActive is the single source of truth
 			updateStatusBar(globalState, actualClient)
-
-			// ✅ FIX: 移除 if fsm.FSMActive 判断
-			// 守护进程内存中的 fsm.FSMActive 可能与实际不一致（因为 -enter 是外部进程执行的）
-			// reconcileFSMState 内部会查询 tmux 变量 @fsm_active，那是唯一的真理来源。
-			// 无条件调用它，让它根据 @fsm_active 的值自动纠正 key-table。
-			reconcileFSMState(actualClient)
 		}
 
 		conn.Write([]byte("ok"))
