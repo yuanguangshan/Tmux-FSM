@@ -3,6 +3,7 @@ package fsm
 import (
 	"log"
 	"strings"
+	"sync"
 	"time"
 	"tmux-fsm/backend"
 	"tmux-fsm/intent"
@@ -125,6 +126,7 @@ func (ea *EngineAdapter) ChangeWithMotion(motion intent.MotionKind, count int) e
 
 // Engine FSM 引擎结构体
 type Engine struct {
+	mu              sync.Mutex // M2.1：保护 Dispatch/Reset/ResetCount 与 layerTimer 回调的互斥（2026-09-06 并发加固）
 	Active          string
 	Keymap          *Keymap
 	layerTimer      *time.Timer
@@ -208,6 +210,9 @@ func (e *Engine) CanHandle(key string) bool {
 }
 
 func (e *Engine) Dispatch(key string) (string, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	if isDigit(key) {
 		if key == "0" && e.count == 0 {
 		} else {
@@ -259,6 +264,9 @@ func isDigit(s string) bool {
 
 // Reset 重置引擎状态到初始层（Invariant 8: Reload = FSM 重生）
 func (e *Engine) Reset() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	if e.layerTimer != nil {
 		e.layerTimer.Stop()
 		e.layerTimer = nil
@@ -365,10 +373,25 @@ func GetDefaultEngine() *Engine {
 // ResetCount 清零计数器（2026-09-06 M1.2 修复）：
 // 一次完整意图被消化后由 Kernel 调用。此前 count 只在未知键和
 // Reset 时清零——"3j" 之后再按 "0" 会被拼成 count=30，状态栏残留。
+// 自加锁，可安全并发调用。
 func (e *Engine) ResetCount() {
+	// 自加锁：测试与外部调用方可能并发调用（与 Dispatch 互斥即可，
+	// 无重入路径——kernel 在 ProcessWithContext 返回后才调用本方法）
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.count = 0
 }
 
+// GetCount 读取当前计数（加锁——ResetCount/Dispatch 可能并发写）
 func (e *Engine) GetCount() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	return e.count
+}
+
+// ActiveState 读取当前层名（加锁，供测试与 UI 查询）
+func (e *Engine) ActiveState() string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.Active
 }

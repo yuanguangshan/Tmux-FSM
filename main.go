@@ -249,13 +249,26 @@ type ServerConfig struct {
 type Server struct {
 	cfg ServerConfig
 	// kernel *kernel.Kernel  // Temporarily disabled
+
+	// M2.1 并发修复：HandleKey 必须串行（kernel.go 顶部注释的不变量——
+	// FSM/Grammar/ShadowStats 均非并发安全）。每连接 goroutine 把按键
+	// 闭包投入 keyQueue，由唯一 worker 顺序执行。
+	keyQueue chan func()
 }
 
 // NewServer 创建新服务器实例
 func NewServer(cfg ServerConfig) *Server {
-	return &Server{
-		cfg: cfg,
+	s := &Server{
+		cfg:      cfg,
+		keyQueue: make(chan func(), 256),
 	}
+	// 单 worker：按键处理严格串行，消除 HandleKey 并发竞态
+	go func() {
+		for job := range s.keyQueue {
+			job()
+		}
+	}()
+	return s
 }
 
 // Run 启动服务器
@@ -377,7 +390,8 @@ func (s *Server) handleClient(conn net.Conn) {
 				RequestID: requestID,
 				ActorID:   actorID,
 			}
-			kernelInstance.HandleKey(hctx, key)
+			// M2.1：按键经串行队列处理（单一 worker 消除并发竞态）
+			s.keyQueue <- func() { kernelInstance.HandleKey(hctx, key) }
 
 			// Phase 4.1: Sync State & Refresh UI
 			state := loadState()
@@ -441,9 +455,13 @@ func (s *Server) handleClient(conn net.Conn) {
 
 			// Use kernel to handle key dispatch
 			if kernelInstance != nil {
-				hctx := kernel.HandleContext{Ctx: context.Background()}
-				kernelInstance.HandleKey(hctx, key)
-				// If kernel handled the key, return without processing further
+				done := make(chan struct{})
+				s.keyQueue <- func() {
+					hctx := kernel.HandleContext{Ctx: context.Background()}
+					kernelInstance.HandleKey(hctx, key)
+					close(done)
+				}
+				<-done // 同步等待处理完成（保持"处理后直接返回"的原语义）
 				return
 			}
 		}

@@ -35,7 +35,7 @@ func TestEngineInitialization(t *testing.T) {
 
 	engine := NewEngine(&km)
 
-	if engine.Active != "NAV" {
+	if engine.ActiveState() != "NAV" {
 		t.Errorf("Expected initial layer to be 'NAV', got '%s'", engine.Active)
 	}
 
@@ -113,7 +113,7 @@ func TestEngineDispatchLayerSwitch(t *testing.T) {
 	engine := NewEngine(&km)
 
 	// 初始状态应该是 NAV
-	if engine.Active != "NAV" {
+	if engine.ActiveState() != "NAV" {
 		t.Errorf("Expected initial layer to be 'NAV', got '%s'", engine.Active)
 	}
 
@@ -123,7 +123,7 @@ func TestEngineDispatchLayerSwitch(t *testing.T) {
 		t.Error("Expected dispatch to report handled for layer switch key")
 	}
 
-	if engine.Active != "GOTO" {
+	if engine.ActiveState() != "GOTO" {
 		t.Errorf("Expected layer to be 'GOTO' after dispatching 'f', got '%s'", engine.Active)
 	}
 }
@@ -258,7 +258,7 @@ func TestEngineReset(t *testing.T) {
 	engine.Reset()
 
 	// 验证状态已被重置
-	if engine.Active != "NAV" {
+	if engine.ActiveState() != "NAV" {
 		t.Errorf("Expected active layer to be reset to 'NAV', got '%s'", engine.Active)
 	}
 
@@ -303,7 +303,7 @@ func TestEngineLayerTimeout(t *testing.T) {
 
 	// 分发 'f' 键，切换到 GOTO 层
 	engine.Dispatch("f")
-	if engine.Active != "GOTO" {
+	if engine.ActiveState() != "GOTO" {
 		t.Errorf("Expected to be in 'GOTO' layer after dispatching 'f', got '%s'", engine.Active)
 	}
 
