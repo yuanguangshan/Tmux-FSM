@@ -54,6 +54,19 @@ func (k *Kernel) Execute(hctx HandleContext, decision *Decision) {
 		}
 		_ = k.Exec.Process(decision.Intent)
 
+	case DecisionPassthrough:
+		// M4-core：字面透传——把可打印字符原样送进目标 pane 的 shell
+		// （用户在 FSM 导航模式下自由输入，未绑定键不再被吞）。
+		// -H 十六进制形式对引号/分号等特殊字符也安全。
+		paneID := ""
+		if hctx.ActorID != "" {
+			if parts := strings.SplitN(hctx.ActorID, "|", 2); len(parts) > 0 {
+				paneID = parts[0]
+			}
+		}
+		_ = backend.GlobalBackend.ExecRaw(fmt.Sprintf(
+			"send-keys -t %s -H %02X", paneID, decision.PassthroughKey[0]))
+
 	case DecisionFSM:
 		// This is a simple FSM action that should be executed.
 		// Instead of calling FSM's RunAction directly (which violates architecture),

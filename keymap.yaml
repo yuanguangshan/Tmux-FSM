@@ -20,9 +20,8 @@ states:
       y: { action: "" }
       c: { action: "" }
       
-      # Visual Mode
-      v: { action: "" }
-      V: { action: "" }
+      # Visual Mode: 未实现（readline/shell 场景无选区语义，
+      # 假绑定会让 v/V 被静默吞掉；M4.1 诚实移除后 v/V 字面透传给 pane）
       
       # Prefix Keys
       g: { action: "" } # Handles gg, ge, etc via grammar

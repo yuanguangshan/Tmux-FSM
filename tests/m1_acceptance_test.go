@@ -131,3 +131,34 @@ func TestM1_Acceptance_TextObjects(t *testing.T) {
 		})
 	}
 }
+
+// TestM4_Passthrough 未绑定可打印单字符 → 字面透传决策（M4-core 修复）
+func TestM4_Passthrough(t *testing.T) {
+	k, _ := acceptanceKernel(t)
+
+	cases := []struct {
+		key  string
+		want kernel.DecisionKind
+	}{
+		{"x", kernel.DecisionPassthrough}, // 未绑定可打印
+		{"i", kernel.DecisionPassthrough}, // 未知键（用户输入）
+		{"g", kernel.DecisionPassthrough}, // g 前缀未挂起时透传
+	}
+	for _, tc := range cases {
+		d := k.Decide(tc.key)
+		if d == nil || d.Kind != tc.want {
+			t.Errorf("key %q: got %v, want %v", tc.key, d, tc.want)
+		}
+		if d != nil && d.PassthroughKey != tc.key {
+			t.Errorf("key %q: PassthroughKey = %q", tc.key, d.PassthroughKey)
+		}
+	}
+
+	// 语法键不透传（Grammar 消费路径）
+	for _, key := range []string{"d", "j", "w", "b", "e"} {
+		d := k.Decide(key)
+		if d != nil && d.Kind == kernel.DecisionPassthrough {
+			t.Errorf("语法键 %q 不应透传", key)
+		}
+	}
+}

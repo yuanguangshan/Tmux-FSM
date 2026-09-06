@@ -13,6 +13,7 @@ const (
 	DecisionFSM
 	DecisionLegacy
 	DecisionIntent
+	DecisionPassthrough
 )
 
 func (k DecisionKind) String() string {
@@ -34,6 +35,9 @@ type Decision struct {
 	Kind   DecisionKind
 	Intent *intent.Intent
 	Action string // For simple FSM actions
+
+	// M4-core：透传给目标 pane 的字面字符（DecisionPassthrough 时非空）
+	PassthroughKey string
 }
 
 // GrammarEmitter 用于将 Grammar 的结果传递给 Kernel
@@ -60,6 +64,18 @@ func (k *Kernel) Decide(key string) *Decision {
 						Kind:   DecisionFSM,
 						Action: keyAction.Action,
 					}
+				}
+			}
+		}
+
+		// ✅ M4-core：Grammar 不消费的可打印单字符 → 字面透传给 pane。
+		// 修复 FSM NAV 模式吞掉所有未绑定字符、用户无法输入文本的
+		// 可用性问题（此前这类键走 DecisionLegacy 被静默丢弃）。
+		if k.Grammar != nil && !k.Grammar.WillConsume(key) {
+			if len(key) == 1 && key[0] >= 0x20 && key[0] <= 0x7E {
+				return &Decision{
+					Kind:           DecisionPassthrough,
+					PassthroughKey: key,
 				}
 			}
 		}
