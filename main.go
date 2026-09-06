@@ -407,6 +407,16 @@ func (s *Server) handleClient(conn net.Conn) {
 			// M2.1：按键经串行队列处理（单一 worker 消除并发竞态）
 			s.keyQueue <- func() { kernelInstance.HandleKey(hctx, key) }
 
+			// M2.5 修正（取代错误的进程内 FSMActive 判定）：
+			// 以 @fsm_active（跨进程真理，EnterFSM/ExitFSM 经全局后端写入）
+			// 判断模态——FSM 已退出时不写状态栏，保持 ExitFSM 的 HideUI
+			// 清理效果；否则此前 post-key 会把状态重写成 "NAV"
+			fsmActiveOpt, _ := exec.Command("tmux", "show-option", "-gqv", "@fsm_active").Output()
+			if strings.TrimSpace(string(fsmActiveOpt)) != "1" {
+				fsm.HideUI()
+				return
+			}
+
 			// Phase 4.1: Sync State & Refresh UI
 			state := loadState()
 			if kernelInstance.FSM != nil {

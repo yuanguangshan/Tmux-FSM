@@ -51,20 +51,20 @@ fi
 # -9 无差别处决。改为：优先按 PID 文件精确击杀（并校验进程名），
 # 兜底用 pkill -x 精确匹配进程名（不含路径、不模糊）。
 
-# 1) PID 文件精确击杀：校验 /tmp/tmux-fsm.pid 指向的进程名确实是 tmux-fsm
+# 1) PID 文件精确击杀：校验目标进程确实是 tmux-fsm
+#    （macOS ps -o comm= 显示完整路径，用子串包含而非精确匹配）
 if [ -f /tmp/tmux-fsm.pid ]; then
   OLD_PID="$(cat /tmp/tmux-fsm.pid 2>/dev/null)"
-  if [ -n "$OLD_PID" ] && ps -p "$OLD_PID" -o comm= 2>/dev/null | grep -qx "tmux-fsm"; then
+  if [ -n "$OLD_PID" ] && ps -p "$OLD_PID" -o comm= 2>/dev/null | grep -q "tmux-fsm"; then
     kill -TERM "$OLD_PID" 2>/dev/null || true
     sleep 0.2
-    kill -KILL "$OLD_PID" 2>/dev/null || true
+    kill -9 "$OLD_PID" 2>/dev/null || true
   fi
 fi
 
-# 2) 兜底：按进程名精确匹配（-x 不做子串/路径模糊匹配）
-pkill -x -TERM "tmux-fsm" 2>/dev/null || true
-sleep 0.2
-pkill -x -KILL "tmux-fsm" 2>/dev/null || true
+# 2) 兜底：按进程名精确匹配（-x 不做子串/路径模糊匹配）。
+#    macOS BSD pkill 不认 -TERM/-KILL 字母信号，用数字信号 -9。
+pkill -9 -x "tmux-fsm" 2>/dev/null || true
 
 echo "Installing to: $TMUX_FSM_DIR"
 mkdir -p "$TMUX_FSM_DIR"
