@@ -248,6 +248,8 @@ type ServerConfig struct {
 // Server 服务器结构
 type Server struct {
 	cfg ServerConfig
+	// M2.2 单实例锁文件句柄（Flock 随进程存活，Close 即释放锁）
+	instanceLock *os.File
 	// kernel *kernel.Kernel  // Temporarily disabled
 
 	// M2.1 并发修复：HandleKey 必须串行（kernel.go 顶部注释的不变量——
@@ -273,7 +275,19 @@ func NewServer(cfg ServerConfig) *Server {
 
 // Run 启动服务器
 func (s *Server) Run(ctx context.Context) error {
-	// 清理旧 socket
+	// M2.2 单实例锁（Flock）：此前 Server 启动时 os.Remove 硬删 socket
+	// 再 Listen——tmux source-file 重载会再启一个 -server，新实例抢走
+	// socket、旧实例进程永生（僵尸 daemon）。现在谁持有实例锁谁才是
+	// 真身；抢锁失败的新实例直接退出（重载语义由 -reload 承担）。
+	lockFile, err := acquireInstanceLock(s.cfg.SocketPath + ".lock")
+	if err != nil {
+		log.Printf("[server] instance lock held: %v — exiting", err)
+		return nil
+	}
+	s.instanceLock = lockFile // 保持句柄引用，锁随进程存活
+	// 注意：lockFile 故意不 Close——Flock 随进程存活
+
+	// 清理旧 socket（此刻我们持有实例锁，删除是安全的）
 	_ = os.Remove(s.cfg.SocketPath)
 
 	ln, err := net.Listen("unix", s.cfg.SocketPath)
@@ -824,4 +838,18 @@ func reconcileFSMState(clientName string) {
 			log.Printf("Warning: Failed to reconcile FSM state (fsm not active but key table is fsm): %v", err)
 		}
 	}
+}
+
+// acquireInstanceLock 获取进程级单实例 Flock 锁（M2.2）。
+// 返回的 *os.File 必须在进程生命周期内保持打开——Close 即释放锁。
+func acquireInstanceLock(path string) (*os.File, error) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("another instance already holds %s", path)
+	}
+	return f, nil
 }
