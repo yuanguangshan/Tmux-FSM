@@ -68,6 +68,8 @@
   未绑定可打印键字面透传给 pane（吞字问题根治，可用性核心）。
 - 2026-09-07 04:3x M4.4：`.` 重复——curOpKeys/lastOpKeys/replaying 三态；
   ResetCount 固化序列；Reset 清中断序列。72d3117。
+- 2026-09-07 04:5x M4.3：p 粘贴 tmux buffer（paste-buffer -p），
+  yank-paste 闭环；命名寄存器列后续。kernel_test 补映射断言。
 - 2026-09-06 10:1x M2.5 验收达成：隔离 socket 实测 -enter→d(NAV [delete])→
   w(NAV)→q(退出) 全链路；Flock 活体验证（重复 source daemon 数不增）；
   退出态判定改用 @fsm_active 跨进程真理（修正 FSMActive 进程内假信号）；
