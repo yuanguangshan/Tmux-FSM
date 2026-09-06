@@ -5,7 +5,7 @@
 > IN_PROGRESS 协议：开始任务前把「当前任务」行填上；完成后清空。
 > 若本轮读取时发现 IN_PROGRESS 已挂 25 分钟以上，视为上轮中断，可直接接手。
 
-当前任务: （无——等待下一轮 cron 领取 M2.3）
+当前任务: （无——等待下一轮 cron 领取 M2.4）
 当前里程碑: M2
 
 ## 任务队列状态
@@ -24,7 +24,7 @@
 - [x] M1.6 M1 验收（端到端回归 12 项全过）
 - [x] M2.1 HandleKey 串行化 + race 测试
 - [x] M2.2 daemon 单实例 Flock
-- [ ] M2.3 install.sh pkill 精确化
+- [x] M2.3 install.sh pkill 精确化
 - [ ] M2.4 双 UI 写入者合并
 - [ ] M2.5 M2 验收
 - [ ] M3.1 每键往返削减
@@ -60,6 +60,8 @@
   engine_race_test.go 并发竞争测试；go test -race 全仓通过。
 - 2026-09-06 09:0x M2.2：acquireInstanceLock（Flock EX|NB）+ 互斥语义测试；
   Run 启动先抢实例锁，防 source-file 重载孵化僵尸 daemon。
+- 2026-09-06 09:1x M2.3：install.sh 停止逻辑改 PID 精确击杀 + pkill -x，
+  先 TERM 后 KILL；不再 -9 误杀 argv 含路径的无关进程。
 
 ## 日志
 
