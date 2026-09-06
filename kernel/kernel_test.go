@@ -224,3 +224,14 @@ func TestDecisionStruct(t *testing.T) {
 		t.Errorf("Expected Action to be 'move_left', got '%s'", decision.Action)
 	}
 }
+
+// M4.3：寄存器最小实现——p 从 tmux buffer 粘贴回 shell 行；
+// exit 不走 tmux 命令通道（走 fsm.ExitFSM）。
+func TestGetTmuxCommandForAction(t *testing.T) {
+	if cmd := getTmuxCommandForAction("paste_from_buffer"); cmd != "paste-buffer -p" {
+		t.Errorf("paste_from_buffer cmd = %q", cmd)
+	}
+	if cmd := getTmuxCommandForAction("exit"); cmd != "" {
+		t.Errorf("exit 不应产生 tmux 命令（应走 fsm.ExitFSM），got %q", cmd)
+	}
+}

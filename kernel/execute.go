@@ -113,6 +113,10 @@ func getTmuxCommandForAction(action string) string {
 		return "select-pane -U"
 	case "pane_down":
 		return "select-pane -D"
+	case "paste_from_buffer":
+		// M4.3：y 系列复制进 tmux buffer 后，p 粘贴回 shell 行
+		// （-p = bracketed paste，光标落在粘贴内容尾部）
+		return "paste-buffer -p"
 	case "next_pane":
 		return "select-pane -t :.+"
 	case "prev_pane":

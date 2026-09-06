@@ -33,6 +33,7 @@ states:
       # Misc
       u: { action: "" } # Delegated to Grammar
       "C-r": { action: "" } # Delegated to Grammar
+      p: { action: "paste_from_buffer" } # M4.3：粘贴 tmux buffer（y 系列的接收端）
       Escape: { action: "exit" }
       q: { action: "exit" }
       ":": { action: "prompt" }
