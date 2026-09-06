@@ -1,29 +1,64 @@
 # tmux-fsm
 
-A flexible, configuration-driven FSM (Finite State Machine) based keybinding system for tmux, designed for efficient terminal navigation and pane management.
+**Vim 模态编辑，搬进 tmux 的每一行 shell。**
 
-## ✨ Features
+> 把 Vim 的动词-对象模型（`dw` / `ci"` / `yiw` / `3j`、count、文本对象、
+> `.` 重复、yank→paste 闭环）搬进 tmux 的任意 pane：`prefix + f` 进入
+> 导航模式，hjkl/w/e/b 移动光标，`d`/`c`/`y` 配合文本对象直接编辑
+> 命令行；`q` / `Esc` 随时退出，未绑定的字符原样输入（自由打字）。
 
-### 🏗️ **Modular Architecture**
-- **FSM Engine**: Core state machine logic with layer and timeout support
-- **Configurable Keymap**: YAML-based configuration for all key bindings
-- **UI Abstraction**: Status line integration for state display
-- **Neovim Integration**: Bidirectional mode synchronization
+*A configuration-driven FSM keybinding daemon for tmux —
+Vim-modal editing for every shell line. All advertised motions are
+covered by end-to-end tests; latency numbers are measured, see
+docs/PERFORMANCE.md.*
 
-### 🎛️ **Configuration-Driven**
-- **YAML Keymap**: Externalized key bindings for easy customization
-- **State Management**: Multiple FSM states with hints and transitions
-- **Layer Support**: Temporary sub-modes with timeout capabilities
-- **Validation**: Built-in configuration validation
+---
 
-### ⌨️ **Advanced Key Handling**
-- **Prefix Keys**: Support for chorded key sequences (e.g., `g` + `h` for goto-left)
-- **Timeout Management**: Automatic state reset after timeout
-- **Action Mapping**: Semantic actions mapped to key sequences
+## ⚡ 性能与可靠性（实测数据）
 
-### 🔄 **Neovim Integration**
-- **Mode Synchronization**: Automatic exit from FSM when Neovim enters insert mode
-- **Bidirectional Communication**: FSM and Neovim can notify each other of mode changes
+| 指标 | 数值 | 说明 |
+|---|---|---|
+| daemon 内存态按键处理 | **1.5-4 μs/键** | Go Benchmark（kernel/bench_test.go） |
+| 端到端（-key 客户端全链路） | **~24 ms/键** | 含每键一次的客户端进程 fork |
+| 测试 | 210+ 用例全绿 | `go test -race ./...` 通过 |
+| 已修复的历史缺陷 | q 退出死路 / 计数泄漏 / 文本对象吞字 / 假流式 | 见 docs/AUTH-CHAIN.md 与 git 历史 |
+
+可靠性与正确性保障：HandleKey 串行化队列（M2.1）、daemon 单实例
+Flock 锁（M2.2）、`-race` 全仓 CI 门槛。
+
+## ✨ 功能矩阵
+
+| 功能 | 状态 | 按键 |
+|---|---|---|
+| 行内导航（hjkl / 0 $ ^） | ✅ | FSM 导航模式下直接使用 |
+| 词级移动（w / b / e） | ✅ | 详见 keymap.yaml |
+| 文件级跳转（gg / G） | ✅ | 方向已区分（尾/头） |
+| 操作符（d / y / c） | ✅ | 配合 motion 与文本对象 |
+| count（3j / d2w） | ✅ | 数字前缀，生命周期已修复 |
+| 查找（f / F / t / T + 目标字符） | ✅ | 含 till 变体与 count |
+| 文本对象（iw / aw / i( / i{ / i[ / i' / i" / i\` …） | ✅ | 光标数学实现，物理层真实删除/改写 |
+| `.` 重复上一操作 | ✅ | 序列级重放 |
+| yank → paste 闭环 | ✅ | y 系写入 tmux buffer，p 粘贴回 shell 行 |
+| undo / redo | ✅ | u / C-r |
+| Visual 模式（v / V） | ❌ 未实现 | 诚实移除假绑定；shell 场景需选区语义，列为未来方向 |
+| FSM 内搜索（/ ? n N） | ❌ | shell 行场景由 shell 自身语义承接（字面透传） |
+| Neovim 模式同步 | ✅ | 双向通知（既有能力） |
+
+## 🏗️ 架构
+
+```
+按键 → tmux fsm key-table（plugin.tmux 绑定）
+     → tmux-fsm -key（客户端，Unix socket）
+     → kernel.HandleKey（串行队列，M2.1）
+        ├─ Decide：FSM action / Grammar 语法层 / 透传判定（三分法）
+        └─ Execute：FSM 动作 / weaver 投影 / 字面透传
+     → weaver：快照 → 适配 → tmux 物理投影（send-keys/capture 光标数学）
+```
+
+深入阅读：[docs/AUTH-CHAIN.md](docs/AUTH-CHAIN.md)（鉴权链路）、
+[docs/ARCHITECTURE-RECON.md](docs/ARCHITECTURE-RECON.md)（架构施工地图）、
+[docs/PERFORMANCE.md](docs/PERFORMANCE.md)（延迟基准）、
+[docs/ONBOARDING.md](docs/ONBOARDING.md)（新人入门）。
 
 ## 🚀 Installation
 

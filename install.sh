@@ -198,8 +198,8 @@ esac
 # ----------------------------------------------------------------------
 
 echo ""
-echo "✅ tmux-fsm (Zero-Latency Daemon Kernel) installed!"
-echo "   Latency: < 1ms"
+echo "✅ tmux-fsm (Daemon Kernel) installed!"
+echo "   Daemon key processing: ~2μs; e2e per-key: ~24ms (incl. client fork)"
 echo ""
 echo "Usage:"
 echo "  - Enter FSM mode:  <prefix> f"
