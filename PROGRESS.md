@@ -64,6 +64,8 @@
   先 TERM 后 KILL；不再 -9 误杀 argv 含路径的无关进程。
 - 2026-09-06 09:2x M2.4：UpdateUI 不再直接写 tmux 变量（消除每键 3 次
   exec 与状态栏漂移），updateStatusBar 成为唯一写入者。
+- 2026-09-07 04:3x M4.4：`.` 重复——curOpKeys/lastOpKeys/replaying 三态；
+  ResetCount 固化序列；Reset 清中断序列。72d3117。
 - 2026-09-06 10:1x M2.5 验收达成：隔离 socket 实测 -enter→d(NAV [delete])→
   w(NAV)→q(退出) 全链路；Flock 活体验证（重复 source daemon 数不增）；
   退出态判定改用 @fsm_active 跨进程真理（修正 FSMActive 进程内假信号）；
