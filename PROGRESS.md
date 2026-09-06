@@ -5,8 +5,8 @@
 > IN_PROGRESS 协议：开始任务前把「当前任务」行填上；完成后清空。
 > 若本轮读取时发现 IN_PROGRESS 已挂 25 分钟以上，视为上轮中断，可直接接手。
 
-当前任务: （无——等待下一轮 cron 领取 M1.6）
-当前里程碑: M1
+当前任务: （无——等待下一轮 cron 领取 M2.1）
+当前里程碑: M2
 
 ## 任务队列状态
 
@@ -21,7 +21,7 @@
 - [x] M1.3 未知键透传 Grammar
 - [x] M1.4 Direction 元数据
 - [x] M1.5 f/t/F/T 目标字符
-- [ ] M1.6 M1 验收（端到端回归）
+- [x] M1.6 M1 验收（端到端回归 12 项全过）
 - [ ] M2.1 HandleKey 串行化 + race 测试
 - [ ] M2.2 daemon 单实例 Flock
 - [ ] M2.3 install.sh pkill 精确化
@@ -54,6 +54,8 @@
 - 2026-09-06 07:0x M1.4+M1.5：grammar 双 switch 补 w/b/e/ge 方向与 G/gg 区分；
   promote 补 word_forward/backward 与 end_of_file/start_of_file 映射；
   新增 dw/db/dG/dt meta 断言 4 条。
+- 2026-09-06 07:2x M1.6 验收达成（5be385b）：动作矩阵 8 项 + 计数生命周期 +
+  文本对象 ciw/yiw/ci" 全过——M1 里程碑完成，微信已通报。
 
 ## 日志
 
