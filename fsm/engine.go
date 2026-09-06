@@ -134,6 +134,12 @@ type Engine struct {
 	emitters        []RawTokenEmitter // 用于向外部发送token的多个接收者
 	visualMode      intent.VisualMode // 视觉模式状态
 	PendingOperator string            // 当前 pending 的操作符 (用于 UI 显示)
+
+	// M4.4 `.` 重复：curOpKeys 收集进行中的按键序列；序列被消化
+	// （ResetCount）时固化为 lastOpKeys；"." 重放 lastOpKeys。
+	lastOpKeys []string
+	curOpKeys  []string
+	replaying  bool
 }
 
 // FSMStatus FSM 状态信息，用于UI更新
@@ -213,6 +219,23 @@ func (e *Engine) Dispatch(key string) (string, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	// M4.4：`.` 重复上一操作——重放固化的按键序列。
+	// 重放期间不再记录（防自我吞并），count 由重放的数字键重新累加。
+	if key == "." && !e.replaying && len(e.lastOpKeys) > 0 {
+		e.replaying = true
+		replay := append([]string(nil), e.lastOpKeys...)
+		e.mu.Unlock()
+		for _, k2 := range replay {
+			e.Dispatch(k2)
+		}
+		e.mu.Lock()
+		e.replaying = false
+		return "repeat", true
+	}
+	if !e.replaying && key != "." {
+		e.curOpKeys = append(e.curOpKeys, key)
+	}
+
 	if isDigit(key) {
 		if key == "0" && e.count == 0 {
 		} else {
@@ -266,6 +289,7 @@ func isDigit(s string) bool {
 func (e *Engine) Reset() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.curOpKeys = nil // 中断的序列作废（lastOpKeys 保留供 "." 重放）
 
 	if e.layerTimer != nil {
 		e.layerTimer.Stop()
@@ -380,6 +404,11 @@ func (e *Engine) ResetCount() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.count = 0
+	// M4.4：序列被消化 → 固化为 "." 重放的素材
+	if len(e.curOpKeys) > 0 {
+		e.lastOpKeys = append([]string(nil), e.curOpKeys...)
+		e.curOpKeys = nil
+	}
 }
 
 // GetCount 读取当前计数（加锁——ResetCount/Dispatch 可能并发写）

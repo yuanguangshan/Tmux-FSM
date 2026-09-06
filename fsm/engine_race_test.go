@@ -59,3 +59,50 @@ func TestEngineResetCountConcurrent(t *testing.T) {
 	}()
 	wg.Wait()
 }
+
+func TestEngineDotRepeat(t *testing.T) {
+	km := Keymap{
+		Initial: "NAV",
+		States: map[string]StateDef{
+			"NAV": {
+				Keys: map[string]KeyAction{
+					"d": {}, "w": {}, "x": {},
+				},
+			},
+		},
+	}
+	_ = km
+	e := NewEngine(&km)
+
+	// 完成 dw 序列
+	e.Dispatch("d")
+	e.Dispatch("w")
+	// 生产环境中 kernel 在意图派发后调用 ResetCount 固化序列
+	e.ResetCount()
+	if len(e.lastOpKeys) != 2 {
+		t.Fatalf("lastOpKeys = %v, want [d w]", e.lastOpKeys)
+	}
+
+	// "." 重放：重放期间 lastOpKeys 保持稳定（不会自我吞并）
+	e.Dispatch(".")
+	if len(e.lastOpKeys) != 2 {
+		t.Errorf("重放后 lastOpKeys = %v, want 仍为 2 项", e.lastOpKeys)
+	}
+
+	// 无历史时 "." 为无害 no-op
+	e2 := NewEngine(&km)
+	e2.Dispatch(".")
+	if len(e2.lastOpKeys) != 0 {
+		t.Error("无历史时 lastOpKeys 应为空")
+	}
+}
+
+func TestEngineAbortClearsPending(t *testing.T) {
+	km := Keymap{Initial: "NAV", States: map[string]StateDef{"NAV": {Keys: map[string]KeyAction{}}}}
+	e := NewEngine(&km)
+	e.Dispatch("d") // pending
+	e.Reset()       // 用户 Escape 之类的复位
+	if len(e.curOpKeys) != 0 {
+		t.Error("Reset 应清空中断的序列")
+	}
+}
