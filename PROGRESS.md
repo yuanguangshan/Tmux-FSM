@@ -39,8 +39,8 @@
 - [ ] M4.6 功能矩阵更新
 - [ ] M5.1 LICENSE
 - [ ] M5.2 GitHub Actions
-- [ ] M5.3 README 更新
-- [ ] M5.4 docs 整理
+- [x] M5.3 README 更新（真实延迟/功能矩阵/文档导航）
+- [x] M5.4 docs 整理
 
 ## 决策记录
 
