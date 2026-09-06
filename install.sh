@@ -46,12 +46,25 @@ if [ -f "/tmp/tmux-fsm.pid" ]; then
     rm -f "/tmp/tmux-fsm.pid"
 fi
 
-# Fallback: kill any remaining tmux-fsm processes
-pkill -9 -f "[/]tmux-fsm" 2>/dev/null || true
+# M2.3 修复：旧实现 pkill -9 -f "[/]tmux-fsm" 匹配的是完整命令行——
+# 任何 argv 里含该路径的进程（编辑器/less/tail/grep 到本仓库的）都会被
+# -9 无差别处决。改为：优先按 PID 文件精确击杀（并校验进程名），
+# 兜底用 pkill -x 精确匹配进程名（不含路径、不模糊）。
 
-# Double check that no processes remain
-sleep 0.1
-pkill -9 -f "[/]tmux-fsm" 2>/dev/null || true
+# 1) PID 文件精确击杀：校验 /tmp/tmux-fsm.pid 指向的进程名确实是 tmux-fsm
+if [ -f /tmp/tmux-fsm.pid ]; then
+  OLD_PID="$(cat /tmp/tmux-fsm.pid 2>/dev/null)"
+  if [ -n "$OLD_PID" ] && ps -p "$OLD_PID" -o comm= 2>/dev/null | grep -qx "tmux-fsm"; then
+    kill -TERM "$OLD_PID" 2>/dev/null || true
+    sleep 0.2
+    kill -KILL "$OLD_PID" 2>/dev/null || true
+  fi
+fi
+
+# 2) 兜底：按进程名精确匹配（-x 不做子串/路径模糊匹配）
+pkill -x -TERM "tmux-fsm" 2>/dev/null || true
+sleep 0.2
+pkill -x -KILL "tmux-fsm" 2>/dev/null || true
 
 echo "Installing to: $TMUX_FSM_DIR"
 mkdir -p "$TMUX_FSM_DIR"
