@@ -66,6 +66,8 @@
   exec 与状态栏漂移），updateStatusBar 成为唯一写入者。
 - 2026-09-06 09:2x M4.1：Visual 诚实移除——keymap 移除 v/V 假绑定，
   未绑定可打印键字面透传给 pane（吞字问题根治，可用性核心）。
+- 2026-09-06 09:3x M5.1+M5.2：LICENSE(MIT) + GitHub Actions CI
+  （build/vet/test-race/gofmt 合并门槛）。
 - 2026-09-07 04:3x M4.4：`.` 重复——curOpKeys/lastOpKeys/replaying 三态；
   ResetCount 固化序列；Reset 清中断序列。72d3117。
 - 2026-09-07 04:5x M4.3：p 粘贴 tmux buffer（paste-buffer -p），
