@@ -64,6 +64,8 @@
   先 TERM 后 KILL；不再 -9 误杀 argv 含路径的无关进程。
 - 2026-09-06 09:2x M2.4：UpdateUI 不再直接写 tmux 变量（消除每键 3 次
   exec 与状态栏漂移），updateStatusBar 成为唯一写入者。
+- 2026-09-06 09:2x M4.1：Visual 诚实移除——keymap 移除 v/V 假绑定，
+  未绑定可打印键字面透传给 pane（吞字问题根治，可用性核心）。
 - 2026-09-07 04:3x M4.4：`.` 重复——curOpKeys/lastOpKeys/replaying 三态；
   ResetCount 固化序列；Reset 清中断序列。72d3117。
 - 2026-09-06 10:1x M2.5 验收达成：隔离 socket 实测 -enter→d(NAV [delete])→
